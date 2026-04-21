@@ -1,0 +1,195 @@
+from dataclasses import dataclass
+from enum import Enum, auto
+
+
+class TokenKind(Enum):
+    KW_IMPORT = auto()
+    KW_BIFURCATE = auto()
+    KW_PRINT = auto()
+    ATH = auto()
+    DIE = auto()
+    IDENT = auto()
+    LPAREN = auto()
+    RPAREN = auto()
+    LBRACKET = auto()
+    RBRACKET = auto()
+    LBRACE = auto()
+    RBRACE = auto()
+    COMMA = auto()
+    SEMI = auto()
+    RAWTEXT = auto()
+    RESERVED = auto()
+    EOF = auto()
+
+
+@dataclass(frozen=True)
+class Token:
+    kind: TokenKind
+    value: str
+    line: int
+    col: int
+
+
+class LexError(Exception):
+    def __init__(self, msg: str, line: int, col: int):
+        super().__init__(f"line {line}, col {col}: {msg}")
+        self.msg = msg
+        self.line = line
+        self.col = col
+
+
+KEYWORDS = {
+    "import": TokenKind.KW_IMPORT,
+    "bifurcate": TokenKind.KW_BIFURCATE,
+    "print": TokenKind.KW_PRINT,
+}
+
+RESERVED_V1 = {"importf", "input", "print2"}
+
+PUNCT = {
+    "(": TokenKind.LPAREN,
+    ")": TokenKind.RPAREN,
+    "[": TokenKind.LBRACKET,
+    "]": TokenKind.RBRACKET,
+    "{": TokenKind.LBRACE,
+    "}": TokenKind.RBRACE,
+    ",": TokenKind.COMMA,
+    ";": TokenKind.SEMI,
+}
+
+
+class Lexer:
+    def __init__(self, src: str):
+        self.src = src
+        self.pos = 0
+        self.line = 1
+        self.col = 1
+        self.tokens: list[Token] = []
+
+    def _peek(self, offset: int = 0) -> str:
+        p = self.pos + offset
+        return self.src[p] if p < len(self.src) else ""
+
+    def _advance(self) -> str:
+        c = self.src[self.pos]
+        self.pos += 1
+        if c == "\n":
+            self.line += 1
+            self.col = 1
+        else:
+            self.col += 1
+        return c
+
+    def _emit(self, kind: TokenKind, value: str, line: int, col: int) -> None:
+        self.tokens.append(Token(kind, value, line, col))
+
+    def _skip_ws_and_comments(self) -> None:
+        while self.pos < len(self.src):
+            c = self._peek()
+            if c in " \t\r\n":
+                self._advance()
+            elif c == "/" and self._peek(1) == "/":
+                while self.pos < len(self.src) and self._peek() != "\n":
+                    self._advance()
+            elif c == "/" and self._peek(1) == "*":
+                start_line, start_col = self.line, self.col
+                self._advance()
+                self._advance()
+                closed = False
+                while self.pos < len(self.src):
+                    if self._peek() == "*" and self._peek(1) == "/":
+                        self._advance()
+                        self._advance()
+                        closed = True
+                        break
+                    self._advance()
+                if not closed:
+                    raise LexError("unterminated /* */ comment", start_line, start_col)
+            else:
+                return
+
+    def _read_word(self) -> str:
+        start = self.pos
+        c = self._peek()
+        if not (c.isalpha() or c == "_"):
+            return ""
+        while self.pos < len(self.src):
+            c = self._peek()
+            if c.isalnum() or c == "_":
+                self._advance()
+            else:
+                break
+        return self.src[start:self.pos]
+
+    def _read_print_payload(self) -> None:
+        if self._peek() != " ":
+            raise LexError(
+                "'print' must be followed by a single ASCII space", self.line, self.col
+            )
+        self._advance()
+        start = self.pos
+        start_line, start_col = self.line, self.col
+        while self.pos < len(self.src) and self._peek() != ";":
+            self._advance()
+        if self.pos >= len(self.src):
+            raise LexError(
+                "unterminated 'print' statement (missing ';')", start_line, start_col
+            )
+        self._emit(TokenKind.RAWTEXT, self.src[start:self.pos], start_line, start_col)
+
+    def tokenize(self) -> list[Token]:
+        while True:
+            self._skip_ws_and_comments()
+            if self.pos >= len(self.src):
+                break
+
+            line, col = self.line, self.col
+            c = self._peek()
+
+            if c == "~":
+                self._advance()
+                word = self._read_word()
+                if word.lower() != "ath":
+                    raise LexError(
+                        f"expected '~ATH', got '~{word}'", line, col
+                    )
+                self._emit(TokenKind.ATH, "~" + word, line, col)
+                continue
+
+            if c == ".":
+                self._advance()
+                word = self._read_word()
+                if word.lower() != "die":
+                    raise LexError(
+                        f"expected '.DIE', got '.{word}'", line, col
+                    )
+                self._emit(TokenKind.DIE, "." + word, line, col)
+                continue
+
+            if c in PUNCT:
+                self._advance()
+                self._emit(PUNCT[c], c, line, col)
+                continue
+
+            if c.isalpha() or c == "_":
+                word = self._read_word()
+                folded = word.lower()
+                if folded in KEYWORDS:
+                    kind = KEYWORDS[folded]
+                    self._emit(kind, word, line, col)
+                    if kind is TokenKind.KW_PRINT:
+                        self._read_print_payload()
+                elif folded in RESERVED_V1:
+                    self._emit(TokenKind.RESERVED, word, line, col)
+                else:
+                    self._emit(TokenKind.IDENT, word, line, col)
+                continue
+
+            raise LexError(f"unexpected character {c!r}", line, col)
+
+        self._emit(TokenKind.EOF, "", self.line, self.col)
+        return self.tokens
+
+
+def tokenize(src: str) -> list[Token]:
+    return Lexer(src).tokenize()
