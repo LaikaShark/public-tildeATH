@@ -50,15 +50,39 @@ Comments:
 ### 2.2 Tokens
 
 ```
-KEYWORD     := 'import' | 'BIFURCATE' | 'print'
-LOOPSTART   := '~ATH'
-DIE         := '.DIE'
-IDENT       := [A-Za-z_][A-Za-z0-9_]*
+KEYWORD     := 'import' | 'BIFURCATE' | 'print'    [matched case-insensitively]
+LOOPSTART   := '~ATH'                              [the 'ATH' part is case-insensitive]
+DIE         := '.DIE'                              [the 'DIE' part is case-insensitive]
+IDENT       := [A-Za-z_][A-Za-z0-9_]*              [case-sensitive]
 PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';'
 ```
 
-`IDENT` is case-sensitive. `THIS` and `NULL` are ordinary identifiers
-predefined in the initial environment (§4.2); they are not reserved words.
+**Case sensitivity.** Keywords, the `~ATH` loop-start token, the `.DIE`
+method token, and (in v1+) function names match **case-insensitively**:
+`IMPORT`, `Import`, and `import` all denote the same keyword;
+`~ath`, `~Ath`, and `~ATH` all denote the same loop-start;
+`.die` and `.DIE` denote the same method token. Identifiers (variable
+names) are **case-sensitive**: `Foo`, `foo`, and `FOO` are three distinct
+variables.
+
+**Reserved words** (no case variant of any of these may appear as an
+identifier):
+
+- Active in v0: `import`, `BIFURCATE`, `print`.
+- Reserved against future use: `importf`, `INPUT`, `PRINT2`. Programs using
+  any of these are rejected by v0 with a "reserved for v1+" diagnostic
+  rather than treating them as identifiers.
+
+`THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
+they follow the case-sensitive identifier rule. The names `this`, `Null`,
+and so on are distinct, unbound, perfectly legal identifiers that the
+program may introduce via `import`.
+
+Tokenization of an identifier-or-keyword uses maximal munch on
+`[A-Za-z_][A-Za-z0-9_]*`. The resulting chunk is then compared
+case-insensitively against the reserved-word set: matches become keywords,
+non-matches become identifiers. Hence `printer` is an identifier, not the
+keyword `print` followed by `er`.
 
 `~ATH` is one token. The tilde is significant.
 
@@ -143,6 +167,10 @@ exactly two bindings:
 |--------|------------------------------------------------------------------------|
 | `THIS` | A fresh alive object with no halves. Killing it terminates the program. |
 | `NULL` | A globally-shared, immortal-in-deadness object: `alive = false`.       |
+
+These bindings use exactly the spellings `THIS` and `NULL` (uppercase). Per
+the case-sensitive identifier rule (§2.2), the names `this`, `Null`, etc.,
+are not predefined; they are unbound until a program introduces them.
 
 Any other name is unbound until introduced by `import` or by a `BIFURCATE`
 that names it as an output.
