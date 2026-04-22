@@ -134,3 +134,35 @@ def test_writing_to_NULL_rejected_at_cli(tmp_path):
     compiled = _compile(src, out)
     assert compiled.returncode != 0
     assert "null" in compiled.stderr.lower() and "read-only" in compiled.stderr.lower()
+
+
+def test_read_of_flow_unreachable_binding_does_not_crash(tmp_path):
+    # W is introduced inside a loop body that runs zero times (V is killed
+    # before the loop). Sema accepts the program because W is syntactically
+    # in scope after the loop. The runtime must not segfault on W.DIE().
+    src = tmp_path / "unreachable.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { import y W; }\n"
+        "W.DIE();\n"
+        "print done;\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_decompose_of_unbound_variable_yields_NULL_halves(tmp_path):
+    # Same shape: U is introduced in an unreached loop body, then decomposed.
+    # Decompose of an unbound (null-pointer) slot must safely yield NULL halves
+    # and not allocate onto a null pointer.
+    src = tmp_path / "decompose_unbound.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { import y U; }\n"
+        "BIFURCATE U[L, R];\n"
+        "L.DIE();\n"
+        "R.DIE();\n"
+        "print survived;\n"
+    )
+    assert _build_and_run(src, tmp_path) == "survived\n"

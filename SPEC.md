@@ -179,6 +179,12 @@ a compile-time error. `THIS` is rebindable.
 Any other name is unbound until introduced by `import` or by a `BIFURCATE`
 that names it as an output.
 
+`NULL` also serves as the **behavioral identity for unbound names at
+runtime**: if the syntactic in-scope check (§6.1) lets a read of `V` through
+but at execution time no introduction has actually run for `V`, the read
+yields `NULL`. Every statement in §4.4 is defined when its source operand is
+`NULL` (and therefore when it is unbound).
+
 ### 4.3 Variables vs. objects
 
 A variable is a name in the (single global, in v0) environment that points to
@@ -347,8 +353,14 @@ v0 errors fall into two classes:
 
 ### 6.2 Run-time behavior
 
-There are no run-time errors in v0. Every well-formed program either runs to
-completion or runs forever.
+There are no run-time errors in v0. A program that passes the §6.1 checks
+either runs to completion or runs forever — it cannot crash, abort, or
+produce a diagnostic from the runtime.
+
+This guarantee survives even when §6.1's syntactic check admits a read of a
+variable whose introducing statement happens to lie on an unexecuted
+control-flow path (e.g., inside a `~ATH` body that runs zero times). Such
+reads yield `NULL` (§4.2), and every operation in §4.4 is defined on `NULL`.
 
 ---
 

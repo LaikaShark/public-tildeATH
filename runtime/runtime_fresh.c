@@ -24,6 +24,11 @@ ath_obj *ath_compose(ath_obj *l, ath_obj *r) {
 }
 
 void ath_decompose(ath_obj *v, ath_obj **l_out, ath_obj **r_out) {
+    if (v == NULL || v == ath_NULL) {
+        *l_out = ath_NULL;
+        *r_out = ath_NULL;
+        return;
+    }
     if (v->left == NULL) {
         v->left = ath_alloc_alive();
         v->right = ath_alloc_alive();
@@ -33,10 +38,16 @@ void ath_decompose(ath_obj *v, ath_obj **l_out, ath_obj **r_out) {
 }
 
 void ath_die(ath_obj *v) {
+    if (v == NULL || v == ath_NULL) {
+        return;
+    }
     v->alive = 0;
 }
 
 int ath_is_alive(ath_obj *v) {
+    if (v == NULL) {
+        return 0;
+    }
     return v->alive;
 }
 

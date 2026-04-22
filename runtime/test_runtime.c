@@ -62,6 +62,35 @@ int main(void) {
     ath_print(msg, strlen(msg));
     ath_print("", 0);
 
+    /* Null-safety: operations on a C null pointer behave as if it were NULL. */
+    assert(!ath_is_alive(NULL));
+    ath_die(NULL); /* must not crash */
+
+    ath_obj *nl, *nr;
+    ath_decompose(NULL, &nl, &nr);
+    assert(nl == ath_NULL && nr == ath_NULL);
+
+    /* Decomposing ath_NULL yields (ath_NULL, ath_NULL) and must not mutate it. */
+    ath_obj *saved_left = ath_NULL->left;
+    ath_obj *saved_right = ath_NULL->right;
+    ath_obj *nl2, *nr2;
+    ath_decompose(ath_NULL, &nl2, &nr2);
+    assert(nl2 == ath_NULL && nr2 == ath_NULL);
+    assert(ath_NULL->left == saved_left);
+    assert(ath_NULL->right == saved_right);
+
+    /* Killing ath_NULL keeps it dead and does not touch its fields. */
+    ath_die(ath_NULL);
+    assert(!ath_is_alive(ath_NULL));
+    assert(ath_NULL->left == saved_left);
+    assert(ath_NULL->right == saved_right);
+
+    /* Compose with null/NULL operands builds a fresh alive composite. */
+    ath_obj *cn = ath_compose(NULL, ath_NULL);
+    assert(ath_is_alive(cn));
+    assert(cn->left == NULL);
+    assert(cn->right == ath_NULL);
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }
