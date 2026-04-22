@@ -172,6 +172,10 @@ These bindings use exactly the spellings `THIS` and `NULL` (uppercase). Per
 the case-sensitive identifier rule (§2.2), the names `this`, `Null`, etc.,
 are not predefined; they are unbound until a program introduces them.
 
+`NULL` is **read-only**: any statement that would rebind it (as an `import`
+target, a `BIFURCATE` decompose output, or a `BIFURCATE` compose target) is
+a compile-time error. `THIS` is rebindable.
+
 Any other name is unbound until introduced by `import` or by a `BIFURCATE`
 that names it as an output.
 

@@ -115,3 +115,22 @@ def test_reserved_v1_word_rejected_at_cli(tmp_path):
     compiled = _compile(src, out)
     assert compiled.returncode != 0
     assert "reserved" in compiled.stderr.lower()
+
+
+def test_unbound_variable_rejected_at_cli(tmp_path):
+    src = tmp_path / "typo.ath"
+    src.write_text("this.DIE();\n")  # lowercase 'this' is not the predefined THIS
+    out = tmp_path / "prog"
+    compiled = _compile(src, out)
+    assert compiled.returncode != 0
+    assert "not in scope" in compiled.stderr.lower()
+    assert not out.exists()
+
+
+def test_writing_to_NULL_rejected_at_cli(tmp_path):
+    src = tmp_path / "null_write.ath"
+    src.write_text("import x NULL;\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out)
+    assert compiled.returncode != 0
+    assert "null" in compiled.stderr.lower() and "read-only" in compiled.stderr.lower()

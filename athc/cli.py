@@ -7,6 +7,7 @@ from pathlib import Path
 
 from athc.codegen import emit_object, generate_ir
 from athc.parser import ParseError, parse
+from athc.sema import SemaError, analyze
 
 
 def _default_runtime() -> Path:
@@ -45,6 +46,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         program = parse(src)
     except ParseError as e:
+        print(f"athc: {source_path}: {e}", file=sys.stderr)
+        return 1
+
+    try:
+        analyze(program)
+    except SemaError as e:
         print(f"athc: {source_path}: {e}", file=sys.stderr)
         return 1
 
