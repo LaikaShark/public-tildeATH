@@ -7,8 +7,10 @@ venv/
 build/
 dist/
 *.o
+*.a
 *.ll
 *.bc
 *.s
 a.out
+runtime/test_runtime
 .DS_Store
