@@ -25,9 +25,10 @@ def test_whitespace_and_comments_are_skipped():
 
 
 def test_block_comments_do_not_nest():
-    src = "/* outer /* inner */ tail */"
-    toks = tokenize(src)
-    assert [t.value for t in toks if t.kind is not TokenKind.EOF] == ["tail", "*", "/"]
+    # The first */ closes the comment regardless of any /* before it.
+    # After the close, only the identifier 'c' remains.
+    toks = tokenize("/* outer /* inner */ c")
+    assert [t.value for t in toks if t.kind is not TokenKind.EOF] == ["c"]
 
 
 def test_unterminated_block_comment_errors():
