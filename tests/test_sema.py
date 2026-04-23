@@ -117,3 +117,25 @@ def test_error_reports_position():
 def test_looptest_sample_passes_sema():
     sample = Path(__file__).parent / "conformance" / "looptest.ath"
     check(sample.read_text())
+
+
+def test_input_introduces_variable():
+    check("INPUT line; PRINT2 line;")
+
+
+def test_input_to_NULL_rejected():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check("INPUT NULL;")
+
+
+def test_print2_of_unbound_errors():
+    with pytest.raises(SemaError, match="missing.*not in scope|line.*not in scope"):
+        check("PRINT2 line;")
+
+
+def test_print2_of_predefined_NULL_ok():
+    check("PRINT2 NULL;")
+
+
+def test_print2_of_THIS_ok():
+    check("PRINT2 THIS;")

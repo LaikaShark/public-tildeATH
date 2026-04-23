@@ -28,19 +28,23 @@ def _compile(source_path: Path, output: Path) -> subprocess.CompletedProcess:
     )
 
 
-def _run(binary: Path, timeout: float = 5.0) -> subprocess.CompletedProcess:
+def _run(binary: Path, timeout: float = 5.0, stdin_input: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [str(binary)], capture_output=True, text=True, timeout=timeout
+        [str(binary)],
+        input=stdin_input,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
 
 
-def _build_and_run(source_path: Path, tmp_path: Path) -> str:
+def _build_and_run(source_path: Path, tmp_path: Path, stdin_input: str | None = None) -> str:
     _ensure_runtime()
     out = tmp_path / "prog"
     compiled = _compile(source_path, out)
     assert compiled.returncode == 0, f"compile failed:\nstderr:\n{compiled.stderr}"
     assert out.exists(), "compiler did not produce output binary"
-    run = _run(out)
+    run = _run(out, stdin_input=stdin_input)
     assert run.returncode == 0, f"binary exited {run.returncode}, stderr:\n{run.stderr}"
     return run.stdout
 
@@ -110,7 +114,7 @@ def test_looptest_conformance(tmp_path):
 
 def test_reserved_v1_word_rejected_at_cli(tmp_path):
     src = tmp_path / "reserved.ath"
-    src.write_text("INPUT V;\n")
+    src.write_text("importf foo as bar;\n")
     out = tmp_path / "prog"
     compiled = _compile(src, out)
     assert compiled.returncode != 0
@@ -166,3 +170,31 @@ def test_decompose_of_unbound_variable_yields_NULL_halves(tmp_path):
         "print survived;\n"
     )
     assert _build_and_run(src, tmp_path) == "survived\n"
+
+
+def test_echo_via_input_and_print2(tmp_path):
+    src = tmp_path / "echo.ath"
+    src.write_text("INPUT s;\nPRINT2 s;\nTHIS.DIE();\n")
+    assert _build_and_run(src, tmp_path, stdin_input="hello, ~ATH!\n") == "hello, ~ATH!\n"
+
+
+def test_print2_of_NULL_prints_blank_line(tmp_path):
+    src = tmp_path / "blank.ath"
+    src.write_text("PRINT2 NULL;\nTHIS.DIE();\n")
+    assert _build_and_run(src, tmp_path) == "\n"
+
+
+def test_input_at_eof_yields_empty_string(tmp_path):
+    src = tmp_path / "eof.ath"
+    src.write_text("INPUT s;\nPRINT2 s;\nprint after;\nTHIS.DIE();\n")
+    # Empty stdin -> input returns empty string -> PRINT2 emits one newline
+    assert _build_and_run(src, tmp_path, stdin_input="") == "\nafter\n"
+
+
+def test_input_strips_trailing_newline(tmp_path):
+    src = tmp_path / "strip.ath"
+    src.write_text(
+        "INPUT a;\nINPUT b;\nPRINT2 a;\nPRINT2 b;\nTHIS.DIE();\n"
+    )
+    # Two lines; trailing \n on each should be stripped before encoding
+    assert _build_and_run(src, tmp_path, stdin_input="first\nsecond\n") == "first\nsecond\n"

@@ -4,6 +4,8 @@ from athc.ast import (
     DecomposeStmt,
     DieStmt,
     ImportStmt,
+    InputStmt,
+    Print2Stmt,
     PrintStmt,
     Program,
 )
@@ -49,6 +51,11 @@ def _walk(stmts: list, defined: set) -> None:
             _check_read(s.var, defined, s)
         elif isinstance(s, PrintStmt):
             pass
+        elif isinstance(s, InputStmt):
+            _check_write(s.var, s)
+            defined.add(s.var)
+        elif isinstance(s, Print2Stmt):
+            _check_read(s.var, defined, s)
         else:
             raise SemaError(
                 f"unknown statement {type(s).__name__}", getattr(s, "line", 0), getattr(s, "col", 0)

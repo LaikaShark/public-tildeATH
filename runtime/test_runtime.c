@@ -91,6 +91,34 @@ int main(void) {
     assert(cn->left == NULL);
     assert(cn->right == ath_NULL);
 
+    /* Character atoms are canonical per character code. */
+    assert(ath_char_atom('a') == ath_char_atom('a'));
+    assert(ath_char_atom('a') != ath_char_atom('b'));
+    assert(ath_is_alive(ath_char_atom('z')));
+    /* Same code via differently-typed inputs gives same atom. */
+    assert(ath_char_atom('A') == ath_char_atom(0x41));
+
+    /* PRINT2 round-trip: build "Hi" and verify it prints "Hi\n". */
+    ath_obj *str = ath_compose(
+        ath_char_atom('H'),
+        ath_compose(ath_char_atom('i'), ath_NULL));
+    fputs("expect Hi: ", stdout);
+    ath_print_obj(str);
+
+    /* PRINT2 of NULL emits just a newline. */
+    fputs("expect blank: ", stdout);
+    ath_print_obj(ath_NULL);
+
+    /* PRINT2 of a null pointer also emits just a newline (null-safety). */
+    fputs("expect blank: ", stdout);
+    ath_print_obj(NULL);
+
+    /* PRINT2 stops at the first unrecognized left half. */
+    ath_obj *garbage = ath_compose(ath_char_atom('X'),
+                                   ath_compose(ath_alloc_alive(), ath_NULL));
+    fputs("expect X: ", stdout);
+    ath_print_obj(garbage);
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

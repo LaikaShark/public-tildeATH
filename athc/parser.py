@@ -4,6 +4,8 @@ from athc.ast import (
     DecomposeStmt,
     DieStmt,
     ImportStmt,
+    InputStmt,
+    Print2Stmt,
     PrintStmt,
     Program,
 )
@@ -55,13 +57,17 @@ class Parser:
             return self._parse_bifurcate()
         if tok.kind is TokenKind.KW_PRINT:
             return self._parse_print()
+        if tok.kind is TokenKind.KW_INPUT:
+            return self._parse_input()
+        if tok.kind is TokenKind.KW_PRINT2:
+            return self._parse_print2()
         if tok.kind is TokenKind.ATH:
             return self._parse_ath_loop()
         if tok.kind is TokenKind.IDENT:
             return self._parse_die()
         if tok.kind is TokenKind.RESERVED:
             raise ParseError(
-                f"'{tok.value}' is reserved for v1+ and not implemented in v0",
+                f"'{tok.value}' is reserved and not yet implemented",
                 tok.line,
                 tok.col,
             )
@@ -122,6 +128,18 @@ class Parser:
         raw = self._expect(TokenKind.RAWTEXT)
         self._expect(TokenKind.SEMI)
         return PrintStmt(text=raw.value, line=kw.line, col=kw.col)
+
+    def _parse_input(self) -> InputStmt:
+        kw = self._expect(TokenKind.KW_INPUT)
+        var = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return InputStmt(var=var.value, line=kw.line, col=kw.col)
+
+    def _parse_print2(self) -> Print2Stmt:
+        kw = self._expect(TokenKind.KW_PRINT2)
+        var = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return Print2Stmt(var=var.value, line=kw.line, col=kw.col)
 
     def _parse_ath_loop(self) -> AthLoop:
         kw = self._expect(TokenKind.ATH)

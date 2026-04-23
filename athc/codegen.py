@@ -6,6 +6,8 @@ from athc.ast import (
     DecomposeStmt,
     DieStmt,
     ImportStmt,
+    InputStmt,
+    Print2Stmt,
     PrintStmt,
     Program,
 )
@@ -34,6 +36,8 @@ def _collect_names(stmts, names: set):
             names.add(s.var)
             _collect_names(s.body, names)
         elif isinstance(s, DieStmt):
+            names.add(s.var)
+        elif isinstance(s, (InputStmt, Print2Stmt)):
             names.add(s.var)
 
 
@@ -91,6 +95,16 @@ class Codegen:
             self.module, ir.FunctionType(ir.VoidType(), []), name="ath_halt"
         )
         self.f_halt.attributes.add("noreturn")
+        self.f_input = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, []),
+            name="ath_input_line",
+        )
+        self.f_print_obj = ir.Function(
+            self.module,
+            ir.FunctionType(ir.VoidType(), [self.obj_ptr]),
+            name="ath_print_obj",
+        )
 
         self.g_null = ir.GlobalVariable(self.module, self.obj_ptr, name="ath_NULL")
         self.g_null.linkage = "external"
@@ -178,6 +192,10 @@ class Codegen:
             self._emit_die(builder, stmt)
         elif isinstance(stmt, PrintStmt):
             self._emit_print(builder, stmt)
+        elif isinstance(stmt, InputStmt):
+            self._emit_input(builder, stmt)
+        elif isinstance(stmt, Print2Stmt):
+            self._emit_print2(builder, stmt)
         else:
             raise CodegenError(f"no codegen for {type(stmt).__name__}")
 
@@ -244,6 +262,14 @@ class Codegen:
         builder.call(
             self.f_print, [ptr, ir.Constant(self.size_t, length)]
         )
+
+    def _emit_input(self, builder: ir.IRBuilder, stmt: InputStmt) -> None:
+        result = builder.call(self.f_input, [])
+        self._write_var(builder, stmt.var, result)
+
+    def _emit_print2(self, builder: ir.IRBuilder, stmt: Print2Stmt) -> None:
+        val = self._read_var(builder, stmt.var)
+        builder.call(self.f_print_obj, [val])
 
 
 def generate_ir(program: Program, module_name: str = "ath") -> str:

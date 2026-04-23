@@ -26,6 +26,12 @@ void     ath_decompose(ath_obj *v, ath_obj **l_out, ath_obj **r_out);
 void     ath_die(ath_obj *v);
 int      ath_is_alive(ath_obj *v);
 void     ath_print(const char *text, size_t len);
+
+/* String I/O. Strings are cons-lists of character atoms per SPEC §4.6. */
+ath_obj *ath_input_line(void);
+void     ath_print_obj(ath_obj *s);
+ath_obj *ath_char_atom(int c);
+
 _Noreturn void ath_halt(void);
 
 #endif

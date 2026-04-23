@@ -6,6 +6,8 @@ class TokenKind(Enum):
     KW_IMPORT = auto()
     KW_BIFURCATE = auto()
     KW_PRINT = auto()
+    KW_INPUT = auto()
+    KW_PRINT2 = auto()
     ATH = auto()
     DIE = auto()
     IDENT = auto()
@@ -42,9 +44,11 @@ KEYWORDS = {
     "import": TokenKind.KW_IMPORT,
     "bifurcate": TokenKind.KW_BIFURCATE,
     "print": TokenKind.KW_PRINT,
+    "input": TokenKind.KW_INPUT,
+    "print2": TokenKind.KW_PRINT2,
 }
 
-RESERVED_V1 = {"importf", "input", "print2"}
+RESERVED_V1 = {"importf"}
 
 PUNCT = {
     "(": TokenKind.LPAREN,

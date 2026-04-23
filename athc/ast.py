@@ -50,7 +50,30 @@ class PrintStmt:
     col: int
 
 
-Stmt = Union[ImportStmt, DecomposeStmt, ComposeStmt, AthLoop, DieStmt, PrintStmt]
+@dataclass
+class InputStmt:
+    var: str
+    line: int
+    col: int
+
+
+@dataclass
+class Print2Stmt:
+    var: str
+    line: int
+    col: int
+
+
+Stmt = Union[
+    ImportStmt,
+    DecomposeStmt,
+    ComposeStmt,
+    AthLoop,
+    DieStmt,
+    PrintStmt,
+    InputStmt,
+    Print2Stmt,
+]
 
 
 @dataclass

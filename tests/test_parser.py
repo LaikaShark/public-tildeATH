@@ -8,6 +8,8 @@ from athc.ast import (
     DecomposeStmt,
     DieStmt,
     ImportStmt,
+    InputStmt,
+    Print2Stmt,
     PrintStmt,
     Program,
 )
@@ -61,6 +63,26 @@ def test_print_statement():
     assert s.text == "hello world"
 
 
+def test_input_statement():
+    p = parse("INPUT line;")
+    s = p.statements[0]
+    assert isinstance(s, InputStmt)
+    assert s.var == "line"
+
+
+def test_print2_statement():
+    p = parse("PRINT2 line;")
+    s = p.statements[0]
+    assert isinstance(s, Print2Stmt)
+    assert s.var == "line"
+
+
+def test_input_print2_case_insensitive():
+    p = parse("input X; print2 X;")
+    assert isinstance(p.statements[0], InputStmt)
+    assert isinstance(p.statements[1], Print2Stmt)
+
+
 def test_ath_loop_with_body():
     p = parse("~ATH(V) { print inside; V.DIE(); }")
     s = p.statements[0]
@@ -102,14 +124,9 @@ def test_identifiers_case_sensitive_through_parser():
     assert p.statements[1].var == "foo"
 
 
-def test_reserved_v1_word_rejected():
-    with pytest.raises(ParseError, match="reserved for v1"):
+def test_reserved_importf_rejected():
+    with pytest.raises(ParseError, match="reserved"):
         parse("importf foo as bar;")
-
-
-def test_reserved_input_rejected():
-    with pytest.raises(ParseError, match="reserved for v1"):
-        parse("INPUT X;")
 
 
 def test_missing_semicolon():

@@ -68,10 +68,10 @@ variables.
 **Reserved words** (no case variant of any of these may appear as an
 identifier):
 
-- Active in v0: `import`, `BIFURCATE`, `print`.
-- Reserved against future use: `importf`, `INPUT`, `PRINT2`. Programs using
-  any of these are rejected by v0 with a "reserved for v1+" diagnostic
-  rather than treating them as identifiers.
+- Active: `import`, `BIFURCATE`, `print`, `INPUT`, `PRINT2`.
+- Reserved against future use: `importf`. Programs using this token are
+  rejected with a "reserved for v1+" diagnostic rather than treating it
+  as an identifier.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
 they follow the case-sensitive identifier rule. The names `this`, `Null`,
@@ -268,6 +268,35 @@ Write `TEXT` to standard output, followed by a single line feed (`U+000A`).
 No interpretation of escape sequences. No flushing guarantees beyond what
 the C runtime provides.
 
+#### 4.4.7 `INPUT VAR;`
+
+1. Read one line of text from standard input. The trailing line feed
+   (`U+000A`), and a preceding `U+000D` if present, are stripped.
+2. On end-of-file or read error, treat the line as empty.
+3. Encode the line as a string per §4.6.
+4. Bind `VAR` to the resulting object.
+
+`VAR` is a write target: it must not be `NULL` (§4.2). Lines longer than
+the implementation's input buffer (≥ 4096 bytes) are split: the first
+buffer-worth becomes the string returned by this call; the remainder is
+read by subsequent calls.
+
+#### 4.4.8 `PRINT2 VAR;`
+
+1. Read `VAR`'s current binding, the object `o`.
+2. Walk `o` as a string per §4.6: at each cell, decompose to `(l, r)` per
+   §4.4.2, look up `l` in the canonical character-atom table, write the
+   matched character to standard output, then continue with `r`.
+3. The walk stops as soon as any of the following holds:
+   - the current object is dead (`ath_is_alive` returns 0), or
+   - the current object is `NULL`, or
+   - the left half is not a recognized character atom.
+4. After the walk, write a single line feed (`U+000A`).
+
+`PRINT2` reads `VAR` but never writes. If `o` is not a well-formed string
+(per §4.6) the output is implementation-defined garbage up to the first
+unrecognized atom, but `PRINT2` never crashes (per §6.2).
+
 ### 4.5 Program termination
 
 A program terminates when either:
@@ -276,6 +305,27 @@ A program terminates when either:
 - Control falls off the end of the top-level statement list.
 
 These have identical observable effects.
+
+### 4.6 String encoding
+
+`INPUT` and `PRINT2` interpret objects as **strings**. A string is a
+(possibly empty) sequence of characters, represented as a chain of objects:
+
+- The empty string is `NULL`.
+- A non-empty string with first character `c` and tail `t` is the composite
+  produced by `BIFURCATE [ATOM(c), t] S;` — i.e. `compose(ATOM(c), t)`.
+
+A **character atom** is an alive object the runtime allocates lazily,
+exactly once per distinct character code (0..255). Two strings sharing a
+character at any position share the same atom by pointer identity.
+
+Atoms have no observable internal structure: their `left`/`right` halves
+are initially unset. Decomposing an atom is permitted but yields freshly
+allocated halves that have no meaning as characters — the atom itself
+remains the canonical representative for PRINT2's reverse lookup.
+
+The encoding is deliberately the same as drocta `~ATH`'s `getStrObj` /
+`getObjStr`, so strings round-trip across implementations.
 
 ---
 
@@ -310,6 +360,9 @@ int      ath_is_alive(ath_obj *v);
 
 /* I/O */
 void     ath_print(const char *text, size_t len);
+ath_obj *ath_input_line(void);
+void     ath_print_obj(ath_obj *s);
+ath_obj *ath_char_atom(int c);
 
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));
@@ -413,7 +466,6 @@ by v0 compilers as syntax errors:
 - `importf "FILE" as FN;` — function import
 - `FN [L,R] V;` and `FN V [L,R];` — function call (compose-result and
   decompose-result forms)
-- `INPUT V;`, `PRINT2 V;` — string I/O
 - `ARGS` — function input parameter
 - `EXECUTE(...)` postfix, lowercase `bifurcate`, `!VAR`, multi-token `import`
   forms — Homestuck-surface compatibility layer

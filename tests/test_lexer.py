@@ -80,12 +80,24 @@ def test_die_method_is_case_insensitive(spelling):
     assert toks[0].kind is TokenKind.DIE
 
 
-@pytest.mark.parametrize(
-    "spelling", ["importf", "IMPORTF", "ImportF", "INPUT", "input", "PRINT2", "print2"]
-)
+@pytest.mark.parametrize("spelling", ["importf", "IMPORTF", "ImportF"])
 def test_reserved_v1_words_become_reserved_tokens(spelling):
     toks = tokenize(spelling)
     assert toks[0].kind is TokenKind.RESERVED
+    assert toks[0].value == spelling
+
+
+@pytest.mark.parametrize("spelling", ["INPUT", "input", "Input"])
+def test_keyword_input_is_case_insensitive(spelling):
+    toks = tokenize(spelling)
+    assert toks[0].kind is TokenKind.KW_INPUT
+    assert toks[0].value == spelling
+
+
+@pytest.mark.parametrize("spelling", ["PRINT2", "print2", "Print2"])
+def test_keyword_print2_is_case_insensitive(spelling):
+    toks = tokenize(spelling)
+    assert toks[0].kind is TokenKind.KW_PRINT2
     assert toks[0].value == spelling
 
 
