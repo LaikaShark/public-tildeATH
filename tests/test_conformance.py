@@ -99,6 +99,18 @@ CASES = [
         "tick\ntick\ntick\ndone\n",
         id="recursive_countdown",
     ),
+    pytest.param(
+        "addition/main.ath",
+        None,
+        "tick\ntick\ntick\ntick\ntick\ndone\n",
+        id="add_then_countdown",
+    ),
+    pytest.param(
+        "fizzbuzz/main.ath",
+        None,
+        "fizz\nbuzz\nfizzbuzz\nfizz\nbuzz\nfizzbuzz\n",
+        id="fizzbuzz_mutual_recursion",
+    ),
 ]
 
 

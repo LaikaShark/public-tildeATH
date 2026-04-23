@@ -1,0 +1,16 @@
+// Compute add(2, 3) = 5, then run countdown(5).
+// Expected output: 5 lines of "tick", then "done".
+
+importf "add.ath"      as ADD;
+importf "countdown.ath" as COUNTDOWN;
+
+import sentinel S;
+BIFURCATE [NULL, S] ONE;     // 1
+BIFURCATE [S, ONE]  TWO;     // 2
+BIFURCATE [S, TWO]  THREE;   // 3
+
+ADD [TWO, THREE] SUM;        // SUM = 5
+COUNTDOWN SUM [A, B];
+
+print done;
+THIS.DIE();

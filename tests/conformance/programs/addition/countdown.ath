@@ -1,0 +1,10 @@
+// Same recursive countdown as the other test program. Duplicated here
+// so the file paths importf'd by main.ath all sit in this directory.
+
+print tick;
+BIFURCATE ARGS[LEFT, REST];
+~ATH(LEFT) {
+    COUNTDOWN REST [A, B];
+    BIFURCATE NULL[JUNK, LEFT];
+}
+THIS.DIE();

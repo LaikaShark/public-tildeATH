@@ -1,0 +1,7 @@
+print buzz;
+BIFURCATE ARGS[LEFT, REST];
+~ATH(LEFT) {
+    FIZZBUZZ REST [X, Y];
+    BIFURCATE NULL[JUNK, LEFT];
+}
+THIS.DIE();

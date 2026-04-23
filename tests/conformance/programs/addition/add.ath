@@ -1,0 +1,23 @@
+// Recursive ADD using the same encoding as countdown.
+//   1   = compose(NULL, anything)         -- dead left = "base case"
+//   n+1 = compose(alive-sentinel, n)
+// Recurrence:
+//   add(1, b) = b + 1
+//   add(a, b) = add(a-1, b+1)   for a > 1
+// ARGS is compose(a, b); the result (also an encoded number) is returned
+// via THIS.DIE.
+
+import s S;
+BIFURCATE ARGS[A, B];
+BIFURCATE A[ALEFT, AREST];
+
+~ATH(ALEFT) {
+    // a > 1: recurse with (a-1, b+1)
+    BIFURCATE [S, B] BPLUS;
+    ADD [AREST, BPLUS] R;
+    THIS.DIE(R);
+}
+
+// a == 1: return b + 1
+BIFURCATE [S, B] BPLUS;
+THIS.DIE(BPLUS);
