@@ -3,6 +3,9 @@ from athc.ast import (
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
+    FuncCallComposeArg,
+    FuncCallDecomposeRet,
+    ImportFuncStmt,
     ImportStmt,
     InputStmt,
     Print2Stmt,
@@ -53,6 +56,8 @@ class Parser:
         tok = self._peek()
         if tok.kind is TokenKind.KW_IMPORT:
             return self._parse_import()
+        if tok.kind is TokenKind.KW_IMPORTF:
+            return self._parse_importf()
         if tok.kind is TokenKind.KW_BIFURCATE:
             return self._parse_bifurcate()
         if tok.kind is TokenKind.KW_PRINT:
@@ -64,7 +69,7 @@ class Parser:
         if tok.kind is TokenKind.ATH:
             return self._parse_ath_loop()
         if tok.kind is TokenKind.IDENT:
-            return self._parse_die()
+            return self._parse_die_or_funcall()
         if tok.kind is TokenKind.RESERVED:
             raise ParseError(
                 f"'{tok.value}' is reserved and not yet implemented",
@@ -159,13 +164,76 @@ class Parser:
         self._expect(TokenKind.RBRACE)
         return AthLoop(var=var.value, body=body, line=kw.line, col=kw.col)
 
-    def _parse_die(self) -> DieStmt:
-        var = self._expect(TokenKind.IDENT)
+    def _parse_importf(self) -> ImportFuncStmt:
+        kw = self._expect(TokenKind.KW_IMPORTF)
+        path = self._expect(TokenKind.STRING)
+        self._expect(TokenKind.KW_AS)
+        name = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return ImportFuncStmt(
+            path=path.value, name=name.value, line=kw.line, col=kw.col
+        )
+
+    def _parse_die_or_funcall(self):
+        first = self._expect(TokenKind.IDENT)
+        nxt = self._peek()
+        if nxt.kind is TokenKind.DIE:
+            return self._parse_die_after_var(first)
+        if nxt.kind is TokenKind.LBRACKET:
+            return self._parse_funcall_compose_arg(first)
+        if nxt.kind is TokenKind.IDENT:
+            return self._parse_funcall_decompose_ret(first)
+        raise ParseError(
+            f"expected '.DIE', '[', or identifier after {first.value!r}; "
+            f"got {nxt.kind.name}",
+            nxt.line,
+            nxt.col,
+        )
+
+    def _parse_die_after_var(self, var_tok: Token) -> DieStmt:
         self._expect(TokenKind.DIE)
         self._expect(TokenKind.LPAREN)
+        arg = None
+        if self._peek().kind is TokenKind.IDENT:
+            arg_tok = self._advance()
+            arg = arg_tok.value
         self._expect(TokenKind.RPAREN)
         self._expect(TokenKind.SEMI)
-        return DieStmt(var=var.value, line=var.line, col=var.col)
+        return DieStmt(var=var_tok.value, arg=arg, line=var_tok.line, col=var_tok.col)
+
+    def _parse_funcall_compose_arg(self, name_tok: Token) -> FuncCallComposeArg:
+        self._expect(TokenKind.LBRACKET)
+        left = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.COMMA)
+        right = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.RBRACKET)
+        target = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return FuncCallComposeArg(
+            name=name_tok.value,
+            left=left.value,
+            right=right.value,
+            target=target.value,
+            line=name_tok.line,
+            col=name_tok.col,
+        )
+
+    def _parse_funcall_decompose_ret(self, name_tok: Token) -> FuncCallDecomposeRet:
+        arg = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.LBRACKET)
+        left = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.COMMA)
+        right = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.RBRACKET)
+        self._expect(TokenKind.SEMI)
+        return FuncCallDecomposeRet(
+            name=name_tok.value,
+            arg=arg.value,
+            left=left.value,
+            right=right.value,
+            line=name_tok.line,
+            col=name_tok.col,
+        )
 
 
 def parse(src: str) -> Program:

@@ -7,6 +7,9 @@ from athc.ast import (
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
+    FuncCallComposeArg,
+    FuncCallDecomposeRet,
+    ImportFuncStmt,
     ImportStmt,
     InputStmt,
     Print2Stmt,
@@ -124,9 +127,60 @@ def test_identifiers_case_sensitive_through_parser():
     assert p.statements[1].var == "foo"
 
 
-def test_reserved_importf_rejected():
-    with pytest.raises(ParseError, match="reserved"):
+def test_importf_requires_string_literal_path():
+    with pytest.raises(ParseError, match="expected STRING"):
         parse("importf foo as bar;")
+
+
+def test_importf_statement():
+    p = parse('importf "lib/add.ath" as ADD;')
+    s = p.statements[0]
+    assert isinstance(s, ImportFuncStmt)
+    assert s.path == "lib/add.ath"
+    assert s.name == "ADD"
+
+
+def test_die_with_no_arg():
+    p = parse("V.DIE();")
+    s = p.statements[0]
+    assert isinstance(s, DieStmt)
+    assert s.var == "V"
+    assert s.arg is None
+
+
+def test_die_with_arg():
+    p = parse("THIS.DIE(R);")
+    s = p.statements[0]
+    assert isinstance(s, DieStmt)
+    assert s.var == "THIS"
+    assert s.arg == "R"
+
+
+def test_funcall_compose_arg_form():
+    p = parse("ADD [X, Y] R;")
+    s = p.statements[0]
+    assert isinstance(s, FuncCallComposeArg)
+    assert s.name == "ADD"
+    assert s.left == "X"
+    assert s.right == "Y"
+    assert s.target == "R"
+
+
+def test_funcall_decompose_ret_form():
+    p = parse("SPLIT V [A, B];")
+    s = p.statements[0]
+    assert isinstance(s, FuncCallDecomposeRet)
+    assert s.name == "SPLIT"
+    assert s.arg == "V"
+    assert s.left == "A"
+    assert s.right == "B"
+
+
+def test_funcall_with_lowercase_name_parses():
+    p = parse("add [X, Y] R;")
+    s = p.statements[0]
+    assert isinstance(s, FuncCallComposeArg)
+    assert s.name == "add"  # case-insensitive resolution happens later
 
 
 def test_missing_semicolon():

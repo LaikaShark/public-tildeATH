@@ -139,3 +139,83 @@ def test_print2_of_predefined_NULL_ok():
 
 def test_print2_of_THIS_ok():
     check("PRINT2 THIS;")
+
+
+# --- Function-call semantics ---
+
+
+def _check_with_funcs(src: str, fnames: list[str]) -> None:
+    """Sema-check `src` against a synthetic function table containing
+    function bodies that are no-ops (so each function passes its own sema)."""
+    program = parse(src)
+    # Empty programs are valid function bodies in the function-table.
+    function_table = {name.lower(): parse("") for name in fnames}
+    analyze(program, function_table)
+
+
+def test_funcall_unknown_function_rejected():
+    with pytest.raises(SemaError, match="ADD.*not declared"):
+        _check_with_funcs("import x A; import y B; ADD [A, B] R;", [])
+
+
+def test_funcall_known_function_passes():
+    _check_with_funcs("import x A; import y B; ADD [A, B] R;", ["ADD"])
+
+
+def test_funcall_resolves_case_insensitively():
+    _check_with_funcs("import x A; import y B; add [A, B] R;", ["ADD"])
+    _check_with_funcs("import x A; import y B; ADD [A, B] R;", ["add"])
+
+
+def test_funcall_compose_arg_args_must_be_in_scope():
+    with pytest.raises(SemaError, match="X.*not in scope"):
+        _check_with_funcs("ADD [X, Y] R;", ["ADD"])
+
+
+def test_funcall_decompose_ret_args_must_be_in_scope():
+    with pytest.raises(SemaError, match="V.*not in scope"):
+        _check_with_funcs("SPLIT V [A, B];", ["SPLIT"])
+
+
+def test_funcall_target_introduced():
+    _check_with_funcs(
+        "import x A; import y B; ADD [A, B] R; R.DIE();", ["ADD"]
+    )
+
+
+def test_funcall_decompose_outputs_introduced():
+    _check_with_funcs(
+        "import x V; SPLIT V [A, B]; A.DIE(); B.DIE();", ["SPLIT"]
+    )
+
+
+def test_funcall_cannot_write_to_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        _check_with_funcs("import x A; import y B; ADD [A, B] NULL;", ["ADD"])
+
+
+# --- ARGS scope in function bodies ---
+
+
+def test_args_is_in_scope_in_function_body():
+    program = parse("")  # empty main
+    function_table = {"id": parse("THIS.DIE(ARGS);")}
+    analyze(program, function_table)
+
+
+def test_args_not_in_scope_at_top_level():
+    with pytest.raises(SemaError, match="ARGS.*not in scope"):
+        analyze(parse("ARGS.DIE();"))
+
+
+# --- .DIE(arg) ---
+
+
+def test_die_arg_must_be_in_scope():
+    with pytest.raises(SemaError, match="R.*not in scope"):
+        check("THIS.DIE(R);")
+
+
+def test_die_arg_can_be_predefined():
+    check("THIS.DIE(THIS);")
+    check("THIS.DIE(NULL);")

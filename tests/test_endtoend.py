@@ -112,13 +112,13 @@ def test_looptest_conformance(tmp_path):
     assert len(lines) >= 2
 
 
-def test_reserved_v1_word_rejected_at_cli(tmp_path):
-    src = tmp_path / "reserved.ath"
+def test_importf_path_must_be_string_literal(tmp_path):
+    src = tmp_path / "bad_importf.ath"
     src.write_text("importf foo as bar;\n")
     out = tmp_path / "prog"
     compiled = _compile(src, out)
     assert compiled.returncode != 0
-    assert "reserved" in compiled.stderr.lower()
+    assert "expected STRING" in compiled.stderr or "expected string" in compiled.stderr.lower()
 
 
 def test_unbound_variable_rejected_at_cli(tmp_path):
@@ -198,3 +198,131 @@ def test_input_strips_trailing_newline(tmp_path):
     )
     # Two lines; trailing \n on each should be stripped before encoding
     assert _build_and_run(src, tmp_path, stdin_input="first\nsecond\n") == "first\nsecond\n"
+
+
+# --- Functions ---
+
+
+def test_function_call_basic(tmp_path):
+    (tmp_path / "hello.ath").write_text(
+        "print Hello from HELLO.;\nTHIS.DIE();\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "hello.ath" as HELLO;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "HELLO [A, B] R;\n"
+        "print bye;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path) == "Hello from HELLO.\nbye\n"
+
+
+def test_function_returns_args_via_die(tmp_path):
+    (tmp_path / "idfn.ath").write_text("THIS.DIE(ARGS);\n")
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "idfn.ath" as ID;\n'
+        "INPUT s;\n"
+        "ID s [H, T];\n"
+        "PRINT2 T;\n"  # T = tail of "hi" = "i"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path, stdin_input="hi\n") == "i\ndone\n"
+
+
+def test_function_default_return_is_NULL(tmp_path):
+    (tmp_path / "noop.ath").write_text("THIS.DIE();\n")  # returns NULL
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "noop.ath" as NOOP;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "NOOP [A, B] R;\n"
+        "PRINT2 R;\n"  # R = NULL -> blank line
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path) == "\nafter\n"
+
+
+def test_die_with_arg_sets_return_then_falls_off_end(tmp_path):
+    (tmp_path / "midret.ath").write_text(
+        # Sets return_obj = ARGS, kills V, falls off end -> returns ARGS.
+        "import x V;\nV.DIE(ARGS);\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "midret.ath" as F;\n'
+        "INPUT s;\n"
+        "F s [H, T];\n"
+        "PRINT2 T;\n"  # T = "ello"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path, stdin_input="hello\n") == "ello\n"
+
+
+def test_function_call_compose_arg_form_then_decompose(tmp_path):
+    # Function picks the left half of ARGS and returns it.
+    (tmp_path / "pickleft.ath").write_text(
+        "BIFURCATE ARGS[L, R];\nTHIS.DIE(L);\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "pickleft.ath" as PICK;\n'
+        "INPUT s;\n"
+        "BIFURCATE s[H, T];\n"
+        # Call PICK with compose(H, T) — should return H back.
+        "PICK [H, T] R;\n"
+        # If everything worked, R is the H atom; print its alive-ness via a loop.
+        "~ATH(R) { print alive; R.DIE(); }\n"
+        "THIS.DIE();\n"
+    )
+    out = _build_and_run(main, tmp_path, stdin_input="ab\n")
+    assert out == "alive\n"
+
+
+def test_importf_nested_function_imports(tmp_path):
+    (tmp_path / "inner.ath").write_text("print inner;\nTHIS.DIE();\n")
+    (tmp_path / "outer.ath").write_text(
+        'importf "inner.ath" as INNER;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "INNER [A, B] R;\n"
+        "print outer;\n"
+        "THIS.DIE();\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "outer.ath" as OUTER;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "OUTER [A, B] R;\n"
+        "print main;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path) == "inner\nouter\nmain\n"
+
+
+def test_importf_missing_file_rejected(tmp_path):
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "nope.ath" as F;\nTHIS.DIE();\n'
+    )
+    out = tmp_path / "prog"
+    compiled = _compile(main, out)
+    assert compiled.returncode != 0
+    assert "file not found" in compiled.stderr.lower()
+
+
+def test_unknown_function_call_rejected_at_cli(tmp_path):
+    main = tmp_path / "main.ath"
+    main.write_text(
+        "import x A;\nimport y B;\nNOSUCH [A, B] R;\nTHIS.DIE();\n"
+    )
+    out = tmp_path / "prog"
+    compiled = _compile(main, out)
+    assert compiled.returncode != 0
+    assert "not declared" in compiled.stderr.lower()

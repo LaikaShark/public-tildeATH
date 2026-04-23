@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from athc.codegen import emit_object, generate_ir
-from athc.parser import ParseError, parse
+from athc.loader import LoaderError, load_program
 from athc.sema import SemaError, analyze
 
 
@@ -37,25 +37,22 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     source_path = Path(args.source)
+
     try:
-        src = source_path.read_text()
-    except OSError as e:
-        print(f"athc: could not read {source_path}: {e}", file=sys.stderr)
+        program, function_table = load_program(source_path)
+    except LoaderError as e:
+        print(f"athc: {e}", file=sys.stderr)
         return 1
 
     try:
-        program = parse(src)
-    except ParseError as e:
-        print(f"athc: {source_path}: {e}", file=sys.stderr)
-        return 1
-
-    try:
-        analyze(program)
+        analyze(program, function_table)
     except SemaError as e:
         print(f"athc: {source_path}: {e}", file=sys.stderr)
         return 1
 
-    ir_text = generate_ir(program, module_name=source_path.stem or "ath")
+    ir_text = generate_ir(
+        program, function_table, module_name=source_path.stem or "ath"
+    )
 
     if args.emit_ir:
         sys.stdout.write(ir_text)

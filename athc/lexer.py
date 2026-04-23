@@ -4,6 +4,8 @@ from enum import Enum, auto
 
 class TokenKind(Enum):
     KW_IMPORT = auto()
+    KW_IMPORTF = auto()
+    KW_AS = auto()
     KW_BIFURCATE = auto()
     KW_PRINT = auto()
     KW_INPUT = auto()
@@ -11,6 +13,7 @@ class TokenKind(Enum):
     ATH = auto()
     DIE = auto()
     IDENT = auto()
+    STRING = auto()
     LPAREN = auto()
     RPAREN = auto()
     LBRACKET = auto()
@@ -42,13 +45,15 @@ class LexError(Exception):
 
 KEYWORDS = {
     "import": TokenKind.KW_IMPORT,
+    "importf": TokenKind.KW_IMPORTF,
+    "as": TokenKind.KW_AS,
     "bifurcate": TokenKind.KW_BIFURCATE,
     "print": TokenKind.KW_PRINT,
     "input": TokenKind.KW_INPUT,
     "print2": TokenKind.KW_PRINT2,
 }
 
-RESERVED_V1 = {"importf"}
+RESERVED_V1: set[str] = set()
 
 PUNCT = {
     "(": TokenKind.LPAREN,
@@ -168,6 +173,18 @@ class Lexer:
                         f"expected '.DIE', got '.{word}'", line, col
                     )
                 self._emit(TokenKind.DIE, "." + word, line, col)
+                continue
+
+            if c == '"':
+                self._advance()
+                start = self.pos
+                while self.pos < len(self.src) and self._peek() != '"':
+                    self._advance()
+                if self.pos >= len(self.src):
+                    raise LexError("unterminated string literal", line, col)
+                text = self.src[start:self.pos]
+                self._advance()
+                self._emit(TokenKind.STRING, text, line, col)
                 continue
 
             if c in PUNCT:

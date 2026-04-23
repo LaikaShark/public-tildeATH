@@ -80,13 +80,6 @@ def test_die_method_is_case_insensitive(spelling):
     assert toks[0].kind is TokenKind.DIE
 
 
-@pytest.mark.parametrize("spelling", ["importf", "IMPORTF", "ImportF"])
-def test_reserved_v1_words_become_reserved_tokens(spelling):
-    toks = tokenize(spelling)
-    assert toks[0].kind is TokenKind.RESERVED
-    assert toks[0].value == spelling
-
-
 @pytest.mark.parametrize("spelling", ["INPUT", "input", "Input"])
 def test_keyword_input_is_case_insensitive(spelling):
     toks = tokenize(spelling)
@@ -99,6 +92,45 @@ def test_keyword_print2_is_case_insensitive(spelling):
     toks = tokenize(spelling)
     assert toks[0].kind is TokenKind.KW_PRINT2
     assert toks[0].value == spelling
+
+
+@pytest.mark.parametrize("spelling", ["importf", "IMPORTF", "ImportF"])
+def test_keyword_importf_is_case_insensitive(spelling):
+    toks = tokenize(spelling)
+    assert toks[0].kind is TokenKind.KW_IMPORTF
+
+
+@pytest.mark.parametrize("spelling", ["as", "AS", "As"])
+def test_keyword_as_is_case_insensitive(spelling):
+    toks = tokenize(spelling)
+    assert toks[0].kind is TokenKind.KW_AS
+
+
+def test_string_literal_basic():
+    toks = tokenize('"hello"')
+    assert toks[0].kind is TokenKind.STRING
+    assert toks[0].value == "hello"
+
+
+def test_string_literal_empty():
+    toks = tokenize('""')
+    assert toks[0].kind is TokenKind.STRING
+    assert toks[0].value == ""
+
+
+def test_string_literal_with_special_chars():
+    toks = tokenize('"path/to/file.ath"')
+    assert toks[0].value == "path/to/file.ath"
+
+
+def test_string_literal_can_span_newlines():
+    toks = tokenize('"first\nsecond"')
+    assert toks[0].value == "first\nsecond"
+
+
+def test_string_literal_unterminated_errors():
+    with pytest.raises(LexError, match="unterminated string"):
+        tokenize('"never closed')
 
 
 def test_printer_is_identifier_not_print_keyword():

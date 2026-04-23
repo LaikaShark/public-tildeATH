@@ -41,6 +41,7 @@ class DieStmt:
     var: str
     line: int
     col: int
+    arg: str | None = None
 
 
 @dataclass
@@ -64,6 +65,36 @@ class Print2Stmt:
     col: int
 
 
+@dataclass
+class ImportFuncStmt:
+    path: str
+    name: str
+    line: int
+    col: int
+
+
+@dataclass
+class FuncCallComposeArg:
+    """FN [L, R] V;  -- compose(L, R) -> result -> V"""
+    name: str
+    left: str
+    right: str
+    target: str
+    line: int
+    col: int
+
+
+@dataclass
+class FuncCallDecomposeRet:
+    """FN A [B, C];  -- A -> result -> decompose into B, C"""
+    name: str
+    arg: str
+    left: str
+    right: str
+    line: int
+    col: int
+
+
 Stmt = Union[
     ImportStmt,
     DecomposeStmt,
@@ -73,6 +104,9 @@ Stmt = Union[
     PrintStmt,
     InputStmt,
     Print2Stmt,
+    ImportFuncStmt,
+    FuncCallComposeArg,
+    FuncCallDecomposeRet,
 ]
 
 

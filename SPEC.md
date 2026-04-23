@@ -50,10 +50,12 @@ Comments:
 ### 2.2 Tokens
 
 ```
-KEYWORD     := 'import' | 'BIFURCATE' | 'print'    [matched case-insensitively]
-LOOPSTART   := '~ATH'                              [the 'ATH' part is case-insensitive]
-DIE         := '.DIE'                              [the 'DIE' part is case-insensitive]
-IDENT       := [A-Za-z_][A-Za-z0-9_]*              [case-sensitive]
+KEYWORD     := 'import' | 'importf' | 'as' | 'BIFURCATE' | 'print'
+              | 'INPUT' | 'PRINT2'              [matched case-insensitively]
+LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
+DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
+IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
+STRING      := '"' (any char except '"')* '"'  [no escapes in v1]
 PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';'
 ```
 
@@ -68,10 +70,7 @@ variables.
 **Reserved words** (no case variant of any of these may appear as an
 identifier):
 
-- Active: `import`, `BIFURCATE`, `print`, `INPUT`, `PRINT2`.
-- Reserved against future use: `importf`. Programs using this token are
-  rejected with a "reserved for v1+" diagnostic rather than treating it
-  as an identifier.
+- Active: `import`, `importf`, `as`, `BIFURCATE`, `print`, `INPUT`, `PRINT2`.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
 they follow the case-sensitive identifier rule. The names `this`, `Null`,
@@ -86,7 +85,16 @@ keyword `print` followed by `er`.
 
 `~ATH` is one token. The tilde is significant.
 
-### 2.3 `print` payload
+### 2.3 String literals
+
+A double-quoted string literal `"..."` is a `STRING` token. The body is a
+sequence of bytes terminated by the next `"`. There are no escape
+sequences in v1: `\n`, `\"`, etc. are not interpreted. Newlines inside the
+body are part of the string. The body may be empty.
+
+Used by `importf` (§4.4.9) to name a file path.
+
+### 2.4 `print` payload
 
 After the keyword `print`, the lexer enters a one-shot raw mode:
 
@@ -109,12 +117,18 @@ EBNF. `*` is zero-or-more, `?` is optional.
 program       = statement* ;
 
 statement     = import-stmt
+              | importf-stmt
               | bifurcate-stmt
               | ath-loop
               | die-stmt
-              | print-stmt ;
+              | print-stmt
+              | input-stmt
+              | print2-stmt
+              | funcall-stmt ;
 
 import-stmt   = 'import' IDENT IDENT ';' ;
+
+importf-stmt  = 'importf' STRING 'as' IDENT ';' ;
 
 bifurcate-stmt
               = decompose-stmt
@@ -127,9 +141,16 @@ compose-stmt  = 'BIFURCATE' '[' IDENT ',' IDENT ']' IDENT ';' ;
 
 ath-loop      = '~ATH' '(' IDENT ')' '{' statement* '}' ;
 
-die-stmt      = IDENT '.DIE' '(' ')' ';' ;
+die-stmt      = IDENT '.DIE' '(' [ IDENT ] ')' ';' ;
 
 print-stmt    = 'print' RAWTEXT ';' ;
+
+input-stmt    = 'INPUT' IDENT ';' ;
+
+print2-stmt   = 'PRINT2' IDENT ';' ;
+
+funcall-stmt  = IDENT '[' IDENT ',' IDENT ']' IDENT ';'        (* compose-arg form *)
+              | IDENT IDENT '[' IDENT ',' IDENT ']' ';' ;      (* decompose-result form *)
 ```
 
 Notes:
@@ -138,6 +159,9 @@ Notes:
 - A statement may not appear outside a `program` or `ath-loop` body.
 - The two `BIFURCATE` forms are distinguished by the token following
   `BIFURCATE`: an `IDENT` selects decompose; a `[` selects compose.
+- An `IDENT`-starting statement is disambiguated by the next token:
+  `.DIE` → die-stmt; `[` → funcall compose-arg form;
+  `IDENT` → funcall decompose-result form.
 
 ---
 
@@ -160,13 +184,14 @@ ath_obj { alive: bool, left: ath_obj* | UNSET, right: ath_obj* | UNSET }
 
 ### 4.2 Initial environment
 
-Before the first statement of the program executes, the environment contains
-exactly two bindings:
+Each function activation (including the top-level program — its "main"
+activation) starts with a fresh local environment containing:
 
 | Name   | Object                                                                 |
 |--------|------------------------------------------------------------------------|
-| `THIS` | A fresh alive object with no halves. Killing it terminates the program. |
+| `THIS` | A fresh alive object for this activation. Killing it returns from the function (or, for main, terminates the program). |
 | `NULL` | A globally-shared, immortal-in-deadness object: `alive = false`.       |
+| `ARGS` | (Function activations only.) The object passed by the caller per §4.4.10/§4.4.11. Not defined in main. |
 
 These bindings use exactly the spellings `THIS` and `NULL` (uppercase). Per
 the case-sensitive identifier rule (§2.2), the names `this`, `Null`, etc.,
@@ -250,15 +275,23 @@ inside the body changes what is being watched.
 The body may be empty (`{}`), in which case the construct loops forever if
 the initial check passes.
 
-#### 4.4.5 `V.DIE();`
+#### 4.4.5 `V.DIE();` and `V.DIE(RET);`
 
-1. Read `V`'s current binding, the object `o`.
-2. If `V` is the name `THIS`: terminate the program immediately. No
-   subsequent statement, in any enclosing loop, executes.
-3. Otherwise: set `o.alive = false`. This affects only `o` itself — its
-   halves, any composites it is part of, and any other aliases of `o` (other
-   variables pointing to the same object) all continue to observe `o` as
-   dead, but no other object is modified.
+1. If a `RET` argument is given, read its current binding and update the
+   current activation's **pending return value** to point to that object.
+2. Read `V`'s current binding, the object `o`.
+3. If `V` is the name `THIS`: return from the current activation
+   immediately. No subsequent statement in this activation executes. The
+   caller receives the activation's pending return value (defaulting to
+   `NULL` if never set). For main, the pending return value is discarded
+   and the program terminates with OS exit code 0.
+4. Otherwise: set `o.alive = false`. This affects only `o` itself — its
+   halves, any composites it is part of, and any other aliases of `o`
+   continue to observe `o` as dead, but no other object is modified.
+
+Step 1 happens before step 3, so `THIS.DIE(THIS);` returns the activation's
+own THIS object — the read of `THIS` is well-defined because the kill
+hasn't happened yet.
 
 Killing an already-dead object is a no-op.
 
@@ -297,14 +330,56 @@ read by subsequent calls.
 (per §4.6) the output is implementation-defined garbage up to the first
 unrecognized atom, but `PRINT2` never crashes (per §6.2).
 
+#### 4.4.9 `importf "PATH" as NAME;`
+
+A **compile-time directive**, not a runtime operation:
+
+1. The implementation opens the file at `PATH`, resolved relative to the
+   directory of the file containing this statement.
+2. The file's contents are parsed as a Program per §3 and registered as a
+   function under the name `NAME` (case-insensitively, per §2.2).
+3. The statement emits no runtime code.
+
+If `PATH` does not exist or fails to parse, compilation fails. A function
+registered by `importf` is callable from any function in the compilation
+unit, including from inside loops and from other functions.
+
+A program may register multiple functions under the same name; the last
+registration in source order wins. (Subject to revision; see §9.)
+
+#### 4.4.10 `FN [L, R] V;` (function call, compose-argument form)
+
+1. Read `L` and `R` from the current scope.
+2. Compose them via `ath_compose(L, R)` to a single argument object.
+3. Invoke function `FN` (resolved case-insensitively against the function
+   registry from §4.4.9) with that argument. The call yields an object.
+4. Bind `V` in the current scope to that object.
+
+#### 4.4.11 `FN A [B, C];` (function call, decompose-result form)
+
+1. Read `A` from the current scope.
+2. Invoke function `FN` with `A`. The call yields an object `o`.
+3. Decompose `o` via `ath_decompose` and bind `B` to the left half, `C` to
+   the right half (per §4.4.2 semantics, including lazy half allocation
+   if `o` is a leaf).
+
+In both forms, `FN` is matched against the function registry; if no such
+function is registered, compilation fails (§6.1).
+
 ### 4.5 Program termination
 
-A program terminates when either:
+A program terminates when its main activation returns. This happens when:
 
-- `THIS.DIE();` is executed (§4.4.5), or
+- `THIS.DIE();` (or `THIS.DIE(RET);`) is executed at the top level, or
 - Control falls off the end of the top-level statement list.
 
-These have identical observable effects.
+In both cases the OS-visible exit code is `0`. The pending return value of
+main, if any, is discarded.
+
+A function activation returns when `THIS.DIE();` is executed in its body
+or when control falls off the end of its body. Its pending return value
+(defaulting to `NULL`) is delivered to the caller as the value of the
+function call expression.
 
 ### 4.6 String encoding
 
@@ -395,14 +470,17 @@ v0 errors fall into two classes:
 
 ### 6.1 Compile-time errors
 
-- Lexical: unterminated `/*`, missing space after `print`, illegal character.
+- Lexical: unterminated `/*`, unterminated `"..."`, missing space after
+  `print`, illegal character.
 - Syntactic: any deviation from the grammar in §3.
-- Reference to an unbound name. (Specifically: `~ATH(V)`, `V.DIE();`,
-  decomposition source `V`, and compose operands must name variables that
-  have been introduced by `import` or by an earlier `BIFURCATE` *on every
-  control-flow path*. The "every path" rule is checked syntactically: a name
-  is in scope if it would be introduced by some preceding statement in the
-  same block or an enclosing block.)
+- Reference to an unbound name in any read position, checked syntactically:
+  a name is in scope if introduced by some preceding statement in the same
+  block or an enclosing block. The scope is per-activation — function
+  bodies have their own scope starting with `THIS`, `NULL`, `ARGS`.
+- Reference to an unknown function in a `funcall-stmt`: matched
+  case-insensitively against names registered by `importf`.
+- Binding `NULL` (any case variant in a write position) is rejected per §4.2.
+- File-not-found or parse error in an `importf` target.
 
 ### 6.2 Run-time behavior
 
@@ -455,6 +533,31 @@ Under v0 semantics this:
 
 This program is the v0 conformance target.
 
+### 7.2 Function call (v1)
+
+`hello.ath`:
+```
+import unused U;
+~ATH(U) {
+    print Hello from a function.;
+    THIS.DIE(THIS);
+}
+THIS.DIE();
+```
+
+`main.ath`:
+```
+importf "hello.ath" as HELLO;
+import a A;
+import b B;
+HELLO [A, B] R;
+THIS.DIE();
+```
+
+Compiling `main.ath` produces a binary that prints `Hello from a function.`
+once and exits. The `HELLO` function ignores its `ARGS` and is included
+purely to exercise the call machinery.
+
 ---
 
 ## 8. Reserved for v1+
@@ -462,23 +565,21 @@ This program is the v0 conformance target.
 The following will be specified in subsequent revisions and MUST be rejected
 by v0 compilers as syntax errors:
 
-- `V.DIE(ARG);` — function return value
-- `importf "FILE" as FN;` — function import
-- `FN [L,R] V;` and `FN V [L,R];` — function call (compose-result and
-  decompose-result forms)
-- `ARGS` — function input parameter
 - `EXECUTE(...)` postfix, lowercase `bifurcate`, `!VAR`, multi-token `import`
   forms — Homestuck-surface compatibility layer
 
 ---
 
-## 9. Open questions (to resolve before v1)
+## 9. Open questions
 
 - Should there be lexical block scope for variables introduced inside a
-  `~ATH` loop, or is the environment flat? (v0 is flat — single global
-  namespace.)
+  `~ATH` loop, or is the environment flat within an activation? (Currently
+  flat per activation. Activations themselves are isolated.)
 - Should `import NAME VAR;` warn on duplicate `NAME` across distinct `VAR`s?
 - Should `print` support an escape mechanism for `;`?
-- Should we add quoted string literals as an alternative to `RAWTEXT`?
+- Should `importf` registering a name twice be a hard error rather than
+  last-wins?
+- Should `STRING` support escape sequences (`\n`, `\"`, `\\`)? Currently
+  no escapes in v1.
 - Concrete intern semantics for `ath_compose` in `intern` mode: by raw
   pointer pair, or recursively by structural identity of halves?
