@@ -133,6 +133,19 @@ def test_string_literal_unterminated_errors():
         tokenize('"never closed')
 
 
+@pytest.mark.parametrize("spelling", ["EXECUTE", "execute", "Execute"])
+def test_keyword_execute_is_case_insensitive(spelling):
+    toks = tokenize(spelling)
+    assert toks[0].kind is TokenKind.KW_EXECUTE
+
+
+def test_bang_is_a_token():
+    toks = tokenize("!V")
+    assert toks[0].kind is TokenKind.BANG
+    assert toks[1].kind is TokenKind.IDENT
+    assert toks[1].value == "V"
+
+
 def test_printer_is_identifier_not_print_keyword():
     toks = tokenize("printer importer importfoo")
     assert all(t.kind is TokenKind.IDENT for t in toks[:3])

@@ -51,12 +51,12 @@ Comments:
 
 ```
 KEYWORD     := 'import' | 'importf' | 'as' | 'BIFURCATE' | 'print'
-              | 'INPUT' | 'PRINT2'              [matched case-insensitively]
+              | 'INPUT' | 'PRINT2' | 'EXECUTE'   [matched case-insensitively]
 LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
 STRING      := '"' (any char except '"')* '"'  [no escapes in v1]
-PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';'
+PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';' | '!'
 ```
 
 **Case sensitivity.** Keywords, the `~ATH` loop-start token, the `.DIE`
@@ -70,7 +70,8 @@ variables.
 **Reserved words** (no case variant of any of these may appear as an
 identifier):
 
-- Active: `import`, `importf`, `as`, `BIFURCATE`, `print`, `INPUT`, `PRINT2`.
+- Active: `import`, `importf`, `as`, `BIFURCATE`, `print`, `INPUT`,
+  `PRINT2`, `EXECUTE`.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
 they follow the case-sensitive identifier rule. The names `this`, `Null`,
@@ -126,7 +127,9 @@ statement     = import-stmt
               | print2-stmt
               | funcall-stmt ;
 
-import-stmt   = 'import' IDENT IDENT ';' ;
+import-stmt   = 'import' IDENT+ ';' ;
+                (* the last IDENT is the variable bound; preceding IDENTs
+                   are metadata, joined with single spaces *)
 
 importf-stmt  = 'importf' STRING 'as' IDENT ';' ;
 
@@ -139,7 +142,8 @@ decompose-stmt
 
 compose-stmt  = 'BIFURCATE' '[' IDENT ',' IDENT ']' IDENT ';' ;
 
-ath-loop      = '~ATH' '(' IDENT ')' '{' statement* '}' ;
+ath-loop      = '~ATH' '(' [ '!' ] IDENT ')' '{' statement* '}'
+                [ 'EXECUTE' '(' IDENT ')' ] ';'? ;
 
 die-stmt      = IDENT '.DIE' '(' [ IDENT ] ')' ';' ;
 
@@ -221,15 +225,21 @@ Reading the variable always reads its current binding.
 
 ### 4.4 Statement semantics
 
-#### 4.4.1 `import NAME VAR;`
+#### 4.4.1 `import NAME... VAR;`
+
+One or more IDENTs follow `import`. The **last** IDENT is `VAR`, the
+variable to bind. Any preceding IDENTs are metadata (joined by single
+spaces to form a "concept name").
 
 If `VAR` is already bound: no-op.
 
 Otherwise: allocate a fresh alive object with no halves, bind `VAR` to it.
 
-`NAME` is metadata (it preserves a flavor of the source program for tooling
-and diagnostics). The compiler MAY warn on collisions with other declared
-names but MUST NOT use `NAME` to alter program behavior.
+The metadata preserves the flavor of the source program for tooling and
+diagnostics. The compiler MAY warn on collisions with other declared
+metadata strings but MUST NOT use it to alter program behavior. This
+accommodates the Homestuck surface form `import dead grandmother G;` as
+well as the drocta-style `import x V;`.
 
 #### 4.4.2 `BIFURCATE V[L, R];` (decompose)
 
@@ -259,11 +269,12 @@ keyed by the operand object identities. If a previously composed object with
 those exact halves exists, it is returned (whether alive or dead);
 otherwise, a new alive object is allocated and inserted.
 
-#### 4.4.4 `~ATH(V) { S* }`
+#### 4.4.4 `~ATH(V) { S* }` and `~ATH(!V) { S* }`
 
 ```
 loop:
-  if not ath_is_alive(env[V]): goto end_loop
+  alive := ath_is_alive(env[V])
+  if not alive (or alive, if the '!' form): goto end_loop
   execute S*
   goto loop
 end_loop:
@@ -274,6 +285,25 @@ inside the body changes what is being watched.
 
 The body may be empty (`{}`), in which case the construct loops forever if
 the initial check passes.
+
+The `!V` form (Homestuck "inversion") inverts the condition: the body
+runs while `V` is **dead**. Because objects can never come back to life,
+`~ATH(!V)` runs at most once if `V` is already dead at entry, then exits;
+if `V` is alive at entry, the loop never runs.
+
+An optional `EXECUTE(IDENT)` postfix may follow the closing `}`:
+
+```
+~ATH(V) { S* } EXECUTE(NULL);
+```
+
+The `IDENT` after `EXECUTE` is **accepted but currently has no semantic
+effect** — it is a syntactic accommodation of the Homestuck surface,
+where `EXECUTE` historically named the action to perform after the loop
+exits. Future revisions may interpret it (e.g., as a function to invoke).
+
+With an `EXECUTE` postfix, the construct terminates with `;`. Without
+`EXECUTE`, the closing `}` is the terminator (no `;`).
 
 #### 4.4.5 `V.DIE();` and `V.DIE(RET);`
 
@@ -565,8 +595,8 @@ purely to exercise the call machinery.
 The following will be specified in subsequent revisions and MUST be rejected
 by v0 compilers as syntax errors:
 
-- `EXECUTE(...)` postfix, lowercase `bifurcate`, `!VAR`, multi-token `import`
-  forms — Homestuck-surface compatibility layer
+(All previously-deferred items are now implemented. This section is
+empty pending v2+ features.)
 
 ---
 

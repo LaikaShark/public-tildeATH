@@ -326,3 +326,74 @@ def test_unknown_function_call_rejected_at_cli(tmp_path):
     compiled = _compile(main, out)
     assert compiled.returncode != 0
     assert "not declared" in compiled.stderr.lower()
+
+
+# --- Homestuck surface ---
+
+
+def test_inverted_loop_runs_after_var_dies(tmp_path):
+    # V starts alive, gets killed, then ~ATH(!V) fires because V is now dead.
+    # Body rebinds V to a live composite so the next check fails and the
+    # loop exits (rather than running forever).
+    src = tmp_path / "inv.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(!V) {\n"
+        "    print V is dead;\n"
+        "    BIFURCATE [NULL, NULL] V;\n"
+        "}\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "V is dead\nafter\n"
+
+
+def test_inverted_loop_skipped_when_var_alive(tmp_path):
+    # V is alive, so ~ATH(!V) body never runs.
+    src = tmp_path / "inv_skip.ath"
+    src.write_text(
+        "import x V;\n"
+        "~ATH(!V) { print never; }\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "after\n"
+
+
+def test_execute_postfix_is_accepted(tmp_path):
+    src = tmp_path / "exec.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { print never; } EXECUTE(NULL);\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "after\n"
+
+
+def test_homestuck_canonical_shape_parses_and_runs(tmp_path):
+    # Patterned after esolangs wiki canonical shape.
+    src = tmp_path / "hs.ath"
+    src.write_text(
+        "import dead universe U;\n"
+        "U.DIE();\n"
+        "~ATH(!U) {\n"
+        "    print universe ended;\n"
+        "    THIS.DIE();\n"
+        "} EXECUTE(NULL);\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "universe ended\n"
+
+
+def test_multi_word_import_works_end_to_end(tmp_path):
+    src = tmp_path / "multi.ath"
+    src.write_text(
+        "import dead grandmother G;\n"
+        "~ATH(G) { print alive; G.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "alive\ndone\n"

@@ -10,6 +10,7 @@ class TokenKind(Enum):
     KW_PRINT = auto()
     KW_INPUT = auto()
     KW_PRINT2 = auto()
+    KW_EXECUTE = auto()
     ATH = auto()
     DIE = auto()
     IDENT = auto()
@@ -22,6 +23,7 @@ class TokenKind(Enum):
     RBRACE = auto()
     COMMA = auto()
     SEMI = auto()
+    BANG = auto()
     RAWTEXT = auto()
     RESERVED = auto()
     EOF = auto()
@@ -51,6 +53,7 @@ KEYWORDS = {
     "print": TokenKind.KW_PRINT,
     "input": TokenKind.KW_INPUT,
     "print2": TokenKind.KW_PRINT2,
+    "execute": TokenKind.KW_EXECUTE,
 }
 
 RESERVED_V1: set[str] = set()
@@ -64,6 +67,7 @@ PUNCT = {
     "}": TokenKind.RBRACE,
     ",": TokenKind.COMMA,
     ";": TokenKind.SEMI,
+    "!": TokenKind.BANG,
 }
 
 

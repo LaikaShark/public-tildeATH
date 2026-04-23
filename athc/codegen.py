@@ -304,7 +304,8 @@ class FunctionEmitter:
         builder.position_at_start(header)
         v = self._read_var(builder, stmt.var)
         alive = builder.call(self.cg.f_is_alive, [v])
-        cond = builder.icmp_signed("!=", alive, ir.Constant(self.cg.i32, 0))
+        op = "==" if stmt.inverted else "!="
+        cond = builder.icmp_signed(op, alive, ir.Constant(self.cg.i32, 0))
         builder.cbranch(cond, body, end)
 
         builder.position_at_start(body)

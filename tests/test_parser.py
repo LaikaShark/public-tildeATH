@@ -34,6 +34,24 @@ def test_import_statement():
     assert s.var == "A"
 
 
+def test_import_multi_word_metadata():
+    p = parse("import dead grandmother G;")
+    s = p.statements[0]
+    assert isinstance(s, ImportStmt)
+    assert s.name == "dead grandmother"
+    assert s.var == "G"
+
+
+def test_import_with_only_var_rejected():
+    with pytest.raises(ParseError, match="metadata word"):
+        parse("import G;")
+
+
+def test_import_with_no_idents_rejected():
+    with pytest.raises(ParseError, match="metadata word"):
+        parse("import ;")
+
+
 def test_decompose_statement():
     p = parse("BIFURCATE V[L,R];")
     s = p.statements[0]
@@ -91,9 +109,32 @@ def test_ath_loop_with_body():
     s = p.statements[0]
     assert isinstance(s, AthLoop)
     assert s.var == "V"
+    assert s.inverted is False
     assert len(s.body) == 2
     assert isinstance(s.body[0], PrintStmt)
     assert isinstance(s.body[1], DieStmt)
+
+
+def test_ath_loop_with_inversion():
+    p = parse("~ATH(!V) { print inverted; }")
+    s = p.statements[0]
+    assert isinstance(s, AthLoop)
+    assert s.var == "V"
+    assert s.inverted is True
+
+
+def test_ath_loop_with_execute_suffix():
+    p = parse("~ATH(V) { print x; } EXECUTE(NULL);")
+    s = p.statements[0]
+    assert isinstance(s, AthLoop)
+    assert s.var == "V"
+
+
+def test_ath_loop_inversion_plus_execute():
+    p = parse("~ATH(!V) { } EXECUTE(F);")
+    s = p.statements[0]
+    assert isinstance(s, AthLoop)
+    assert s.inverted is True
 
 
 def test_ath_loop_empty_body():

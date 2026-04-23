@@ -84,10 +84,23 @@ class Parser:
 
     def _parse_import(self) -> ImportStmt:
         kw = self._expect(TokenKind.KW_IMPORT)
-        name = self._expect(TokenKind.IDENT)
-        var = self._expect(TokenKind.IDENT)
+        idents: list[str] = []
+        while self._peek().kind is TokenKind.IDENT:
+            idents.append(self._advance().value)
         self._expect(TokenKind.SEMI)
-        return ImportStmt(name=name.value, var=var.value, line=kw.line, col=kw.col)
+        if len(idents) < 2:
+            raise ParseError(
+                "'import' requires at least one metadata word followed by "
+                "the variable name",
+                kw.line,
+                kw.col,
+            )
+        return ImportStmt(
+            name=" ".join(idents[:-1]),
+            var=idents[-1],
+            line=kw.line,
+            col=kw.col,
+        )
 
     def _parse_bifurcate(self):
         kw = self._expect(TokenKind.KW_BIFURCATE)
@@ -149,6 +162,10 @@ class Parser:
     def _parse_ath_loop(self) -> AthLoop:
         kw = self._expect(TokenKind.ATH)
         self._expect(TokenKind.LPAREN)
+        inverted = False
+        if self._peek().kind is TokenKind.BANG:
+            self._advance()
+            inverted = True
         var = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.RPAREN)
         self._expect(TokenKind.LBRACE)
@@ -162,7 +179,15 @@ class Parser:
                 )
             body.append(self._parse_statement())
         self._expect(TokenKind.RBRACE)
-        return AthLoop(var=var.value, body=body, line=kw.line, col=kw.col)
+        if self._peek().kind is TokenKind.KW_EXECUTE:
+            self._advance()
+            self._expect(TokenKind.LPAREN)
+            self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.RPAREN)
+            self._expect(TokenKind.SEMI)
+        return AthLoop(
+            var=var.value, body=body, line=kw.line, col=kw.col, inverted=inverted
+        )
 
     def _parse_importf(self) -> ImportFuncStmt:
         kw = self._expect(TokenKind.KW_IMPORTF)

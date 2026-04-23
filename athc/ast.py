@@ -34,6 +34,7 @@ class AthLoop:
     body: list = field(default_factory=list)
     line: int = 0
     col: int = 0
+    inverted: bool = False
 
 
 @dataclass
