@@ -1,0 +1,2 @@
+// The identity function: hands ARGS back through THIS.DIE.
+THIS.DIE(ARGS);

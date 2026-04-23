@@ -1,0 +1,10 @@
+// Tests that a function returning its ARGS works, and that the caller
+// can decompose the returned object back into its halves.
+
+importf "id.ath" as ID;
+INPUT line;
+ID line [HEAD, TAIL];
+// HEAD is the first-char atom of `line`; TAIL is the rest of the string.
+PRINT2 TAIL;
+print done;
+THIS.DIE();

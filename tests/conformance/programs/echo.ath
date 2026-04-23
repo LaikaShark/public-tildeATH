@@ -1,0 +1,3 @@
+INPUT line;
+PRINT2 line;
+THIS.DIE();

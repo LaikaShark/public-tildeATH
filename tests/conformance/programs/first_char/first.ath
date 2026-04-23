@@ -1,0 +1,4 @@
+// Returns the first cons-cell of ARGS unchanged (so the caller's
+// decompose recovers the head atom and tail). Effectively the identity
+// on a non-empty string.
+THIS.DIE(ARGS);

@@ -1,0 +1,6 @@
+importf "hello.ath" as HELLO;
+import any A;
+import any B;
+HELLO [A, B] R;
+print main is done;
+THIS.DIE();

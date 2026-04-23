@@ -1,0 +1,15 @@
+// Recursive countdown function.
+// Prints "tick" once per call. If ARGS's left half is alive (i.e. ARGS
+// encodes a successor n+1), recurse on the right half. Otherwise (base
+// case: ARGS encodes 1, dead left) stop.
+//
+// The rebind-to-NULL idiom breaks the if-then loop without killing the
+// shared sentinel object that every level of ARGS points to.
+
+print tick;
+BIFURCATE ARGS[LEFT, REST];
+~ATH(LEFT) {
+    COUNTDOWN REST [A, B];
+    BIFURCATE NULL[JUNK, LEFT];
+}
+THIS.DIE();
