@@ -115,7 +115,7 @@ def test_error_reports_position():
 
 
 def test_looptest_sample_passes_sema():
-    sample = Path(__file__).parent / "conformance" / "looptest.ath"
+    sample = Path(__file__).resolve().parent.parent / "examples" / "looptest.ath"
     check(sample.read_text())
 
 

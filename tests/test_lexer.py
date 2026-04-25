@@ -213,7 +213,7 @@ def test_token_positions_are_one_based():
 
 
 def test_looptest_sample_tokenizes():
-    sample = Path(__file__).parent / "conformance" / "looptest.ath"
+    sample = Path(__file__).resolve().parent.parent / "examples" / "looptest.ath"
     src = sample.read_text()
     toks = tokenize(src)
 

@@ -1,6 +1,5 @@
 """Conformance suite: compile-and-run each canonical .ath program and
-diff stdout against an expected value. Programs live under
-tests/conformance/programs/."""
+diff stdout against an expected value. Programs live under examples/."""
 
 import subprocess
 import sys
@@ -9,7 +8,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PROGRAMS = PROJECT_ROOT / "tests" / "conformance" / "programs"
+PROGRAMS = PROJECT_ROOT / "examples"
 RUNTIME_LIB = PROJECT_ROOT / "runtime" / "libath_fresh.a"
 
 

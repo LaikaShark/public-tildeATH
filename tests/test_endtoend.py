@@ -6,7 +6,7 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_LIB = PROJECT_ROOT / "runtime" / "libath_fresh.a"
-CONFORMANCE = PROJECT_ROOT / "tests" / "conformance"
+CONFORMANCE = PROJECT_ROOT / "examples"
 
 
 def _ensure_runtime():

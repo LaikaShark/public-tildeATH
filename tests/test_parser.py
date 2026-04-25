@@ -251,7 +251,7 @@ def test_positions_propagate_to_ast():
 
 
 def test_looptest_sample_parses():
-    sample = Path(__file__).parent / "conformance" / "looptest.ath"
+    sample = Path(__file__).resolve().parent.parent / "examples" / "looptest.ath"
     p = parse(sample.read_text())
 
     # Counts:
