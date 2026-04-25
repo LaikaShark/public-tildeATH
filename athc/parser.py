@@ -11,6 +11,7 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    WatchStmt,
 )
 from athc.lexer import Token, TokenKind, tokenize
 
@@ -58,6 +59,8 @@ class Parser:
             return self._parse_import()
         if tok.kind is TokenKind.KW_IMPORTF:
             return self._parse_importf()
+        if tok.kind is TokenKind.KW_WATCH:
+            return self._parse_watch()
         if tok.kind is TokenKind.KW_BIFURCATE:
             return self._parse_bifurcate()
         if tok.kind is TokenKind.KW_PRINT:
@@ -197,6 +200,16 @@ class Parser:
         self._expect(TokenKind.SEMI)
         return ImportFuncStmt(
             path=path.value, name=name.value, line=kw.line, col=kw.col
+        )
+
+    def _parse_watch(self) -> WatchStmt:
+        kw = self._expect(TokenKind.KW_WATCH)
+        path = self._expect(TokenKind.STRING)
+        self._expect(TokenKind.KW_AS)
+        var = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return WatchStmt(
+            path=path.value, var=var.value, line=kw.line, col=kw.col
         )
 
     def _parse_die_or_funcall(self):

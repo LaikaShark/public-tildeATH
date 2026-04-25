@@ -562,6 +562,89 @@ never killing sentinels or shared atoms.
 
 ---
 
+## 10b. Objects with real lifetimes
+
+Up to this point, every object in your program has been the same shape:
+born alive, dies only when you explicitly kill it. Two extensions break
+that pattern.
+
+### 10b.1 The lifetime library
+
+The metadata before the variable in `import` isn't *only* cosmetic
+anymore — it can match a name in the runtime's **lifetime library**
+(`SPEC.md` §5.3). If it does, the imported object gets a randomly-chosen
+lifetime drawn uniformly from the entry's `[min_s, max_s]` range.
+
+```ath
+import fly F;          // F dies in 1-3 days
+import soap bubble B;  // B dies in 2-30 seconds
+import instant I;      // I is born dead (lifetime [0, 0])
+import sequoia S;      // S effectively immortal at human scales
+```
+
+The library spans the range from "zero lifetime" up to 10^110 seconds
+(heat death). Highlights:
+
+- **Born dead**: `instant`. Always.
+- **Sub-millisecond**: `muzzle flash`, `tick`. The shortest non-zero
+  lifetimes — useful for timing experiments.
+- **Low variance / exact**: `second`, `minute`, `hour`, `day`, `week`,
+  `year`. Each fires at exactly the named interval.
+- **Wildly variable**: `lightning` (0.1 ms to 10 s, five orders of
+  magnitude), `campaign` (0 to 100 s), `experiment` (six OOM).
+- **Living things**: `mayfly`, `fly`, `mouse`, `dog`, `human`, `sequoia`,
+  in roughly biological ranges.
+- **Cosmic**: `star` (1-10 billion years), `galaxy`, `black hole`,
+  `proton`, `universe`, `forever`.
+- **Homestuck flavor**: `author` (~lifespan of a human, 80-100 years),
+  `meson` (10-100 ns).
+
+Names not in the library still parse and run — they just produce a
+plain alive object as before. So `import x V;` is unchanged.
+
+Concept names are matched in full, including multi-word forms:
+`import soap bubble B;` hits the library entry `soap bubble`;
+`import dead bubble B;` doesn't (and falls through to plain alive).
+
+For reproducible tests, set the `ATH_SEED` environment variable to a
+decimal unsigned integer before running — the runtime seeds its RNG
+from it.
+
+### 10b.2 Watching files
+
+The `watch` statement ties an object's life to the existence of a file
+on disk:
+
+```ath
+watch "target.txt" as F;
+~ATH(F) {
+    print still here;
+}
+print target is gone;
+THIS.DIE();
+```
+
+The path resolves at runtime against the current working directory. If
+the file is present at allocation, `F` is alive. As soon as the file is
+removed (via `rm`, `mv`, anything that makes `access()` fail), the next
+`ath_is_alive` check sees `F` as dead and the loop exits.
+
+If the file was already missing when `watch` ran, `F` is born dead and
+the loop never runs at all.
+
+Death is one-way: even if the file reappears later, `F` stays dead.
+
+See `examples/file_watcher/main.ath` for a runnable demo (touch the
+file, start the program in the background, rm the file, watch it
+exit).
+
+This combines well with the library: `watch "lock.pid" as L;` plus
+`~ATH(L) { import soap bubble B; ~ATH(B) { ... } }` gives you nested
+external-condition loops — fire a body until either the file is removed
+or roughly half a minute has elapsed, whichever comes first.
+
+---
+
 ## 11. The Homestuck surface
 
 Three features of the dialect are syntactic concessions to the original
@@ -649,7 +732,37 @@ Reasonable things you *might* expect from the spec but won't find in v1:
 
 ---
 
-## 13. Where to go from here
+## 13. The full file-watch + lifetime combination
+
+For a final motivating example: a program that does work until either
+its config file vanishes or 10 seconds elapse, whichever comes first.
+
+```ath
+watch "config.txt" as CFG;
+import campaign T;            // 0-100 seconds, uniformly random
+
+~ATH(CFG) {
+    ~ATH(T) {
+        print serving requests;
+        // ... do work ...
+    }
+    print campaign over;
+    CFG.DIE();                 // exit outer loop too
+}
+print shutting down;
+THIS.DIE();
+```
+
+The outer loop is alive while the config file exists. The inner loop is
+alive while the random `campaign` lifetime hasn't expired. The first to
+fail terminates the corresponding loop. This is `~ATH` in its
+Homestuck-original spirit: programs are infinite loops tied to the
+lifespans of *real things* — a real file, a real (probabilistic)
+duration — that the runtime observes from the outside.
+
+---
+
+## 14. Where to go from here
 
 - **`SPEC.md`** — precise grammar, semantics, runtime ABI. Read this when
   the tutorial says something that surprises you and you want to know if

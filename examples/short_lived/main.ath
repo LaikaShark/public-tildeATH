@@ -1,0 +1,9 @@
+// A "tick" lives 0.001-0.01 seconds. The ~ATH loop spin-waits until the
+// runtime observes the deadline has passed (typically a few ms).
+
+import tick T;
+~ATH(T) {
+    // tight spin
+}
+print tick is dead;
+THIS.DIE();

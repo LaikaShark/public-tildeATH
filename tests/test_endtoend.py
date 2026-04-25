@@ -1,5 +1,7 @@
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -397,3 +399,131 @@ def test_multi_word_import_works_end_to_end(tmp_path):
         "THIS.DIE();\n"
     )
     assert _build_and_run(src, tmp_path) == "alive\ndone\n"
+
+
+# --- Lifetime library ---
+
+
+def test_instant_lifetime_is_born_dead(tmp_path):
+    # "instant" library entry has lifetime [0, 0], so the object is dead
+    # at allocation time and the loop body never runs.
+    src = tmp_path / "instant.ath"
+    src.write_text(
+        "import instant V;\n"
+        "~ATH(V) { print never; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_tick_lifetime_dies_within_a_few_iterations(tmp_path):
+    # "tick" lifetime is 0.001-0.01 seconds. A tight ~ATH spin should
+    # observe it dying well within the 5-second subprocess timeout.
+    src = tmp_path / "tick.ath"
+    src.write_text(
+        "import tick T;\n"
+        "~ATH(T) { }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_library_lookup_is_case_insensitive(tmp_path):
+    src = tmp_path / "case.ath"
+    src.write_text(
+        "import INSTANT V;\n"
+        "~ATH(V) { print never; }\n"
+        "print ok;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "ok\n"
+
+
+def test_unknown_library_name_falls_through_to_plain_alive(tmp_path):
+    # "notarealconcept" is not in the library — must behave like the
+    # original v0 import (plain alive object, killed manually).
+    src = tmp_path / "fallthrough.ath"
+    src.write_text(
+        "import notarealconcept V;\n"
+        "~ATH(V) { print alive once; V.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "alive once\ndone\n"
+
+
+def test_long_lived_concept_lets_loop_run_then_kill(tmp_path):
+    # "sequoia" lives for ~1000-3500 years, so it's effectively immortal
+    # for the duration of the test. Body must explicitly kill it.
+    src = tmp_path / "sequoia.ath"
+    src.write_text(
+        "import sequoia V;\n"
+        "~ATH(V) { print stately; V.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "stately\ndone\n"
+
+
+# --- File watching ---
+
+
+def test_watch_missing_file_is_born_dead(tmp_path):
+    src = tmp_path / "watch_missing.ath"
+    nonexistent = tmp_path / "definitely_not_here_xyz"
+    src.write_text(
+        f'watch "{nonexistent}" as F;\n'
+        "~ATH(F) { print never; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_watch_existing_file_then_loop_runs(tmp_path):
+    target = tmp_path / "present.txt"
+    target.write_text("ok")
+    src = tmp_path / "watch_exists.ath"
+    src.write_text(
+        f'watch "{target}" as F;\n'
+        "~ATH(F) { print file is here; F.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "file is here\ndone\n"
+
+
+def test_watch_dies_when_file_deleted_mid_run(tmp_path):
+    _ensure_runtime()
+    target = tmp_path / "watched.txt"
+    target.write_text("ok")
+
+    src = tmp_path / "watch_run.ath"
+    src.write_text(
+        f'watch "{target}" as F;\n'
+        "~ATH(F) { print alive; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out_bin = tmp_path / "prog"
+    compiled = _compile(src, out_bin)
+    assert compiled.returncode == 0, compiled.stderr
+
+    # Redirect stdout to a file so the tight loop doesn't deadlock on a
+    # pipe buffer.
+    out_log = tmp_path / "out.log"
+    with open(out_log, "w") as f:
+        proc = subprocess.Popen([str(out_bin)], stdout=f)
+    # Give the program a moment to start iterating, then yank the file.
+    time.sleep(0.1)
+    os.unlink(target)
+    proc.wait(timeout=5.0)
+    assert proc.returncode == 0
+
+    output = out_log.read_text()
+    assert "alive" in output, f"expected at least one alive line; got:\n{output!r}"
+    # After the file disappears, the loop must exit and the trailing
+    # "done" must be the last output.
+    assert output.endswith("done\n"), f"expected to end with 'done'; got:\n{output!r}"

@@ -1,0 +1,15 @@
+// Watches a file at "target.txt" (relative to CWD when running). The
+// loop body prints "watching" while the file exists. Try:
+//
+//   touch target.txt
+//   ./file_watcher &
+//   rm target.txt
+//
+// and the program will exit shortly after rm.
+
+watch "target.txt" as F;
+~ATH(F) {
+    print watching;
+}
+print target is gone;
+THIS.DIE();

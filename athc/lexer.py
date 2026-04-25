@@ -11,6 +11,7 @@ class TokenKind(Enum):
     KW_INPUT = auto()
     KW_PRINT2 = auto()
     KW_EXECUTE = auto()
+    KW_WATCH = auto()
     ATH = auto()
     DIE = auto()
     IDENT = auto()
@@ -54,6 +55,7 @@ KEYWORDS = {
     "input": TokenKind.KW_INPUT,
     "print2": TokenKind.KW_PRINT2,
     "execute": TokenKind.KW_EXECUTE,
+    "watch": TokenKind.KW_WATCH,
 }
 
 RESERVED_V1: set[str] = set()

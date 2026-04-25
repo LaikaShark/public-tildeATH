@@ -110,6 +110,18 @@ CASES = [
         "fizz\nbuzz\nfizzbuzz\nfizz\nbuzz\nfizzbuzz\n",
         id="fizzbuzz_mutual_recursion",
     ),
+    pytest.param(
+        "instant_skipper.ath",
+        None,
+        "fell through\n",
+        id="instant_lifetime_skips_loop",
+    ),
+    pytest.param(
+        "short_lived/main.ath",
+        None,
+        "tick is dead\n",
+        id="tick_lifetime_dies_in_loop",
+    ),
 ]
 
 

@@ -1,0 +1,10 @@
+// The "instant" library entry has lifetime [0, 0] — born dead — so the
+// ~ATH body never runs. Demonstrates that import metadata is now
+// semantically meaningful when it matches a library concept.
+
+import instant V;
+~ATH(V) {
+    print never reached;
+}
+print fell through;
+THIS.DIE();

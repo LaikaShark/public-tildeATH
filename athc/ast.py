@@ -75,6 +75,14 @@ class ImportFuncStmt:
 
 
 @dataclass
+class WatchStmt:
+    path: str
+    var: str
+    line: int
+    col: int
+
+
+@dataclass
 class FuncCallComposeArg:
     """FN [L, R] V;  -- compose(L, R) -> result -> V"""
     name: str
@@ -108,6 +116,7 @@ Stmt = Union[
     ImportFuncStmt,
     FuncCallComposeArg,
     FuncCallDecomposeRet,
+    WatchStmt,
 ]
 
 

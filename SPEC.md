@@ -50,8 +50,8 @@ Comments:
 ### 2.2 Tokens
 
 ```
-KEYWORD     := 'import' | 'importf' | 'as' | 'BIFURCATE' | 'print'
-              | 'INPUT' | 'PRINT2' | 'EXECUTE'   [matched case-insensitively]
+KEYWORD     := 'import' | 'importf' | 'as' | 'watch' | 'BIFURCATE'
+              | 'print' | 'INPUT' | 'PRINT2' | 'EXECUTE'   [matched case-insensitively]
 LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
@@ -70,8 +70,8 @@ variables.
 **Reserved words** (no case variant of any of these may appear as an
 identifier):
 
-- Active: `import`, `importf`, `as`, `BIFURCATE`, `print`, `INPUT`,
-  `PRINT2`, `EXECUTE`.
+- Active: `import`, `importf`, `as`, `watch`, `BIFURCATE`, `print`,
+  `INPUT`, `PRINT2`, `EXECUTE`.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
 they follow the case-sensitive identifier rule. The names `this`, `Null`,
@@ -119,6 +119,7 @@ program       = statement* ;
 
 statement     = import-stmt
               | importf-stmt
+              | watch-stmt
               | bifurcate-stmt
               | ath-loop
               | die-stmt
@@ -132,6 +133,8 @@ import-stmt   = 'import' IDENT+ ';' ;
                    are metadata, joined with single spaces *)
 
 importf-stmt  = 'importf' STRING 'as' IDENT ';' ;
+
+watch-stmt    = 'watch' STRING 'as' IDENT ';' ;
 
 bifurcate-stmt
               = decompose-stmt
@@ -228,18 +231,22 @@ Reading the variable always reads its current binding.
 #### 4.4.1 `import NAME... VAR;`
 
 One or more IDENTs follow `import`. The **last** IDENT is `VAR`, the
-variable to bind. Any preceding IDENTs are metadata (joined by single
-spaces to form a "concept name").
+variable to bind. Any preceding IDENTs are metadata, joined by single
+spaces into a "concept name."
 
 If `VAR` is already bound: no-op.
 
-Otherwise: allocate a fresh alive object with no halves, bind `VAR` to it.
+Otherwise: the concept name is looked up case-insensitively in the
+runtime's **lifetime library** (§5.3). If a match is found, allocate a
+fresh object whose lifetime is sampled uniformly from the library entry's
+`[min_s, max_s]` range — see §4.7 for the precise semantics. If no
+match is found, allocate a plain alive object (the v0/v1 behavior).
 
-The metadata preserves the flavor of the source program for tooling and
-diagnostics. The compiler MAY warn on collisions with other declared
-metadata strings but MUST NOT use it to alter program behavior. This
-accommodates the Homestuck surface form `import dead grandmother G;` as
-well as the drocta-style `import x V;`.
+`VAR` is then bound to the resulting object.
+
+The concept name is matched in full; `import fly F;` matches the entry
+`fly`, but `import dead fly F;` looks up `dead fly` and falls through
+to plain alive.
 
 #### 4.4.2 `BIFURCATE V[L, R];` (decompose)
 
@@ -396,6 +403,24 @@ registration in source order wins. (Subject to revision; see §9.)
 In both forms, `FN` is matched against the function registry; if no such
 function is registered, compilation fails (§6.1).
 
+#### 4.4.12 `watch "PATH" as VAR;`
+
+Allocates a fresh object whose liveness is tied to the existence of the
+file at `PATH`. `PATH` is resolved at runtime (not compile time) against
+the program's current working directory.
+
+- If `PATH` exists at allocation time, the object is born **alive**.
+- If `PATH` does not exist at allocation time, the object is born
+  **dead**.
+
+On every subsequent `ath_is_alive` check, the runtime calls `access(F_OK)`
+on the path. If the file is gone, the object transitions to dead and
+stays dead — even if the file is later recreated, since death is one-way
+(§4.1).
+
+`VAR` must not be `NULL` (§4.2). If `VAR` is already bound, `watch` is a
+no-op (idempotent, matching `import`).
+
 ### 4.5 Program termination
 
 A program terminates when its main activation returns. This happens when:
@@ -431,6 +456,36 @@ remains the canonical representative for PRINT2's reverse lookup.
 
 The encoding is deliberately the same as drocta `~ATH`'s `getStrObj` /
 `getObjStr`, so strings round-trip across implementations.
+
+### 4.7 Lifetime extensions
+
+Every object carries two optional lifetime conditions in addition to its
+explicit `.DIE`-driven mortality:
+
+1. **Deadline.** A monotonic-clock timestamp (in seconds since some
+   epoch fixed by the runtime). When set and the runtime's clock
+   reaches or passes the timestamp, the object becomes dead at the next
+   `ath_is_alive` observation. Once dead, the deadline check is not
+   re-evaluated.
+2. **Watched path.** A filesystem path. When set, every `ath_is_alive`
+   observation calls `access(F_OK)` on the path; if the call fails for
+   any reason (file doesn't exist, permission denied, etc.), the object
+   becomes dead. Subsequent recreation of the file does not revive it.
+
+Both conditions are independent of the object's `alive` field — they are
+*additional* ways an object can be observed dead. An object with neither
+condition set behaves exactly as in earlier specs (lives until explicitly
+killed). An object can have either or both set.
+
+`import NAME... VAR;` sets the deadline when `NAME` matches a library
+entry (§5.3); `watch "PATH" as VAR;` sets the watched path. There are
+no other surface forms that set these — they are entry-point
+allocations, not mutators.
+
+The lifetime sampling is **uniform** over the library entry's range,
+seeded by the `ATH_SEED` environment variable if set (decimal unsigned
+integer), or by the wall clock otherwise. Setting `ATH_SEED` makes
+library-sampled programs deterministic for testing.
 
 ---
 
@@ -469,6 +524,12 @@ ath_obj *ath_input_line(void);
 void     ath_print_obj(ath_obj *s);
 ath_obj *ath_char_atom(int c);
 
+/* Lifetime extensions (§4.7) */
+ath_obj *ath_alloc_with_lifetime(double min_s, double max_s);
+ath_obj *ath_alloc_watching_file(const char *path);
+ath_obj *ath_alloc_from_library(const char *name);
+int      ath_library_lookup(const char *name, double *min_out, double *max_out);
+
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));
 
@@ -488,6 +549,78 @@ The driver flag `-fcompose=fresh|intern` selects which archive is linked.
 `ath_die` is the swap point for any future cascading-death rule.
 `ath_is_alive` is the swap point for any future structural- or derived-
 liveness rule. None of these alternative behaviors are implemented in v0.
+
+`ath_alloc_with_lifetime` allocates a fresh alive object and arranges
+for it to become observably dead after a uniform-random delay in the
+half-open interval [`min_s`, `max_s`] seconds. A sample of zero or less
+results in a born-dead object. Samples larger than `1e308` are clamped.
+
+`ath_alloc_watching_file` allocates a fresh object whose liveness is
+gated on `access(F_OK)` for `path`. If the file does not exist at
+allocation time, the object is born dead.
+
+`ath_alloc_from_library` looks `name` up in the lifetime library
+(§5.3) and dispatches to `ath_alloc_with_lifetime` on hit, or to
+`ath_alloc_alive` on miss.
+
+### 5.3 Lifetime library
+
+The runtime ships a fixed table mapping case-insensitive concept names
+to lifetime ranges in seconds. The current contents — spanning roughly
+ten microseconds to 10^110 seconds, with a mix of low- and high-variance
+entries — are listed below. Implementations MAY add entries but MUST
+preserve the named ones with at least the documented ranges.
+
+| Name | min (s) | max (s) | character |
+|---|---|---|---|
+| `instant` | 0 | 0 | zero lifetime — born dead |
+| `muzzle flash` | 5e-4 | 2e-3 | sub-millisecond |
+| `tick` | 1e-3 | 1e-2 | low-millisecond |
+| `flash` | 0.05 | 0.5 | one-tenth of a second-ish |
+| `blink` | 0.1 | 0.4 | low variance, very short |
+| `second` | 1 | 1 | zero variance, exactly 1 s |
+| `minute` | 60 | 60 | zero variance |
+| `hour` | 3600 | 3600 | zero variance |
+| `day` | 86 400 | 86 400 | zero variance |
+| `week` | 604 800 | 604 800 | zero variance |
+| `year` | 31 557 600 | 31 557 600 | zero variance (Julian year) |
+| `spark` | 0.1 | 2 | moderate variance |
+| `soap bubble` | 2 | 30 | moderate variance |
+| `smoke ring` | 5 | 60 | moderate variance |
+| `snowflake` | 60 | 600 | moderate |
+| `ice cube` | 900 | 7200 | moderate |
+| `mayfly` | 300 | 86 400 | wide |
+| `fruit fly` | 28 800 | 180 000 | moderate |
+| `fly` | 86 400 | 259 200 | 1–3 days |
+| `banana` | 259 200 | 1 209 600 | 3–14 days |
+| `daisy` | 43 200 | 604 800 | 12 h – 1 week |
+| `rose` | 604 800 | 2 592 000 | 1–30 days |
+| `moth` | 604 800 | 2 419 200 | 1–28 days |
+| `mouse` | 31 536 000 | 94 608 000 | 1–3 years |
+| `goldfish` | 94 608 000 | 1 262 304 000 | 3–40 years |
+| `dog` | 315 360 000 | 567 648 000 | 10–18 years |
+| `human` | 1.58e9 | 3.79e9 | 50–120 years |
+| `sequoia` | 3.15e10 | 1.10e11 | 1000–3500 years |
+| `pyramid` | 1.26e11 | 2.52e11 | 4000–8000 years |
+| `continent` | 3e15 | 3e16 | ~100M–1B years |
+| `star` | 3e16 | 3.2e17 | 1B–10B years |
+| `red dwarf` | 3e17 | 3e19 | 10B–1T years |
+| `galaxy` | 3e18 | 3e19 | 100B–1T years |
+| `black hole` | 3e90 | 3e100 | ~googol years |
+| `proton` | 3e37 | 3e41 | hypothetical baryon decay |
+| `universe` | 3e100 | 3e110 | heat death |
+| `forever` | 1e308 | 1e308 | effectively infinite |
+| `lightning` | 1e-4 | 10 | very high variance (5 OOM) |
+| `campaign` | 0 | 100 | highly variable |
+| `experiment` | 1 | 1e6 | 6 OOM |
+| `empire` | 3.15e9 | 3.15e13 | 100 years – 1M years |
+| `author` | 2.52e9 | 3.15e9 | 80–100 years |
+| `meson` | 1e-8 | 1e-7 | 10–100 ns |
+
+Names with `min == max` have zero variance; names with `min == 0` have
+the possibility of being born dead. The library is intentionally
+suggestive — `import author Karkat;` and `import dead universe U;` both
+do something meaningful — without trying to be a complete ontology.
 
 `ath_halt` is invoked exactly when `THIS.DIE();` executes. Implementations
 typically call `_exit(0)`.
@@ -511,6 +644,8 @@ v0 errors fall into two classes:
   case-insensitively against names registered by `importf`.
 - Binding `NULL` (any case variant in a write position) is rejected per §4.2.
 - File-not-found or parse error in an `importf` target.
+- `watch` paths are *not* validated at compile time; missing files cause
+  the watching object to be born dead at runtime, never a compile error.
 
 ### 6.2 Run-time behavior
 

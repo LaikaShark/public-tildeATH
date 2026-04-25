@@ -219,3 +219,15 @@ def test_die_arg_must_be_in_scope():
 def test_die_arg_can_be_predefined():
     check("THIS.DIE(THIS);")
     check("THIS.DIE(NULL);")
+
+
+# --- watch ---
+
+
+def test_watch_introduces_variable():
+    check('watch "foo.txt" as F; F.DIE();')
+
+
+def test_watch_var_cannot_be_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check('watch "foo.txt" as NULL;')

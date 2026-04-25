@@ -146,6 +146,12 @@ def test_bang_is_a_token():
     assert toks[1].value == "V"
 
 
+@pytest.mark.parametrize("spelling", ["watch", "WATCH", "Watch"])
+def test_keyword_watch_is_case_insensitive(spelling):
+    toks = tokenize(spelling)
+    assert toks[0].kind is TokenKind.KW_WATCH
+
+
 def test_printer_is_identifier_not_print_keyword():
     toks = tokenize("printer importer importfoo")
     assert all(t.kind is TokenKind.IDENT for t in toks[:3])

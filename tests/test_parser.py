@@ -15,6 +15,7 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    WatchStmt,
 )
 from athc.parser import ParseError, parse
 
@@ -222,6 +223,24 @@ def test_funcall_with_lowercase_name_parses():
     s = p.statements[0]
     assert isinstance(s, FuncCallComposeArg)
     assert s.name == "add"  # case-insensitive resolution happens later
+
+
+def test_watch_statement():
+    p = parse('watch "target.txt" as F;')
+    s = p.statements[0]
+    assert isinstance(s, WatchStmt)
+    assert s.path == "target.txt"
+    assert s.var == "F"
+
+
+def test_watch_requires_string_path():
+    with pytest.raises(ParseError, match="expected STRING"):
+        parse("watch foo as F;")
+
+
+def test_watch_requires_as():
+    with pytest.raises(ParseError):
+        parse('watch "foo.txt" F;')
 
 
 def test_missing_semicolon():

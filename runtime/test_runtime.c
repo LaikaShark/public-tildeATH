@@ -1,8 +1,13 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "ath_runtime.h"
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 int main(void) {
     /* NULL is born dead and stays dead. */
@@ -118,6 +123,70 @@ int main(void) {
                                    ath_compose(ath_alloc_alive(), ath_NULL));
     fputs("expect X: ", stdout);
     ath_print_obj(garbage);
+
+    /* --- Library lookup --- */
+    double lo, hi;
+    assert(ath_library_lookup("fly", &lo, &hi));
+    assert(lo == 86400.0 && hi == 259200.0);
+
+    assert(ath_library_lookup("FLY", &lo, &hi));     /* case-insensitive */
+    assert(lo == 86400.0 && hi == 259200.0);
+
+    assert(ath_library_lookup("soap bubble", &lo, &hi));
+    assert(lo == 2.0 && hi == 30.0);
+
+    assert(!ath_library_lookup("not a real concept", &lo, &hi));
+    assert(!ath_library_lookup(NULL, &lo, &hi));
+
+    /* --- Lifetime allocation --- */
+
+    /* "instant" lifetime: born dead. */
+    ath_obj *inst = ath_alloc_from_library("instant");
+    assert(!ath_is_alive(inst));
+
+    /* "tick" (1-10 ms) is alive at first, dead after a 50ms sleep. */
+    ath_obj *tick = ath_alloc_from_library("tick");
+    assert(ath_is_alive(tick));
+    struct timespec wait = {0, 50 * 1000 * 1000};   /* 50 ms */
+    nanosleep(&wait, NULL);
+    assert(!ath_is_alive(tick));
+
+    /* A bare "alive" allocation has no deadline and stays alive across sleeps. */
+    ath_obj *forever = ath_alloc_alive();
+    assert(ath_is_alive(forever));
+    nanosleep(&wait, NULL);
+    assert(ath_is_alive(forever));
+
+    /* Library names not in the table fall through to a plain alive object. */
+    ath_obj *anon = ath_alloc_from_library("garbage_garbage_garbage");
+    assert(ath_is_alive(anon));
+
+    /* --- File watching --- */
+
+    /* Nonexistent path: born dead. */
+    ath_obj *missing = ath_alloc_watching_file("/tmp/ath_test_definitely_not_here_xyz");
+    assert(!ath_is_alive(missing));
+
+    /* Create a temp file, watch it, delete it, observe death. */
+    const char *tmppath = "/tmp/ath_test_watch_target";
+    unlink(tmppath);  /* clean slate */
+    FILE *fp = fopen(tmppath, "w");
+    assert(fp != NULL);
+    fputs("ok\n", fp);
+    fclose(fp);
+
+    ath_obj *watcher = ath_alloc_watching_file(tmppath);
+    assert(ath_is_alive(watcher));
+
+    unlink(tmppath);
+    assert(!ath_is_alive(watcher));
+
+    /* Even if the file is recreated, the watcher stays dead (one-way death). */
+    fp = fopen(tmppath, "w");
+    assert(fp != NULL);
+    fclose(fp);
+    assert(!ath_is_alive(watcher));
+    unlink(tmppath);
 
     fputs("runtime test: all checks passed\n", stdout);
     return 0;

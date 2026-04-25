@@ -13,6 +13,7 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    WatchStmt,
 )
 
 binding.initialize_native_target()
@@ -43,6 +44,8 @@ def _collect_names(stmts, names: set) -> None:
             if s.arg is not None:
                 names.add(s.arg)
         elif isinstance(s, (InputStmt, Print2Stmt)):
+            names.add(s.var)
+        elif isinstance(s, WatchStmt):
             names.add(s.var)
         elif isinstance(s, FuncCallComposeArg):
             names.add(s.left)
@@ -121,6 +124,16 @@ class Codegen:
             ir.FunctionType(ir.VoidType(), [self.obj_ptr]),
             name="ath_print_obj",
         )
+        self.f_alloc_from_library = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
+            name="ath_alloc_from_library",
+        )
+        self.f_alloc_watching_file = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
+            name="ath_alloc_watching_file",
+        )
 
         self.g_null = ir.GlobalVariable(self.module, self.obj_ptr, name="ath_NULL")
         self.g_null.linkage = "external"
@@ -149,6 +162,18 @@ class Codegen:
         g.global_constant = True
         g.initializer = ir.Constant(ty, bytearray(b) if b else bytearray(b"\x00"))
         return g, len(b)
+
+    def make_cstring_global(self, s: str) -> ir.GlobalVariable:
+        """A NUL-terminated C string global, for runtime functions that take char*."""
+        b = s.encode("utf-8") + b"\x00"
+        ty = ir.ArrayType(self.i8, len(b))
+        name = f".cstr.{self._str_id}"
+        self._str_id += 1
+        g = ir.GlobalVariable(self.module, ty, name=name)
+        g.linkage = "private"
+        g.global_constant = True
+        g.initializer = ir.Constant(ty, bytearray(b))
+        return g
 
     def generate(self) -> str:
         FunctionEmitter(self, self.main_fn, self.main_program, is_main=True).emit()
@@ -262,6 +287,8 @@ class FunctionEmitter:
             self._emit_funcall_compose_arg(builder, stmt)
         elif isinstance(stmt, FuncCallDecomposeRet):
             self._emit_funcall_decompose_ret(builder, stmt)
+        elif isinstance(stmt, WatchStmt):
+            self._emit_watch(builder, stmt)
         else:
             raise CodegenError(f"no codegen for {type(stmt).__name__}")
 
@@ -274,7 +301,25 @@ class FunctionEmitter:
             "==", cur, ir.Constant(self.cg.obj_ptr, None)
         )
         with builder.if_then(is_unbound):
-            fresh = builder.call(self.cg.f_alloc, [])
+            name_g = self.cg.make_cstring_global(stmt.name)
+            zero = ir.Constant(self.cg.i32, 0)
+            name_ptr = builder.gep(name_g, [zero, zero], inbounds=True)
+            fresh = builder.call(self.cg.f_alloc_from_library, [name_ptr])
+            builder.store(fresh, slot)
+
+    def _emit_watch(self, builder: ir.IRBuilder, stmt: WatchStmt) -> None:
+        if stmt.var == "NULL":
+            raise CodegenError("cannot watch into the predefined name 'NULL'")
+        slot = self.slots[stmt.var]
+        cur = builder.load(slot)
+        is_unbound = builder.icmp_unsigned(
+            "==", cur, ir.Constant(self.cg.obj_ptr, None)
+        )
+        with builder.if_then(is_unbound):
+            path_g = self.cg.make_cstring_global(stmt.path)
+            zero = ir.Constant(self.cg.i32, 0)
+            path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
+            fresh = builder.call(self.cg.f_alloc_watching_file, [path_ptr])
             builder.store(fresh, slot)
 
     def _emit_decompose(self, builder: ir.IRBuilder, stmt: DecomposeStmt) -> None:
