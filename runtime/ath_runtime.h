@@ -50,6 +50,13 @@ ath_obj *ath_alloc_oneshot(void);
 ath_obj *ath_alloc_from_library(const char *name);
 int      ath_library_lookup(const char *name, double *min_out, double *max_out);
 
+/* Register a user-defined library entry (SPEC §5.3). Subsequent calls to
+ * ath_alloc_from_library with this name use the [min_s, max_s] range,
+ * overriding any built-in entry of the same name. Intended to be called
+ * from main's prologue by the compiler in response to --define-lifetime.
+ * The `name` pointer must remain valid for the lifetime of the program. */
+void     ath_register_lifetime(const char *name, double min_s, double max_s);
+
 _Noreturn void ath_halt(void);
 
 #endif

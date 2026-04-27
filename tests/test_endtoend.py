@@ -21,12 +21,16 @@ def _ensure_runtime():
         pytest.skip(f"could not build runtime: {result.stderr.strip()}")
 
 
-def _compile(source_path: Path, output: Path) -> subprocess.CompletedProcess:
+def _compile(
+    source_path: Path,
+    output: Path,
+    extra_args: list[str] | None = None,
+) -> subprocess.CompletedProcess:
+    cmd = [sys.executable, "-m", "athc.cli", str(source_path), "-o", str(output)]
+    if extra_args:
+        cmd.extend(extra_args)
     return subprocess.run(
-        [sys.executable, "-m", "athc.cli", str(source_path), "-o", str(output)],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
+        cmd, cwd=PROJECT_ROOT, capture_output=True, text=True
     )
 
 
@@ -40,10 +44,15 @@ def _run(binary: Path, timeout: float = 5.0, stdin_input: str | None = None) -> 
     )
 
 
-def _build_and_run(source_path: Path, tmp_path: Path, stdin_input: str | None = None) -> str:
+def _build_and_run(
+    source_path: Path,
+    tmp_path: Path,
+    stdin_input: str | None = None,
+    extra_args: list[str] | None = None,
+) -> str:
     _ensure_runtime()
     out = tmp_path / "prog"
-    compiled = _compile(source_path, out)
+    compiled = _compile(source_path, out, extra_args=extra_args)
     assert compiled.returncode == 0, f"compile failed:\nstderr:\n{compiled.stderr}"
     assert out.exists(), "compiler did not produce output binary"
     run = _run(out, stdin_input=stdin_input)
@@ -521,6 +530,99 @@ def test_watch_existing_file_then_loop_runs(tmp_path):
         "THIS.DIE();\n"
     )
     assert _build_and_run(src, tmp_path) == "file is here\ndone\n"
+
+
+def test_define_lifetime_registers_new_entry(tmp_path):
+    # tortoise is not in the built-in library. With --define-lifetime
+    # it becomes available with a 1-3ms lifetime; the spin loop exits.
+    src = tmp_path / "tortoise.ath"
+    src.write_text(
+        "import tortoise T;\n"
+        "~ATH(T) { }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out = _build_and_run(
+        src, tmp_path, extra_args=["-D", "tortoise:0.001:0.003"]
+    )
+    assert out == "done\n"
+
+
+def test_define_lifetime_overrides_builtin_entry(tmp_path):
+    # Built-in "fly" lives 1-3 days. Override to 0,0 => born dead.
+    src = tmp_path / "override.ath"
+    src.write_text(
+        "import fly F;\n"
+        "~ATH(F) { print never; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out = _build_and_run(
+        src, tmp_path, extra_args=["--define-lifetime", "fly:0:0"]
+    )
+    assert out == "done\n"
+
+
+def test_define_lifetime_supports_multi_word_names(tmp_path):
+    # Multi-word import metadata joined with spaces; user entry uses the
+    # same joined form.
+    src = tmp_path / "mw.ath"
+    src.write_text(
+        "import giant tortoise T;\n"
+        "~ATH(T) { }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out = _build_and_run(
+        src, tmp_path, extra_args=["-D", "giant tortoise:0.001:0.003"]
+    )
+    assert out == "done\n"
+
+
+def test_define_lifetime_multiple_flags(tmp_path):
+    src = tmp_path / "many.ath"
+    src.write_text(
+        "import alpha A;\n"
+        "import beta B;\n"
+        "~ATH(A) { print A; A.DIE(); }\n"
+        "~ATH(B) { print B-skipped; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    # alpha is plain alive (so loop runs once via explicit DIE)
+    # beta has zero lifetime (so loop never runs)
+    out = _build_and_run(
+        src, tmp_path,
+        extra_args=["-D", "alpha:60:120", "-D", "beta:0:0"],
+    )
+    assert out == "A\ndone\n"
+
+
+def test_define_lifetime_invalid_spec_rejected(tmp_path):
+    src = tmp_path / "p.ath"
+    src.write_text("THIS.DIE();\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out, extra_args=["-D", "broken"])
+    assert compiled.returncode != 0
+    assert "expected NAME:MIN:MAX" in compiled.stderr
+
+
+def test_define_lifetime_negative_rejected(tmp_path):
+    src = tmp_path / "p.ath"
+    src.write_text("THIS.DIE();\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out, extra_args=["-D", "neg:-1:5"])
+    assert compiled.returncode != 0
+    assert "non-negative" in compiled.stderr
+
+
+def test_define_lifetime_min_exceeds_max_rejected(tmp_path):
+    src = tmp_path / "p.ath"
+    src.write_text("THIS.DIE();\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out, extra_args=["-D", "bad:10:5"])
+    assert compiled.returncode != 0
+    assert "must not exceed max" in compiled.stderr
 
 
 def test_watch_dies_when_file_deleted_mid_run(tmp_path):

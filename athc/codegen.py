@@ -64,9 +64,11 @@ class Codegen:
         main_program: Program,
         function_table: dict[str, Program] | None = None,
         module_name: str = "ath",
+        user_lifetimes: list[tuple[str, float, float]] | None = None,
     ):
         self.main_program = main_program
         self.function_table = function_table or {}
+        self.user_lifetimes = list(user_lifetimes or [])
 
         target = binding.Target.from_default_triple()
         self.target_machine = target.create_target_machine()
@@ -133,6 +135,14 @@ class Codegen:
             self.module,
             ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
             name="ath_alloc_watching_file",
+        )
+        self.f_register_lifetime = ir.Function(
+            self.module,
+            ir.FunctionType(
+                ir.VoidType(),
+                [self.i8.as_pointer(), ir.DoubleType(), ir.DoubleType()],
+            ),
+            name="ath_register_lifetime",
         )
 
         self.g_null = ir.GlobalVariable(self.module, self.obj_ptr, name="ath_NULL")
@@ -213,6 +223,22 @@ class FunctionEmitter:
 
         entry = self.fn.append_basic_block("entry")
         builder = ir.IRBuilder(entry)
+
+        # Register user-defined library entries (--define-lifetime) before
+        # any other code runs, so the first import sees them.
+        if self.is_main:
+            for name, min_s, max_s in self.cg.user_lifetimes:
+                name_g = self.cg.make_cstring_global(name)
+                zero = ir.Constant(self.cg.i32, 0)
+                name_ptr = builder.gep(name_g, [zero, zero], inbounds=True)
+                builder.call(
+                    self.cg.f_register_lifetime,
+                    [
+                        name_ptr,
+                        ir.Constant(ir.DoubleType(), min_s),
+                        ir.Constant(ir.DoubleType(), max_s),
+                    ],
+                )
 
         for n in sorted(names):
             slot = builder.alloca(self.cg.obj_ptr, name=f"{n}_slot")
@@ -422,8 +448,11 @@ def generate_ir(
     program: Program,
     function_table: dict[str, Program] | None = None,
     module_name: str = "ath",
+    user_lifetimes: list[tuple[str, float, float]] | None = None,
 ) -> str:
-    return Codegen(program, function_table, module_name).generate()
+    return Codegen(
+        program, function_table, module_name, user_lifetimes
+    ).generate()
 
 
 def emit_object(ir_text: str) -> bytes:

@@ -638,6 +638,34 @@ the possibility of being born dead. The library is intentionally
 suggestive — `import author Karkat;` and `import dead universe U;` both
 do something meaningful — without trying to be a complete ontology.
 
+#### 5.3.1 User-extended entries
+
+The compiler accepts `-D NAME:MIN:MAX` (long form
+`--define-lifetime`) on the command line, repeatable. Each occurrence
+registers an additional library entry in the resulting binary:
+
+```
+athc -D "tortoise:50:150" -D "soap bubble:1:5" prog.ath -o prog
+```
+
+- `NAME` is the concept name (same matching rules as built-ins; spaces
+  permitted; matched case-insensitively against the joined `import`
+  metadata).
+- `MIN` and `MAX` are non-negative floats in seconds, with `MIN <= MAX`.
+
+Mechanism: the compiler emits calls to `ath_register_lifetime` at the
+very top of `main`, before any user code runs. The runtime stores
+user-registered entries in a separate table consulted *before* the
+built-in table by `ath_library_lookup`, so a user entry overrides any
+built-in of the same name. There is currently no way to register
+non-time-based entries (e.g., the `once`-style flag) from the CLI; that
+is fixed in the runtime.
+
+Implementation limit: an implementation MAY refuse to register more
+than 64 user entries per program. The reference runtime emits a
+diagnostic to stderr and silently ignores excess entries beyond that
+limit.
+
 `ath_halt` is invoked exactly when `THIS.DIE();` executes. Implementations
 typically call `_exit(0)`.
 

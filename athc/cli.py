@@ -14,6 +14,34 @@ def _default_runtime() -> Path:
     return Path(__file__).resolve().parent.parent / "runtime" / "libath_fresh.a"
 
 
+def _parse_lifetime_spec(spec: str) -> tuple[str, float, float]:
+    """Parse a --define-lifetime NAME:MIN:MAX value. Names may contain
+    spaces; only the last two `:` characters delimit the numbers."""
+    parts = spec.rsplit(":", 2)
+    if len(parts) != 3:
+        raise ValueError(
+            f"--define-lifetime: expected NAME:MIN:MAX, got {spec!r}"
+        )
+    name, min_str, max_str = parts
+    if not name.strip():
+        raise ValueError("--define-lifetime: name cannot be empty")
+    try:
+        min_s = float(min_str)
+        max_s = float(max_str)
+    except ValueError as e:
+        raise ValueError(
+            f"--define-lifetime: min and max must be numbers; got "
+            f"{min_str!r} and {max_str!r}"
+        ) from e
+    if min_s < 0.0 or max_s < 0.0:
+        raise ValueError("--define-lifetime: min and max must be non-negative")
+    if min_s > max_s:
+        raise ValueError(
+            f"--define-lifetime: min ({min_s}) must not exceed max ({max_s})"
+        )
+    return name, min_s, max_s
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="athc", description="Compiler for ~ATH.")
     ap.add_argument("source", help="path to .ath source file")
@@ -34,7 +62,27 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("CC", "gcc"),
         help="C compiler/linker to invoke (default: gcc, or $CC)",
     )
+    ap.add_argument(
+        "-D",
+        "--define-lifetime",
+        action="append",
+        default=[],
+        metavar="NAME:MIN:MAX",
+        help=(
+            "register a custom library entry (lifetime in seconds). "
+            "Repeatable. NAME may contain spaces. User entries override "
+            "built-ins of the same name."
+        ),
+    )
     args = ap.parse_args(argv)
+
+    user_lifetimes: list[tuple[str, float, float]] = []
+    for spec in args.define_lifetime:
+        try:
+            user_lifetimes.append(_parse_lifetime_spec(spec))
+        except ValueError as e:
+            print(f"athc: {e}", file=sys.stderr)
+            return 1
 
     source_path = Path(args.source)
 
@@ -51,7 +99,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     ir_text = generate_ir(
-        program, function_table, module_name=source_path.stem or "ath"
+        program,
+        function_table,
+        module_name=source_path.stem or "ath",
+        user_lifetimes=user_lifetimes,
     )
 
     if args.emit_ir:

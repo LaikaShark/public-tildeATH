@@ -206,6 +206,25 @@ int main(void) {
     ath_die(o3);
     assert(!ath_is_alive(o3));
 
+    /* --- User-defined lifetime entries --- */
+
+    /* A brand-new name resolves once registered. */
+    assert(!ath_library_lookup("tortoise", &lo, &hi));
+    ath_register_lifetime("tortoise", 50.0, 150.0);
+    assert(ath_library_lookup("tortoise", &lo, &hi));
+    assert(lo == 50.0 && hi == 150.0);
+
+    /* User entries override built-ins of the same name. */
+    assert(ath_library_lookup("fly", &lo, &hi));
+    assert(lo == 86400.0);  /* original built-in */
+    ath_register_lifetime("fly", 0.001, 0.002);
+    assert(ath_library_lookup("fly", &lo, &hi));
+    assert(lo == 0.001 && hi == 0.002);  /* overridden */
+
+    /* Case-insensitive match against user entries too. */
+    assert(ath_library_lookup("TORTOISE", &lo, &hi));
+    assert(lo == 50.0);
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

@@ -42,6 +42,8 @@ Useful flags:
 
 - `--emit-ir` — print LLVM IR to stdout (don't link)
 - `--emit-obj PATH` — write the object file and stop
+- `-D NAME:MIN:MAX` — register a custom library entry for this build
+  (repeatable; see §10b.1)
 
 Programs run forever or terminate via `THIS.DIE();`. If you fork-bomb the
 recursion, you'll need `Ctrl-C`.
@@ -612,6 +614,23 @@ Concept names are matched in full, including multi-word forms:
 For reproducible tests, set the `ATH_SEED` environment variable to a
 decimal unsigned integer before running — the runtime seeds its RNG
 from it.
+
+You can also extend the library from the command line. `-D NAME:MIN:MAX`
+(long form `--define-lifetime`) registers a new entry, repeatable. The
+new entry is baked into that binary only:
+
+```bash
+athc -D "tortoise:50:150" prog.ath -o prog
+```
+
+makes `import tortoise T;` available with a 50-150 second lifetime.
+Names with spaces work too: `-D "giant tortoise:50:150"` matches
+`import giant tortoise T;`. User entries override built-ins of the same
+name — so `-D fly:0:0` turns any program's `import fly F;` into a
+born-dead object for that build, useful for testing.
+
+The CLI flag can't register non-time-based entries (the `once`-style
+flag); for those, you'd have to extend the runtime.
 
 ### 10b.2 The `once` entry — exactly-one execution
 

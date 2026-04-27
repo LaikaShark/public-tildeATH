@@ -233,8 +233,35 @@ static const ath_lifetime_entry ath_library[] = {
     {NULL, 0.0, 0.0}
 };
 
+/* --- User-defined library entries (SPEC §5.3) ---------------------------- */
+
+#define ATH_MAX_USER_LIFETIMES 64
+static ath_lifetime_entry ath_user_library[ATH_MAX_USER_LIFETIMES];
+static int ath_user_library_count = 0;
+
+void ath_register_lifetime(const char *name, double min_s, double max_s) {
+    if (name == NULL) return;
+    if (ath_user_library_count >= ATH_MAX_USER_LIFETIMES) {
+        fputs("ath: too many --define-lifetime entries (max 64); ignoring\n",
+              stderr);
+        return;
+    }
+    ath_user_library[ath_user_library_count].name = name;
+    ath_user_library[ath_user_library_count].min_s = min_s;
+    ath_user_library[ath_user_library_count].max_s = max_s;
+    ath_user_library_count++;
+}
+
 int ath_library_lookup(const char *name, double *min_out, double *max_out) {
     if (name == NULL) return 0;
+    /* User-registered entries take precedence over built-ins. */
+    for (int i = 0; i < ath_user_library_count; i++) {
+        if (strcasecmp(ath_user_library[i].name, name) == 0) {
+            if (min_out) *min_out = ath_user_library[i].min_s;
+            if (max_out) *max_out = ath_user_library[i].max_s;
+            return 1;
+        }
+    }
     for (const ath_lifetime_entry *e = ath_library; e->name; e++) {
         if (strcasecmp(e->name, name) == 0) {
             if (min_out) *min_out = e->min_s;
