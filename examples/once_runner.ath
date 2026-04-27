@@ -1,0 +1,11 @@
+// The `once` library entry is special: alive for exactly one
+// ath_is_alive observation, dead afterward. Putting it in an ~ATH loop
+// is the natural way to write "run this body exactly one time, then
+// move on" without any rebind-or-kill machinery.
+
+import once V;
+~ATH(V) {
+    print exactly one run;
+}
+print after;
+THIS.DIE();

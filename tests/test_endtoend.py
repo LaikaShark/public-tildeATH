@@ -454,6 +454,34 @@ def test_unknown_library_name_falls_through_to_plain_alive(tmp_path):
     assert _build_and_run(src, tmp_path) == "alive once\ndone\n"
 
 
+def test_once_library_entry_runs_body_exactly_once(tmp_path):
+    # "once" is alive for exactly one ath_is_alive observation. The body
+    # runs once, the second check returns dead, the loop exits cleanly.
+    src = tmp_path / "once.ath"
+    src.write_text(
+        "import once V;\n"
+        "~ATH(V) {\n"
+        "    print exactly once;\n"
+        "}\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "exactly once\nafter\n"
+
+
+def test_once_can_be_explicitly_killed_before_observation(tmp_path):
+    # A oneshot killed before any ~ATH check skips its body entirely.
+    src = tmp_path / "once_pre_killed.ath"
+    src.write_text(
+        "import once V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { print never; }\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "after\n"
+
+
 def test_long_lived_concept_lets_loop_run_then_kill(tmp_path):
     # "sequoia" lives for ~1000-3500 years, so it's effectively immortal
     # for the duration of the test. Body must explicitly kill it.

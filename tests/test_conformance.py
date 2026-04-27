@@ -122,6 +122,12 @@ CASES = [
         "tick is dead\n",
         id="tick_lifetime_dies_in_loop",
     ),
+    pytest.param(
+        "once_runner.ath",
+        None,
+        "exactly one run\nafter\n",
+        id="once_lifetime_runs_body_exactly_once",
+    ),
 ]
 
 

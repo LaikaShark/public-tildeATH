@@ -459,8 +459,8 @@ The encoding is deliberately the same as drocta `~ATH`'s `getStrObj` /
 
 ### 4.7 Lifetime extensions
 
-Every object carries two optional lifetime conditions in addition to its
-explicit `.DIE`-driven mortality:
+Every object carries three optional lifetime conditions in addition to
+its explicit `.DIE`-driven mortality:
 
 1. **Deadline.** A monotonic-clock timestamp (in seconds since some
    epoch fixed by the runtime). When set and the runtime's clock
@@ -471,16 +471,22 @@ explicit `.DIE`-driven mortality:
    observation calls `access(F_OK)` on the path; if the call fails for
    any reason (file doesn't exist, permission denied, etc.), the object
    becomes dead. Subsequent recreation of the file does not revive it.
+3. **One-shot flag.** When set, the first `ath_is_alive` observation
+   returns alive and atomically flips the underlying `alive` field to
+   false; every subsequent observation returns dead. Combined with the
+   `~ATH` loop's "re-check before every iteration" rule, this causes
+   the body to execute exactly once.
 
-Both conditions are independent of the object's `alive` field — they are
-*additional* ways an object can be observed dead. An object with neither
-condition set behaves exactly as in earlier specs (lives until explicitly
-killed). An object can have either or both set.
+These conditions are independent of the object's `alive` field — they
+are *additional* ways an object can be observed dead. An object with
+none of them set behaves exactly as in earlier specs (lives until
+explicitly killed). An object may have any combination set.
 
-`import NAME... VAR;` sets the deadline when `NAME` matches a library
-entry (§5.3); `watch "PATH" as VAR;` sets the watched path. There are
-no other surface forms that set these — they are entry-point
-allocations, not mutators.
+`import NAME... VAR;` sets the deadline when `NAME` matches a
+range-based library entry (§5.3), or sets the one-shot flag when
+`NAME` matches the special entry `once`. `watch "PATH" as VAR;` sets
+the watched path. There are no other surface forms that set these —
+they are entry-point allocations, not mutators.
 
 The lifetime sampling is **uniform** over the library entry's range,
 seeded by the `ATH_SEED` environment variable if set (decimal unsigned
@@ -527,6 +533,7 @@ ath_obj *ath_char_atom(int c);
 /* Lifetime extensions (§4.7) */
 ath_obj *ath_alloc_with_lifetime(double min_s, double max_s);
 ath_obj *ath_alloc_watching_file(const char *path);
+ath_obj *ath_alloc_oneshot(void);
 ath_obj *ath_alloc_from_library(const char *name);
 int      ath_library_lookup(const char *name, double *min_out, double *max_out);
 
@@ -559,9 +566,17 @@ results in a born-dead object. Samples larger than `1e308` are clamped.
 gated on `access(F_OK)` for `path`. If the file does not exist at
 allocation time, the object is born dead.
 
-`ath_alloc_from_library` looks `name` up in the lifetime library
-(§5.3) and dispatches to `ath_alloc_with_lifetime` on hit, or to
-`ath_alloc_alive` on miss.
+`ath_alloc_oneshot` allocates a fresh object whose `is_oneshot` flag is
+set. The first observation by `ath_is_alive` returns alive and flips
+the underlying `alive` field to false; every subsequent observation
+returns dead. The library exposes this allocator via the special name
+`once`.
+
+`ath_alloc_from_library` looks `name` up case-insensitively. The
+special name `once` dispatches to `ath_alloc_oneshot`; range-based
+names dispatch to `ath_alloc_with_lifetime`; misses fall through to
+`ath_alloc_alive`. `ath_library_lookup` returns only range-based hits
+— it does not recognize `once`.
 
 ### 5.3 Lifetime library
 
@@ -573,6 +588,7 @@ preserve the named ones with at least the documented ranges.
 
 | Name | min (s) | max (s) | character |
 |---|---|---|---|
+| `once` | — | — | **special**: alive for exactly one `ath_is_alive` observation, dead thereafter |
 | `instant` | 0 | 0 | zero lifetime — born dead |
 | `muzzle flash` | 5e-4 | 2e-3 | sub-millisecond |
 | `tick` | 1e-3 | 1e-2 | low-millisecond |

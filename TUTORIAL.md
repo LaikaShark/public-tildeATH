@@ -586,6 +586,9 @@ The library spans the range from "zero lifetime" up to 10^110 seconds
 (heat death). Highlights:
 
 - **Born dead**: `instant`. Always.
+- **Alive once, then dead**: `once`. Special non-time-based entry —
+  `~ATH(V) { ... }` with V from `once` runs the body exactly one time.
+  See §10b.3 below.
 - **Sub-millisecond**: `muzzle flash`, `tick`. The shortest non-zero
   lifetimes — useful for timing experiments.
 - **Low variance / exact**: `second`, `minute`, `hour`, `day`, `week`,
@@ -610,7 +613,36 @@ For reproducible tests, set the `ATH_SEED` environment variable to a
 decimal unsigned integer before running — the runtime seeds its RNG
 from it.
 
-### 10b.2 Watching files
+### 10b.2 The `once` entry — exactly-one execution
+
+`once` is the library's lone non-time-based entry. An object imported
+from `once` is alive for exactly one `ath_is_alive` observation; the
+runtime flips it to dead atomically with that first observation. The
+upshot, since `~ATH(V)` checks the variable before every iteration:
+
+```ath
+import once V;
+~ATH(V) {
+    print exactly one run;
+}
+print after;
+THIS.DIE();
+```
+
+The first iteration's check returns alive — the body prints. The second
+iteration's check returns dead — the loop exits. No need to kill `V`
+yourself; no need to use the rebind-to-NULL idiom. The "run this
+exactly once" pattern from §9.1 (`import flag F; ~ATH(F) { ...;
+F.DIE(); }`) is now a one-liner: just use `once`.
+
+`once` plays well with the rest of the system: explicit `.DIE()`
+before the first observation makes the body never run; explicit
+`.DIE()` is also fine after the observation (a no-op since the object
+is already dead).
+
+See `examples/once_runner.ath`.
+
+### 10b.3 Watching files
 
 The `watch` statement ties an object's life to the existence of a file
 on disk:

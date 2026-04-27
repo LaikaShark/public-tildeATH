@@ -188,6 +188,24 @@ int main(void) {
     assert(!ath_is_alive(watcher));
     unlink(tmppath);
 
+    /* --- One-shot --- */
+
+    /* "once" library entry: alive on first observation, dead afterward. */
+    ath_obj *o1 = ath_alloc_from_library("once");
+    assert(ath_is_alive(o1));
+    assert(!ath_is_alive(o1));
+    assert(!ath_is_alive(o1));
+
+    /* Case-insensitive name. */
+    ath_obj *o2 = ath_alloc_from_library("ONCE");
+    assert(ath_is_alive(o2));
+    assert(!ath_is_alive(o2));
+
+    /* Explicit kill before observation makes the body never run. */
+    ath_obj *o3 = ath_alloc_oneshot();
+    ath_die(o3);
+    assert(!ath_is_alive(o3));
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

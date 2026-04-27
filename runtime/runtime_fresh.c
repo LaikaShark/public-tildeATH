@@ -9,7 +9,7 @@
 #include <time.h>
 #include <unistd.h>
 
-static ath_obj ath_NULL_storage = { 0, NULL, NULL, 0.0, NULL };
+static ath_obj ath_NULL_storage = { .alive = 0 };
 ath_obj *ath_NULL = &ath_NULL_storage;
 
 static double ath_now_s(void) {
@@ -87,6 +87,10 @@ int ath_is_alive(ath_obj *v) {
     if (v->watch_path != NULL && access(v->watch_path, F_OK) != 0) {
         v->alive = 0;
         return 0;
+    }
+    /* One-shot: alive for this single observation, dead thereafter. */
+    if (v->is_oneshot) {
+        v->alive = 0;
     }
     return 1;
 }
@@ -261,9 +265,20 @@ ath_obj *ath_alloc_with_lifetime(double min_s, double max_s) {
     return o;
 }
 
+ath_obj *ath_alloc_oneshot(void) {
+    ath_obj *o = ath_alloc_alive();
+    o->is_oneshot = 1;
+    return o;
+}
+
 ath_obj *ath_alloc_from_library(const char *name) {
+    if (name == NULL) return ath_alloc_alive();
+    /* Special non-time-based library entries. */
+    if (strcasecmp(name, "once") == 0) {
+        return ath_alloc_oneshot();
+    }
     double min_s, max_s;
-    if (name && ath_library_lookup(name, &min_s, &max_s)) {
+    if (ath_library_lookup(name, &min_s, &max_s)) {
         return ath_alloc_with_lifetime(min_s, max_s);
     }
     return ath_alloc_alive();
