@@ -43,12 +43,7 @@ ath_obj *ath_alloc_alive(void) {
     return o;
 }
 
-ath_obj *ath_compose(ath_obj *l, ath_obj *r) {
-    ath_obj *o = ath_alloc_alive();
-    o->left = l;
-    o->right = r;
-    return o;
-}
+/* ath_compose lives in compose_fresh.c or compose_intern.c. */
 
 void ath_decompose(ath_obj *v, ath_obj **l_out, ath_obj **r_out) {
     if (v == NULL || v == ath_NULL) {

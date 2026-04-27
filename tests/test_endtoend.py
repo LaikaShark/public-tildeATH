@@ -625,6 +625,52 @@ def test_define_lifetime_min_exceeds_max_rejected(tmp_path):
     assert "must not exceed max" in compiled.stderr
 
 
+# --- Composition discipline (--compose fresh|intern) ---
+
+
+def _ensure_runtime_intern():
+    intern_lib = PROJECT_ROOT / "runtime" / "libath_intern.a"
+    if intern_lib.exists():
+        return
+    result = subprocess.run(
+        ["make", "runtime"], cwd=PROJECT_ROOT, capture_output=True, text=True
+    )
+    if result.returncode != 0 or not intern_lib.exists():
+        pytest.skip(f"could not build intern runtime: {result.stderr.strip()}")
+
+
+def test_intern_mode_shares_structurally_equal_composites(tmp_path):
+    # Under fresh, X and Y are distinct: killing Y leaves X alive.
+    # Under intern, X and Y are the same object: killing Y kills X.
+    src = tmp_path / "diff.ath"
+    src.write_text(
+        "import x A;\n"
+        "import y B;\n"
+        "BIFURCATE [A, B] X;\n"
+        "BIFURCATE [A, B] Y;\n"
+        "Y.DIE();\n"
+        "~ATH(X) { print X is alive; X.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+
+    fresh = _build_and_run(src, tmp_path)
+    assert fresh == "X is alive\ndone\n"
+
+    _ensure_runtime_intern()
+    intern = _build_and_run(src, tmp_path, extra_args=["--compose", "intern"])
+    assert intern == "done\n"
+
+
+def test_intern_mode_runtime_library_path_default(tmp_path):
+    # Sanity: invoking with --compose intern picks libath_intern.a by default.
+    _ensure_runtime_intern()
+    src = tmp_path / "hello.ath"
+    src.write_text("print hi from intern;\nTHIS.DIE();\n")
+    out = _build_and_run(src, tmp_path, extra_args=["--compose", "intern"])
+    assert out == "hi from intern\n"
+
+
 def test_watch_dies_when_file_deleted_mid_run(tmp_path):
     _ensure_runtime()
     target = tmp_path / "watched.txt"

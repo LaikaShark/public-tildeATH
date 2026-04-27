@@ -44,6 +44,10 @@ Useful flags:
 - `--emit-obj PATH` — write the object file and stop
 - `-D NAME:MIN:MAX` — register a custom library entry for this build
   (repeatable; see §10b.1)
+- `--compose fresh|intern` — composition discipline (default `fresh`).
+  Under `intern`, two `BIFURCATE [L,R] V;` calls with the same operands
+  return *the same object* (hash-consing). Killing it kills every place
+  it's referenced.
 
 Programs run forever or terminate via `THIS.DIE();`. If you fork-bomb the
 recursion, you'll need `Ctrl-C`.

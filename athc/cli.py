@@ -10,8 +10,12 @@ from athc.loader import LoaderError, load_program
 from athc.sema import SemaError, analyze
 
 
-def _default_runtime() -> Path:
-    return Path(__file__).resolve().parent.parent / "runtime" / "libath_fresh.a"
+def _default_runtime(mode: str = "fresh") -> Path:
+    return (
+        Path(__file__).resolve().parent.parent
+        / "runtime"
+        / f"libath_{mode}.a"
+    )
 
 
 def _parse_lifetime_spec(spec: str) -> tuple[str, float, float]:
@@ -53,9 +57,19 @@ def main(argv: list[str] | None = None) -> int:
         "--emit-obj", metavar="PATH", help="write object file to PATH and exit"
     )
     ap.add_argument(
+        "--compose",
+        choices=["fresh", "intern"],
+        default="fresh",
+        help=(
+            "composition discipline (default: fresh). "
+            "intern hash-conses ath_compose by raw pointer pair, so "
+            "structurally equal composites share storage and die together."
+        ),
+    )
+    ap.add_argument(
         "--runtime",
         metavar="PATH",
-        help="path to libath_fresh.a (default: $project/runtime/libath_fresh.a)",
+        help="path to runtime library (default: libath_<compose>.a)",
     )
     ap.add_argument(
         "--cc",
@@ -115,7 +129,9 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.emit_obj).write_bytes(obj_bytes)
         return 0
 
-    runtime = Path(args.runtime) if args.runtime else _default_runtime()
+    runtime = (
+        Path(args.runtime) if args.runtime else _default_runtime(args.compose)
+    )
     if not runtime.exists():
         print(
             f"athc: runtime library not found at {runtime}; run 'make runtime'",

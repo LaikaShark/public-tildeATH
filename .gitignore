@@ -13,4 +13,6 @@ dist/
 *.s
 a.out
 runtime/test_runtime
+runtime/test_runtime_fresh
+runtime/test_runtime_intern
 .DS_Store

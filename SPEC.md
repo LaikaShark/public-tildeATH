@@ -267,14 +267,24 @@ in step 4. If `L == R` literally (same identifier), the second write wins
 1. Read `L`'s and `R`'s current bindings, the objects `lo` and `ro`.
 2. Call the runtime entry point `ath_compose(lo, ro)`. Bind `V` to the result.
 
-In the v0 default `fresh` mode (§5.2): `ath_compose` allocates a new alive
+The default `fresh` mode (§5.2): `ath_compose` allocates a new alive
 object with `left = lo`, `right = ro`. Two `BIFURCATE [L,R] V;` statements
 with structurally identical operands produce two distinct objects.
 
-In the reserved `intern` mode (§5.2): `ath_compose` consults an intern table
-keyed by the operand object identities. If a previously composed object with
-those exact halves exists, it is returned (whether alive or dead);
-otherwise, a new alive object is allocated and inserted.
+The `intern` mode (§5.2; selectable via `--compose intern`):
+`ath_compose` consults a hash-cons table keyed by the **raw pointer pair**
+`(lo, ro)`. If a previously composed object with those exact operand
+pointers exists, it is returned (whether alive or dead); otherwise, a
+new alive object is allocated and the entry inserted. Killing a
+composite kills every other variable that ever observed it; structurally
+equal composites share storage forever (the table never evicts).
+
+The two modes produce identical observable behavior for any program
+that does not rely on the distinctness or shared-identity of composites.
+All sample programs in `examples/` run identically under both modes (the
+conformance suite verifies this); the difference shows up only in
+programs that compose the same operand pair twice and then kill one
+result.
 
 #### 4.4.4 `~ATH(V) { S* }` and `~ATH(!V) { S* }`
 
@@ -547,10 +557,12 @@ extern ath_obj *ath_NULL;
 `ath_compose` is the **(A)/(B) swap point**. Two implementations are
 provided as separate runtime archives, selected at link time:
 
-- `runtime_fresh.a` — `ath_compose` always allocates. **Default in v0.**
-- `runtime_intern.a` — `ath_compose` interns. **Not built in v0** (reserved).
+- `libath_fresh.a` — `ath_compose` always allocates. Default.
+- `libath_intern.a` — `ath_compose` hash-conses by raw pointer pair.
 
-The driver flag `-fcompose=fresh|intern` selects which archive is linked.
+The compiler driver flag `--compose fresh|intern` selects which archive
+is linked. Both share `runtime_common.o` (everything except
+`ath_compose`).
 
 `ath_decompose` is the swap point for lazy-halves vs. strict semantics.
 `ath_die` is the swap point for any future cascading-death rule.
@@ -790,5 +802,5 @@ empty pending v2+ features.)
   last-wins?
 - Should `STRING` support escape sequences (`\n`, `\"`, `\\`)? Currently
   no escapes in v1.
-- Concrete intern semantics for `ath_compose` in `intern` mode: by raw
-  pointer pair, or recursively by structural identity of halves?
+- (Resolved.) `intern` mode hashes by raw pointer pair, not recursive
+  structural identity. See §4.4.3.

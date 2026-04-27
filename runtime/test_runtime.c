@@ -31,17 +31,30 @@ int main(void) {
     assert(bc->left == b);
     assert(bc->right == c);
 
-    /* Fresh mode: two composes of structurally equal operands are distinct. */
+    /* Composition identity under the active discipline (SPEC §4.4.3). */
     ath_obj *bc2 = ath_compose(b, c);
+#ifdef ATH_INTERN_MODE
+    /* Intern: same operands -> same canonical object. */
+    assert(bc == bc2);
+#else
+    /* Fresh: every call allocates a distinct composite. */
     assert(bc != bc2);
+#endif
     assert(ath_is_alive(bc2));
 
-    /* Killing a composite does not affect its halves or its siblings. */
+    /* Killing a composite affects its halves and siblings differently
+     * depending on whether the sibling is the same object. */
     ath_die(bc);
     assert(!ath_is_alive(bc));
     assert(ath_is_alive(b));
     assert(ath_is_alive(c));
+#ifdef ATH_INTERN_MODE
+    /* Intern: bc2 IS bc, so it died too. */
+    assert(!ath_is_alive(bc2));
+#else
+    /* Fresh: bc2 is a distinct composite, still alive. */
     assert(ath_is_alive(bc2));
+#endif
 
     /* Decompose on a leaf lazily allocates two fresh alive halves. */
     ath_obj *leaf = ath_alloc_alive();

@@ -22,23 +22,37 @@ def _ensure_runtime():
         pytest.skip(f"could not build runtime: {result.stderr.strip()}")
 
 
-def _compile_and_run(source: Path, tmp_path: Path, stdin: str | None = None) -> str:
+def _compile_and_run(
+    source: Path,
+    tmp_path: Path,
+    stdin: str | None = None,
+    compose: str = "fresh",
+) -> str:
     _ensure_runtime()
     out = tmp_path / "prog"
     compiled = subprocess.run(
-        [sys.executable, "-m", "athc.cli", str(source), "-o", str(out)],
+        [
+            sys.executable,
+            "-m",
+            "athc.cli",
+            "--compose",
+            compose,
+            str(source),
+            "-o",
+            str(out),
+        ],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
     )
     assert compiled.returncode == 0, (
-        f"compile failed for {source}:\n{compiled.stderr}"
+        f"compile failed for {source} (compose={compose}):\n{compiled.stderr}"
     )
     run = subprocess.run(
         [str(out)], input=stdin, capture_output=True, text=True, timeout=10.0
     )
     assert run.returncode == 0, (
-        f"binary exited {run.returncode} for {source}:\n{run.stderr}"
+        f"binary exited {run.returncode} for {source} (compose={compose}):\n{run.stderr}"
     )
     return run.stdout
 
@@ -131,9 +145,19 @@ CASES = [
 ]
 
 
+@pytest.mark.parametrize("compose", ["fresh", "intern"])
 @pytest.mark.parametrize("rel_path,stdin,expected", CASES)
-def test_program(rel_path: str, stdin: str | None, expected: str, tmp_path: Path):
+def test_program(
+    rel_path: str,
+    stdin: str | None,
+    expected: str,
+    compose: str,
+    tmp_path: Path,
+):
+    """Every conformance program must produce the same output under both
+    composition disciplines. This catches programs that accidentally rely
+    on fresh-mode object identity."""
     source = PROGRAMS / rel_path
     assert source.exists(), f"missing program file: {source}"
-    output = _compile_and_run(source, tmp_path, stdin=stdin)
+    output = _compile_and_run(source, tmp_path, stdin=stdin, compose=compose)
     assert output == expected
