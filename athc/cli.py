@@ -5,7 +5,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from athc.codegen import emit_object, generate_ir
+from athc.codegen import CodegenError, emit_object, generate_ir
+from athc.diagnostics import render_diagnostic
 from athc.loader import LoaderError, load_program
 from athc.sema import SemaError, analyze
 
@@ -99,25 +100,60 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     source_path = Path(args.source)
+    sources: dict[Path, str] = {}
 
     try:
-        program, function_table = load_program(source_path)
+        program, function_table, loaded_sources = load_program(source_path)
+        sources.update(loaded_sources)
     except LoaderError as e:
-        print(f"athc: {e}", file=sys.stderr)
+        print(
+            render_diagnostic(
+                kind="error",
+                msg=e.msg,
+                path=e.path or source_path,
+                source_text=e.source_text,
+                line=e.line,
+                col=e.col,
+            ),
+            file=sys.stderr,
+        )
         return 1
 
     try:
         analyze(program, function_table)
     except SemaError as e:
-        print(f"athc: {source_path}: {e}", file=sys.stderr)
+        error_path = e.path or program.source_path or source_path.resolve()
+        print(
+            render_diagnostic(
+                kind="error",
+                msg=e.msg,
+                path=error_path,
+                source_text=sources.get(error_path),
+                line=e.line,
+                col=e.col,
+            ),
+            file=sys.stderr,
+        )
         return 1
 
-    ir_text = generate_ir(
-        program,
-        function_table,
-        module_name=source_path.stem or "ath",
-        user_lifetimes=user_lifetimes,
-    )
+    try:
+        ir_text = generate_ir(
+            program,
+            function_table,
+            module_name=source_path.stem or "ath",
+            user_lifetimes=user_lifetimes,
+        )
+    except CodegenError as e:
+        print(
+            render_diagnostic(
+                kind="error",
+                msg=str(e),
+                path=source_path,
+                source_text=sources.get(source_path.resolve()),
+            ),
+            file=sys.stderr,
+        )
+        return 1
 
     if args.emit_ir:
         sys.stdout.write(ir_text)

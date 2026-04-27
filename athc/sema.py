@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from athc.ast import (
     AthLoop,
     ComposeStmt,
@@ -21,20 +23,37 @@ READ_ONLY = frozenset({"NULL"})
 
 
 class SemaError(Exception):
-    def __init__(self, msg: str, line: int, col: int):
+    def __init__(
+        self,
+        msg: str,
+        line: int,
+        col: int,
+        path: Path | None = None,
+    ):
         super().__init__(f"line {line}, col {col}: {msg}")
         self.msg = msg
         self.line = line
         self.col = col
+        self.path = path
 
 
 def analyze(program: Program, function_table: dict | None = None) -> None:
     if function_table is None:
         function_table = {}
     fnames = {n.lower() for n in function_table}
-    _walk(program.statements, set(PREDEFINED_MAIN), fnames)
+    try:
+        _walk(program.statements, set(PREDEFINED_MAIN), fnames)
+    except SemaError as e:
+        if e.path is None:
+            e.path = program.source_path
+        raise
     for fname, fprog in function_table.items():
-        _walk(fprog.statements, set(PREDEFINED_FUNC), fnames)
+        try:
+            _walk(fprog.statements, set(PREDEFINED_FUNC), fnames)
+        except SemaError as e:
+            if e.path is None:
+                e.path = fprog.source_path
+            raise
 
 
 def _walk(stmts: list, defined: set, fnames: set) -> None:

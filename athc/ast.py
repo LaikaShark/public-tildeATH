@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Union
 
 
@@ -123,3 +124,4 @@ Stmt = Union[
 @dataclass
 class Program:
     statements: list = field(default_factory=list)
+    source_path: Path | None = None
