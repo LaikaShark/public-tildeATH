@@ -2,6 +2,7 @@
 
 #include "ath_runtime.h"
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,6 +67,9 @@ void ath_die(ath_obj *v) {
     v->alive = 0;
 }
 
+#define ATH_MAX_SIGNAL 64
+static volatile sig_atomic_t ath_signal_received[ATH_MAX_SIGNAL];
+
 int ath_is_alive(ath_obj *v) {
     if (v == NULL) {
         return 0;
@@ -80,6 +84,12 @@ int ath_is_alive(ath_obj *v) {
     }
     /* File-watch lifetime: object dies once access() fails. */
     if (v->watch_path != NULL && access(v->watch_path, F_OK) != 0) {
+        v->alive = 0;
+        return 0;
+    }
+    /* Signal-watch lifetime: object dies once the awaited signal arrives. */
+    if (v->awaiting_signal > 0 && v->awaiting_signal < ATH_MAX_SIGNAL
+        && ath_signal_received[v->awaiting_signal]) {
         v->alive = 0;
         return 0;
     }
@@ -304,6 +314,75 @@ ath_obj *ath_alloc_from_library(const char *name) {
         return ath_alloc_with_lifetime(min_s, max_s);
     }
     return ath_alloc_alive();
+}
+
+/* --- Signal watching (SPEC §4.7) ----------------------------------------- */
+
+typedef struct { const char *name; int signum; } ath_signal_entry;
+
+static const ath_signal_entry ath_signal_names[] = {
+    {"SIGHUP",  SIGHUP},
+    {"SIGINT",  SIGINT},
+    {"SIGQUIT", SIGQUIT},
+    {"SIGUSR1", SIGUSR1},
+    {"SIGUSR2", SIGUSR2},
+    {"SIGPIPE", SIGPIPE},
+    {"SIGALRM", SIGALRM},
+    {"SIGTERM", SIGTERM},
+    {"SIGCHLD", SIGCHLD},
+    {NULL, 0}
+};
+
+static int ath_signal_lookup(const char *name) {
+    if (name == NULL) return -1;
+    for (const ath_signal_entry *e = ath_signal_names; e->name; e++) {
+        if (strcasecmp(e->name, name) == 0) {
+            return e->signum;
+        }
+    }
+    return -1;
+}
+
+static void ath_signal_handler(int signum) {
+    if (signum > 0 && signum < ATH_MAX_SIGNAL) {
+        ath_signal_received[signum] = 1;
+    }
+}
+
+static void ath_install_signal_watcher(int signum) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = ath_signal_handler;
+    sa.sa_flags = SA_RESTART;
+    sigemptyset(&sa.sa_mask);
+    sigaction(signum, &sa, NULL);
+}
+
+ath_obj *ath_alloc_watching_signal(int signum) {
+    ath_obj *o = ath_alloc_alive();
+    if (signum <= 0 || signum >= ATH_MAX_SIGNAL) {
+        o->alive = 0;
+        return o;
+    }
+    ath_install_signal_watcher(signum);
+    o->awaiting_signal = signum;
+    if (ath_signal_received[signum]) {
+        o->alive = 0;
+    }
+    return o;
+}
+
+ath_obj *ath_alloc_watching_signal_by_name(const char *name) {
+    int signum = ath_signal_lookup(name);
+    if (signum < 0) {
+        if (name) {
+            fprintf(stderr, "ath: unknown signal name '%s'; allocating born-dead\n", name);
+        }
+        ath_obj *o = ath_alloc_alive();
+        o->alive = 0;
+        return o;
+    }
+    return ath_alloc_watching_signal(signum);
 }
 
 ath_obj *ath_alloc_watching_file(const char *path) {

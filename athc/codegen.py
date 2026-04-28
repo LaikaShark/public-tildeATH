@@ -136,6 +136,11 @@ class Codegen:
             ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
             name="ath_alloc_watching_file",
         )
+        self.f_alloc_watching_signal_by_name = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
+            name="ath_alloc_watching_signal_by_name",
+        )
         self.f_register_lifetime = ir.Function(
             self.module,
             ir.FunctionType(
@@ -342,10 +347,21 @@ class FunctionEmitter:
             "==", cur, ir.Constant(self.cg.obj_ptr, None)
         )
         with builder.if_then(is_unbound):
-            path_g = self.cg.make_cstring_global(stmt.path)
             zero = ir.Constant(self.cg.i32, 0)
-            path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
-            fresh = builder.call(self.cg.f_alloc_watching_file, [path_ptr])
+            if stmt.path is not None:
+                target_g = self.cg.make_cstring_global(stmt.path)
+                target_ptr = builder.gep(target_g, [zero, zero], inbounds=True)
+                fresh = builder.call(self.cg.f_alloc_watching_file, [target_ptr])
+            elif stmt.signal_name is not None:
+                name_g = self.cg.make_cstring_global(stmt.signal_name)
+                name_ptr = builder.gep(name_g, [zero, zero], inbounds=True)
+                fresh = builder.call(
+                    self.cg.f_alloc_watching_signal_by_name, [name_ptr]
+                )
+            else:
+                raise CodegenError(
+                    "WatchStmt has neither path nor signal_name"
+                )
             builder.store(fresh, slot)
 
     def _emit_decompose(self, builder: ir.IRBuilder, stmt: DecomposeStmt) -> None:

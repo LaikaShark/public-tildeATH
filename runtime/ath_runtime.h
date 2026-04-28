@@ -8,16 +8,20 @@ typedef struct ath_obj {
     struct ath_obj *left;
     struct ath_obj *right;
     /* Optional lifetime extensions (SPEC §4.7). Any may be unused.
-     * deadline_s: monotonic seconds at which this object becomes dead.
-     *             0.0 means "no deadline; lives until explicitly killed."
-     * watch_path: NUL-terminated filesystem path. NULL means "no watch".
-     *             When set, the object becomes dead as soon as access()
-     *             fails on the path.
-     * is_oneshot: if nonzero, ath_is_alive returns 1 exactly once and
-     *             then sets alive=0 — used by the `once` library entry. */
+     * deadline_s:      monotonic seconds at which this object becomes dead.
+     *                  0.0 means "no deadline; lives until explicitly killed."
+     * watch_path:      NUL-terminated filesystem path. NULL means "no watch".
+     *                  When set, the object becomes dead as soon as access()
+     *                  fails on the path.
+     * is_oneshot:      if nonzero, ath_is_alive returns 1 exactly once and
+     *                  then sets alive=0 — used by the `once` library entry.
+     * awaiting_signal: if nonzero, this object's liveness is tied to a
+     *                  pending POSIX signal of that number. ath_is_alive
+     *                  flips alive=0 once the signal has been received. */
     double deadline_s;
     const char *watch_path;
     int is_oneshot;
+    int awaiting_signal;
 } ath_obj;
 
 extern ath_obj *ath_NULL;
@@ -46,6 +50,8 @@ ath_obj *ath_char_atom(int c);
 /* Lifetime allocators (SPEC §4.7). */
 ath_obj *ath_alloc_with_lifetime(double min_s, double max_s);
 ath_obj *ath_alloc_watching_file(const char *path);
+ath_obj *ath_alloc_watching_signal(int signum);
+ath_obj *ath_alloc_watching_signal_by_name(const char *name);
 ath_obj *ath_alloc_oneshot(void);
 ath_obj *ath_alloc_from_library(const char *name);
 int      ath_library_lookup(const char *name, double *min_out, double *max_out);

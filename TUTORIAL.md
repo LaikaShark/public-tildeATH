@@ -665,7 +665,38 @@ is already dead).
 
 See `examples/once_runner.ath`.
 
-### 10b.3 Watching files
+### 10b.3 Watching signals
+
+The `watch` statement has a second form that ties an object's life to a
+POSIX signal:
+
+```ath
+watch signal SIGUSR1 as RUNNING;
+~ATH(RUNNING) {
+    print serving requests;
+}
+print received SIGUSR1, shutting down cleanly;
+THIS.DIE();
+```
+
+The runtime installs a sticky-flag handler the first time you watch each
+signal. As long as the signal hasn't arrived, the watched variable is
+alive. When the process receives the signal, the next `ath_is_alive`
+check observes the flag and the variable becomes dead — and stays dead
+even if more of the same signal arrive later.
+
+Supported names: `SIGHUP`, `SIGINT`, `SIGQUIT`, `SIGUSR1`, `SIGUSR2`,
+`SIGPIPE`, `SIGALRM`, `SIGTERM`, `SIGCHLD`. Names outside this set
+produce a born-dead object and a one-line stderr warning.
+
+The keyword `signal` here is **contextual** — it's only special as the
+second token after `watch`. Programs can still bind variables named
+`signal` via `import`.
+
+`examples/signal_handler/main.ath` is a runnable demo: start it in the
+background, send SIGUSR1 with `kill -USR1`, watch it exit cleanly.
+
+### 10b.4 Watching files
 
 The `watch` statement ties an object's life to the existence of a file
 on disk:
@@ -697,6 +728,11 @@ This combines well with the library: `watch "lock.pid" as L;` plus
 `~ATH(L) { import soap bubble B; ~ATH(B) { ... } }` gives you nested
 external-condition loops — fire a body until either the file is removed
 or roughly half a minute has elapsed, whichever comes first.
+
+And it combines with signals: `watch signal SIGTERM as T;` plus
+`watch "config.txt" as CFG;` plus an `import campaign C;` gives you a
+loop that terminates on the first of {SIGTERM received, config file
+deleted, random 0-100 second timeout}.
 
 ---
 

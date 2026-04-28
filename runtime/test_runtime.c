@@ -3,6 +3,7 @@
 #include "ath_runtime.h"
 
 #include <assert.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -237,6 +238,31 @@ int main(void) {
     /* Case-insensitive match against user entries too. */
     assert(ath_library_lookup("TORTOISE", &lo, &hi));
     assert(lo == 50.0);
+
+    /* --- Signal watching --- */
+
+    /* Watching a recognized signal is alive until the signal is received. */
+    ath_obj *sig_watcher = ath_alloc_watching_signal_by_name("SIGUSR1");
+    assert(ath_is_alive(sig_watcher));
+    /* raise() delivers synchronously; the handler runs before raise returns. */
+    raise(SIGUSR1);
+    assert(!ath_is_alive(sig_watcher));
+
+    /* Subsequent allocations watching the same signal are immediately dead
+     * because the signal-received flag is sticky. */
+    ath_obj *sig_late = ath_alloc_watching_signal_by_name("SIGUSR1");
+    assert(!ath_is_alive(sig_late));
+
+    /* Unknown signal name -> born dead with a stderr warning. */
+    fputs("(expect one warning below) ", stderr);
+    ath_obj *bad_sig = ath_alloc_watching_signal_by_name("NOTASIGNAL");
+    assert(!ath_is_alive(bad_sig));
+
+    /* Case-insensitive name lookup. */
+    ath_obj *sig_case = ath_alloc_watching_signal_by_name("sigusr2");
+    assert(ath_is_alive(sig_case));
+    raise(SIGUSR2);
+    assert(!ath_is_alive(sig_case));
 
     fputs("runtime test: all checks passed\n", stdout);
     return 0;

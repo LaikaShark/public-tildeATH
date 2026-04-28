@@ -204,12 +204,33 @@ class Parser:
 
     def _parse_watch(self) -> WatchStmt:
         kw = self._expect(TokenKind.KW_WATCH)
-        path = self._expect(TokenKind.STRING)
-        self._expect(TokenKind.KW_AS)
-        var = self._expect(TokenKind.IDENT)
-        self._expect(TokenKind.SEMI)
-        return WatchStmt(
-            path=path.value, var=var.value, line=kw.line, col=kw.col
+        nxt = self._peek()
+        if nxt.kind is TokenKind.STRING:
+            # File form: watch "PATH" as VAR;
+            path = self._advance().value
+            self._expect(TokenKind.KW_AS)
+            var = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return WatchStmt(
+                var=var.value, line=kw.line, col=kw.col, path=path
+            )
+        if nxt.kind is TokenKind.IDENT and nxt.value.lower() == "signal":
+            # Signal form: watch signal NAME as VAR;
+            self._advance()  # consume 'signal'
+            sig = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.KW_AS)
+            var = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return WatchStmt(
+                var=var.value,
+                line=kw.line,
+                col=kw.col,
+                signal_name=sig.value,
+            )
+        raise ParseError(
+            f"expected STRING or 'signal' after 'watch'; got {nxt.kind.name}",
+            nxt.line,
+            nxt.col,
         )
 
     def _parse_die_or_funcall(self):

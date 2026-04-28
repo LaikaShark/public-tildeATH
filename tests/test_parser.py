@@ -225,17 +225,39 @@ def test_funcall_with_lowercase_name_parses():
     assert s.name == "add"  # case-insensitive resolution happens later
 
 
-def test_watch_statement():
+def test_watch_file_form():
     p = parse('watch "target.txt" as F;')
     s = p.statements[0]
     assert isinstance(s, WatchStmt)
     assert s.path == "target.txt"
+    assert s.signal_name is None
     assert s.var == "F"
 
 
-def test_watch_requires_string_path():
-    with pytest.raises(ParseError, match="expected STRING"):
+def test_watch_signal_form():
+    p = parse("watch signal SIGTERM as T;")
+    s = p.statements[0]
+    assert isinstance(s, WatchStmt)
+    assert s.path is None
+    assert s.signal_name == "SIGTERM"
+    assert s.var == "T"
+
+
+def test_watch_signal_keyword_is_contextual_and_case_insensitive():
+    p = parse("watch SIGNAL SIGTERM as T;")
+    assert isinstance(p.statements[0], WatchStmt)
+    assert p.statements[0].signal_name == "SIGTERM"
+
+
+def test_watch_rejects_bare_identifier_after_watch():
+    # foo is neither STRING nor 'signal' -> parse error.
+    with pytest.raises(ParseError, match="STRING or 'signal'"):
         parse("watch foo as F;")
+
+
+def test_watch_signal_missing_name_errors():
+    with pytest.raises(ParseError):
+        parse("watch signal as F;")
 
 
 def test_watch_requires_as():

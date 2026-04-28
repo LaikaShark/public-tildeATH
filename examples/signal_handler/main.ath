@@ -1,0 +1,28 @@
+// Graceful-shutdown loop driven by SIGUSR1.
+//
+// RUNNING is alive until the process receives SIGUSR1. SHOWN is alive
+// for exactly one observation, so the inner body prints once. The outer
+// loop then spins until the signal arrives, after which the post-loop
+// "received signal" message runs.
+//
+// Try:
+//   athc examples/signal_handler/main.ath -o handler
+//   (./handler > out.log &)
+//   sleep 0.2 && kill -USR1 %1
+//   wait %1
+//   cat out.log
+//
+// Expected output:
+//   serving requests
+//   received SIGUSR1, shutting down cleanly
+
+watch signal SIGUSR1 as RUNNING;
+import once SHOWN;
+
+~ATH(RUNNING) {
+    ~ATH(SHOWN) {
+        print serving requests;
+    }
+}
+print received SIGUSR1, shutting down cleanly;
+THIS.DIE();

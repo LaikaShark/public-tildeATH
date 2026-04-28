@@ -671,6 +671,57 @@ def test_intern_mode_runtime_library_path_default(tmp_path):
     assert out == "hi from intern\n"
 
 
+def test_signal_watch_dies_on_signal(tmp_path):
+    _ensure_runtime()
+    import signal as _signal
+
+    src = tmp_path / "sig.ath"
+    src.write_text(
+        "watch signal SIGUSR1 as RUNNING;\n"
+        "import once SHOWN;\n"
+        "~ATH(RUNNING) {\n"
+        "    ~ATH(SHOWN) { print serving requests; }\n"
+        "}\n"
+        "print received signal;\n"
+        "THIS.DIE();\n"
+    )
+    out_bin = tmp_path / "prog"
+    compiled = _compile(src, out_bin)
+    assert compiled.returncode == 0, compiled.stderr
+
+    log = tmp_path / "out.log"
+    with open(log, "w") as f:
+        proc = subprocess.Popen([str(out_bin)], stdout=f)
+    time.sleep(0.1)
+    proc.send_signal(_signal.SIGUSR1)
+    proc.wait(timeout=5.0)
+    assert proc.returncode == 0
+
+    output = log.read_text()
+    assert "serving requests" in output
+    assert output.endswith("received signal\n"), f"got: {output!r}"
+
+
+def test_signal_watch_unknown_signal_name_yields_born_dead(tmp_path):
+    src = tmp_path / "unk.ath"
+    src.write_text(
+        "watch signal NOTASIGNAL as V;\n"
+        "~ATH(V) { print never; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out_bin = tmp_path / "prog"
+    compiled = _compile(src, out_bin)
+    assert compiled.returncode == 0
+    run = subprocess.run(
+        [str(out_bin)], capture_output=True, text=True, timeout=5.0
+    )
+    assert run.returncode == 0
+    assert run.stdout == "done\n"
+    # Runtime should have warned about the unknown signal name.
+    assert "unknown signal" in run.stderr.lower()
+
+
 def test_watch_dies_when_file_deleted_mid_run(tmp_path):
     _ensure_runtime()
     target = tmp_path / "watched.txt"

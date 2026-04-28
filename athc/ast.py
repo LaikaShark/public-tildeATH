@@ -77,10 +77,11 @@ class ImportFuncStmt:
 
 @dataclass
 class WatchStmt:
-    path: str
     var: str
     line: int
     col: int
+    path: str | None = None         # file form: watch "PATH" as VAR;
+    signal_name: str | None = None  # signal form: watch signal NAME as VAR;
 
 
 @dataclass

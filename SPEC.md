@@ -134,7 +134,11 @@ import-stmt   = 'import' IDENT+ ';' ;
 
 importf-stmt  = 'importf' STRING 'as' IDENT ';' ;
 
-watch-stmt    = 'watch' STRING 'as' IDENT ';' ;
+watch-stmt    = 'watch' STRING 'as' IDENT ';'              (* file form *)
+              | 'watch' 'signal' IDENT 'as' IDENT ';' ;   (* signal form *)
+                (* 'signal' is a *contextual* keyword: a bare IDENT whose
+                   value matches "signal" case-insensitively. Outside the
+                   second token after 'watch' it is a normal identifier. *)
 
 bifurcate-stmt
               = decompose-stmt
@@ -413,7 +417,11 @@ registration in source order wins. (Subject to revision; see §9.)
 In both forms, `FN` is matched against the function registry; if no such
 function is registered, compilation fails (§6.1).
 
-#### 4.4.12 `watch "PATH" as VAR;`
+#### 4.4.12 `watch "PATH" as VAR;` and `watch signal NAME as VAR;`
+
+Two forms, dispatched on the first token after `watch`.
+
+**File form** — `watch "PATH" as VAR;`:
 
 Allocates a fresh object whose liveness is tied to the existence of the
 file at `PATH`. `PATH` is resolved at runtime (not compile time) against
@@ -428,8 +436,28 @@ on the path. If the file is gone, the object transitions to dead and
 stays dead — even if the file is later recreated, since death is one-way
 (§4.1).
 
+**Signal form** — `watch signal NAME as VAR;`:
+
+Allocates a fresh object whose liveness is tied to a POSIX signal. The
+runtime installs a sticky-flag handler for `NAME` (idempotent across
+multiple watchers) and the object's `ath_is_alive` check consults the
+flag.
+
+- The signal name `NAME` is one of `SIGHUP`, `SIGINT`, `SIGQUIT`,
+  `SIGUSR1`, `SIGUSR2`, `SIGPIPE`, `SIGALRM`, `SIGTERM`, `SIGCHLD`
+  (case-insensitive). Names outside this set produce a born-dead object
+  and a stderr warning at runtime.
+- If the signal has not yet been received, the object is born alive.
+- If the signal has *already* been received (e.g., by an earlier watcher
+  that triggered it), the object is born dead — the flag is sticky.
+- Multiple watchers of the same signal all die when the signal arrives.
+
+**Shared rules** (both forms):
+
 `VAR` must not be `NULL` (§4.2). If `VAR` is already bound, `watch` is a
-no-op (idempotent, matching `import`).
+no-op (idempotent, matching `import`). The contextual keyword `signal`
+is recognized only as the second token after `watch`; elsewhere it is a
+normal identifier.
 
 ### 4.5 Program termination
 
@@ -469,7 +497,7 @@ The encoding is deliberately the same as drocta `~ATH`'s `getStrObj` /
 
 ### 4.7 Lifetime extensions
 
-Every object carries three optional lifetime conditions in addition to
+Every object carries four optional lifetime conditions in addition to
 its explicit `.DIE`-driven mortality:
 
 1. **Deadline.** A monotonic-clock timestamp (in seconds since some
@@ -481,7 +509,12 @@ its explicit `.DIE`-driven mortality:
    observation calls `access(F_OK)` on the path; if the call fails for
    any reason (file doesn't exist, permission denied, etc.), the object
    becomes dead. Subsequent recreation of the file does not revive it.
-3. **One-shot flag.** When set, the first `ath_is_alive` observation
+3. **Awaited signal.** A POSIX signal number. When set, every
+   `ath_is_alive` observation consults a sticky per-signal flag set by
+   a process-wide handler; if the signal has been received, the object
+   becomes dead. The flag is process-global, so all watchers of the
+   same signal die together.
+4. **One-shot flag.** When set, the first `ath_is_alive` observation
    returns alive and atomically flips the underlying `alive` field to
    false; every subsequent observation returns dead. Combined with the
    `~ATH` loop's "re-check before every iteration" rule, this causes
@@ -543,6 +576,8 @@ ath_obj *ath_char_atom(int c);
 /* Lifetime extensions (§4.7) */
 ath_obj *ath_alloc_with_lifetime(double min_s, double max_s);
 ath_obj *ath_alloc_watching_file(const char *path);
+ath_obj *ath_alloc_watching_signal(int signum);
+ath_obj *ath_alloc_watching_signal_by_name(const char *name);
 ath_obj *ath_alloc_oneshot(void);
 ath_obj *ath_alloc_from_library(const char *name);
 int      ath_library_lookup(const char *name, double *min_out, double *max_out);
