@@ -22,9 +22,12 @@ class TokenKind(Enum):
     RBRACKET = auto()
     LBRACE = auto()
     RBRACE = auto()
+    LANGLE = auto()
+    RANGLE = auto()
     COMMA = auto()
     SEMI = auto()
     BANG = auto()
+    INT = auto()
     RAWTEXT = auto()
     RESERVED = auto()
     EOF = auto()
@@ -67,10 +70,15 @@ PUNCT = {
     "]": TokenKind.RBRACKET,
     "{": TokenKind.LBRACE,
     "}": TokenKind.RBRACE,
+    "<": TokenKind.LANGLE,
+    ">": TokenKind.RANGLE,
     ",": TokenKind.COMMA,
     ";": TokenKind.SEMI,
     "!": TokenKind.BANG,
 }
+
+INT64_MIN = -(2**63)
+INT64_MAX = 2**63 - 1
 
 
 class Lexer:
@@ -136,6 +144,27 @@ class Lexer:
                 break
         return self.src[start:self.pos]
 
+    def _read_int(self, line: int, col: int) -> None:
+        start = self.pos
+        if self._peek() == "-":
+            self._advance()
+        if not self._peek().isdigit():
+            raise LexError("expected digits after '-'", line, col)
+        while self.pos < len(self.src) and self._peek().isdigit():
+            self._advance()
+        text = self.src[start:self.pos]
+        try:
+            n = int(text)
+        except ValueError:
+            raise LexError(f"invalid integer literal {text!r}", line, col)
+        if n < INT64_MIN or n > INT64_MAX:
+            raise LexError(
+                f"integer literal {text} does not fit signed 64-bit range",
+                line,
+                col,
+            )
+        self._emit(TokenKind.INT, text, line, col)
+
     def _read_print_payload(self) -> None:
         if self._peek() != " ":
             raise LexError(
@@ -196,6 +225,10 @@ class Lexer:
             if c in PUNCT:
                 self._advance()
                 self._emit(PUNCT[c], c, line, col)
+                continue
+
+            if c.isdigit() or (c == "-" and self._peek(1).isdigit()):
+                self._read_int(line, col)
                 continue
 
             if c.isalpha() or c == "_":

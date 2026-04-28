@@ -36,6 +36,47 @@ def test_unterminated_block_comment_errors():
         tokenize("/* never closed")
 
 
+def test_int_literal_positive():
+    toks = tokenize("42")
+    assert toks[0].kind is TokenKind.INT
+    assert toks[0].value == "42"
+
+
+def test_int_literal_negative():
+    toks = tokenize("-7")
+    assert toks[0].kind is TokenKind.INT
+    assert toks[0].value == "-7"
+
+
+def test_int_literal_max_int64():
+    toks = tokenize("9223372036854775807")
+    assert toks[0].kind is TokenKind.INT
+
+
+def test_int_literal_overflow_rejected():
+    with pytest.raises(LexError, match="signed 64-bit range"):
+        tokenize("99999999999999999999")
+
+
+def test_int_literal_negative_overflow_rejected():
+    with pytest.raises(LexError, match="signed 64-bit range"):
+        tokenize("-99999999999999999999")
+
+
+def test_angle_brackets_are_punct():
+    toks = tokenize("<add>")
+    assert toks[0].kind is TokenKind.LANGLE
+    assert toks[1].kind is TokenKind.IDENT
+    assert toks[1].value == "add"
+    assert toks[2].kind is TokenKind.RANGLE
+
+
+def test_lone_minus_without_digits_errors():
+    # `-foo` is not a valid token; bare `-` outside a number has no meaning.
+    with pytest.raises(LexError):
+        tokenize("-foo")
+
+
 def test_punctuation():
     assert kinds("(){}[],;") == [
         TokenKind.LPAREN,

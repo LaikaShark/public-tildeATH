@@ -73,6 +73,26 @@ class ImportFuncStmt:
     name: str
     line: int
     col: int
+    search_path: bool = False   # True for the angle-bracket form: importf <stem> as NAME;
+
+
+@dataclass
+class ImportBuiltinStmt:
+    """import builtin SYM as NAME; — registers a C-ABI function locally
+    in the containing file's builtin table (§4.4.13)."""
+    symbol: str
+    name: str
+    line: int
+    col: int
+
+
+@dataclass
+class ImportNumberStmt:
+    """import number N as VAR; — eternal-alive object with int64 payload (§4.4.14)."""
+    value: int
+    var: str
+    line: int
+    col: int
 
 
 @dataclass
@@ -116,6 +136,8 @@ Stmt = Union[
     InputStmt,
     Print2Stmt,
     ImportFuncStmt,
+    ImportBuiltinStmt,
+    ImportNumberStmt,
     FuncCallComposeArg,
     FuncCallDecomposeRet,
     WatchStmt,

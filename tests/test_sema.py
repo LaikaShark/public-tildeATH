@@ -231,3 +231,42 @@ def test_watch_introduces_variable():
 def test_watch_var_cannot_be_NULL():
     with pytest.raises(SemaError, match="NULL.*read-only"):
         check('watch "foo.txt" as NULL;')
+
+
+# --- import number / import builtin ---
+
+
+def test_import_number_introduces_variable():
+    check("import number 42 as N; N.DIE();")
+
+
+def test_import_number_var_cannot_be_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check("import number 42 as NULL;")
+
+
+def test_import_builtin_is_local_callable():
+    # The ImportBuiltinStmt makes ATH_ADD callable in the same file even
+    # though no importf registers it.
+    check(
+        "import builtin ath_add as ATH_ADD;"
+        " import number 1 as A; import number 2 as B;"
+        " ATH_ADD [A, B] R;"
+    )
+
+
+def test_import_builtin_scope_is_per_file():
+    # Without the local import builtin, calling ATH_ADD is rejected.
+    with pytest.raises(SemaError, match="ATH_ADD.*not declared"):
+        check(
+            "import number 1 as A; import number 2 as B;"
+            " ATH_ADD [A, B] R;"
+        )
+
+
+def test_import_builtin_call_resolves_case_insensitively():
+    check(
+        "import builtin ath_add as ATH_ADD;"
+        " import number 1 as A; import number 2 as B;"
+        " ath_add [A, B] R;"
+    )

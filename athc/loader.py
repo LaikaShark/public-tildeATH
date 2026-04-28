@@ -1,8 +1,35 @@
+import os
 from pathlib import Path
 
 from athc.ast import AthLoop, ImportFuncStmt, Program
 from athc.lexer import LexError
 from athc.parser import ParseError, parse
+
+
+def _default_stdlib_dir() -> Path:
+    """The compiler-adjacent stdlib/ directory (sibling of `athc` and `runtime`)."""
+    return Path(__file__).resolve().parent.parent / "stdlib"
+
+
+def _search_path_dirs() -> list[Path]:
+    """Ordered directory list for angle-bracket importf resolution (§5.4)."""
+    dirs: list[Path] = []
+    env = os.environ.get("ATH_PATH", "")
+    for entry in env.split(":") if env else []:
+        if entry:
+            dirs.append(Path(entry))
+    dirs.append(_default_stdlib_dir())
+    return dirs
+
+
+def _resolve_search_path(stem: str) -> Path | None:
+    """Find STEM.ath in ATH_PATH dirs + default stdlib. None if missing."""
+    filename = f"{stem}.ath"
+    for d in _search_path_dirs():
+        candidate = (d / filename).resolve()
+        if candidate.exists():
+            return candidate
+    return None
 
 
 class LoaderError(Exception):
@@ -69,7 +96,21 @@ def _resolve_imports(
 ) -> None:
     importing_text = registry.get(importing_from)
     for imp in _iter_importfs(program.statements):
-        target = (base_dir / imp.path).resolve()
+        if imp.search_path:
+            resolved = _resolve_search_path(imp.path)
+            if resolved is None:
+                searched = [str(d) for d in _search_path_dirs()]
+                raise LoaderError(
+                    f"importf <{imp.path}>: not found in ATH_PATH or stdlib "
+                    f"(searched {searched})",
+                    path=importing_from,
+                    source_text=importing_text,
+                    line=imp.line,
+                    col=imp.col,
+                )
+            target = resolved
+        else:
+            target = (base_dir / imp.path).resolve()
         if target in visiting:
             raise LoaderError(
                 f"circular importf of {target}",

@@ -1,4 +1,4 @@
-# ~ATH Language Specification — v0
+# ~ATH Language Specification
 
 This document defines the dialect of `~ATH` that our compiler accepts and the
 runtime semantics it implements. It is the source of truth: when the
@@ -55,9 +55,21 @@ KEYWORD     := 'import' | 'importf' | 'as' | 'watch' | 'BIFURCATE'
 LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
+INT         := '-'? [0-9]+                     [signed int64 literal, §4.8]
 STRING      := '"' (any char except '"')* '"'  [no escapes in v1]
-PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';' | '!'
+PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | ',' | ';' | '!'
 ```
+
+**Contextual markers.** Two bare identifiers (`builtin`, `number`) are
+recognized as contextual markers only when they appear as the **second
+token after `import`** (§3, §4.4.13, §4.4.14). Elsewhere they are
+ordinary identifiers and may be used as variable names. They are matched
+case-insensitively in that position. This is the same pattern as
+`signal` after `watch` (§4.4.12).
+
+**Angle brackets.** `<` and `>` are tokenized as PUNCT but currently only
+appear in the search-path form of `importf` (§4.4.9). They have no other
+syntactic role.
 
 **Case sensitivity.** Keywords, the `~ATH` loop-start token, the `.DIE`
 method token, and (in v1+) function names match **case-insensitively**:
@@ -128,11 +140,33 @@ statement     = import-stmt
               | print2-stmt
               | funcall-stmt ;
 
-import-stmt   = 'import' IDENT+ ';' ;
-                (* the last IDENT is the variable bound; preceding IDENTs
-                   are metadata, joined with single spaces *)
+import-stmt   = import-concept
+              | import-builtin
+              | import-number ;
 
-importf-stmt  = 'importf' STRING 'as' IDENT ';' ;
+import-concept
+              = 'import' IDENT+ ';' ;
+                (* the last IDENT is the variable bound; preceding IDENTs
+                   are metadata, joined with single spaces. The first IDENT
+                   must not be the contextual marker 'builtin' or 'number'
+                   (matched case-insensitively). *)
+
+import-builtin
+              = 'import' 'builtin' IDENT 'as' IDENT ';' ;
+                (* declares a C-ABI function. First IDENT is the C symbol
+                   name (case-sensitive). Second IDENT is the function
+                   name in the ~ATH function registry (case-insensitive).
+                   See §4.4.13. *)
+
+import-number = 'import' 'number' INT 'as' IDENT ';' ;
+                (* allocates an eternal-alive object carrying the int64
+                   payload. See §4.4.14. *)
+
+importf-stmt  = 'importf' STRING 'as' IDENT ';'
+              | 'importf' '<' IDENT '>' 'as' IDENT ';' ;
+                (* quoted form: path is relative to the importing file.
+                   angle form: name is resolved against ATH_PATH (§5.4),
+                   appending '.ath' to the bare identifier. *)
 
 watch-stmt    = 'watch' STRING 'as' IDENT ';'              (* file form *)
               | 'watch' 'signal' IDENT 'as' IDENT ';' ;   (* signal form *)
@@ -232,11 +266,17 @@ Reading the variable always reads its current binding.
 
 ### 4.4 Statement semantics
 
-#### 4.4.1 `import NAME... VAR;`
+#### 4.4.1 `import NAME... VAR;` (concept form)
 
 One or more IDENTs follow `import`. The **last** IDENT is `VAR`, the
 variable to bind. Any preceding IDENTs are metadata, joined by single
 spaces into a "concept name."
+
+The first IDENT after `import` must not be the contextual marker
+`builtin` or `number` (matched case-insensitively). Those words dispatch
+to §4.4.13 and §4.4.14 respectively. To bind a variable to the concept
+called "builtin" or "number," prefix with another metadata word
+(`import the builtin B;`).
 
 If `VAR` is already bound: no-op.
 
@@ -381,22 +421,40 @@ read by subsequent calls.
 (per §4.6) the output is implementation-defined garbage up to the first
 unrecognized atom, but `PRINT2` never crashes (per §6.2).
 
-#### 4.4.9 `importf "PATH" as NAME;`
+#### 4.4.9 `importf "PATH" as NAME;` and `importf <STEM> as NAME;`
 
-A **compile-time directive**, not a runtime operation:
+A **compile-time directive**, not a runtime operation. Two forms,
+distinguished by the token following `importf`.
 
-1. The implementation opens the file at `PATH`, resolved relative to the
-   directory of the file containing this statement.
-2. The file's contents are parsed as a Program per §3 and registered as a
-   function under the name `NAME` (case-insensitively, per §2.2).
-3. The statement emits no runtime code.
+**Quoted form** — `importf "PATH" as NAME;`:
 
-If `PATH` does not exist or fails to parse, compilation fails. A function
-registered by `importf` is callable from any function in the compilation
-unit, including from inside loops and from other functions.
+1. Open the file at `PATH`, resolved relative to the directory of the
+   file containing this statement.
+2. Parse its contents as a Program per §3 and register it under `NAME`
+   (case-insensitively, per §2.2).
+3. Emit no runtime code.
+
+**Search-path form** — `importf <STEM> as NAME;`:
+
+1. Form the candidate filename `STEM + ".ath"`. `STEM` is taken
+   case-sensitively (the file system does the matching).
+2. Resolve `STEM.ath` against `ATH_PATH` (§5.4): each colon-separated
+   directory is tried in order, then the compiler-adjacent `stdlib/`
+   directory as a fallback.
+3. The first existing file wins; remaining directories are not consulted.
+4. Then proceed as in the quoted form.
+
+If the file does not exist (in either form) or fails to parse,
+compilation fails. A function registered by `importf` is callable from
+any function in the compilation unit, including from inside loops and
+from other functions.
 
 A program may register multiple functions under the same name; the last
-registration in source order wins. (Subject to revision; see §9.)
+registration in source order wins. (Subject to revision; see §9.) A
+file registered via the search-path form is otherwise indistinguishable
+from one registered via the quoted form — both produce ordinary user
+functions unless the file itself contains `import builtin` (§4.4.13),
+in which case the function is a C-ABI shim.
 
 #### 4.4.10 `FN [L, R] V;` (function call, compose-argument form)
 
@@ -458,6 +516,60 @@ flag.
 no-op (idempotent, matching `import`). The contextual keyword `signal`
 is recognized only as the second token after `watch`; elsewhere it is a
 normal identifier.
+
+#### 4.4.13 `import builtin SYM as NAME;`
+
+A **compile-time directive** that registers a C-ABI function under
+`NAME` in the function registry (§4.4.9). `SYM` is the C symbol that
+the linker resolves.
+
+1. The C symbol `SYM` must have the signature
+   `ath_obj *(ath_obj *, ath_obj *)`. The linker checks this; the
+   compiler does not.
+2. `NAME` is added to the function registry (case-insensitively).
+   Subsequent `NAME [L, R] V;` and `NAME A [L, R];` call forms
+   (§4.4.10, §4.4.11) emit a direct call to `SYM` instead of an
+   `ath_user_*` thunk.
+3. The statement emits no runtime code at its source position.
+4. A program may not register the same `NAME` twice with conflicting
+   underlying mechanisms (one as C-ABI, one as `importf`'d ~ATH). The
+   last registration wins, same rule as §4.4.9.
+
+Built-ins are typically declared in single-file shims under `stdlib/`
+and brought into a program via `importf <name> as NAME;` (§4.4.9). The
+arithmetic family — `add`, `sub`, `mul`, `div`, `mod`, `to_string`,
+`parse` — is shipped this way.
+
+The unresolved-symbol case is a **link-time** error, not a compile-time
+one: the compiler trusts that `SYM` will be available when the runtime
+archive is linked. Misspelling a runtime symbol surfaces as a linker
+error, not as an athc diagnostic.
+
+#### 4.4.14 `import number N as VAR;`
+
+A **runtime operation** that allocates a fresh object carrying an
+int64 payload.
+
+1. `N` is an `INT` token (§2.2), parsed as a signed 64-bit integer.
+   Out-of-range literals (e.g., `999999999999999999999`) are a
+   compile-time error.
+2. If `VAR` is already bound: no-op (matches §4.4.1's idempotence).
+3. Otherwise: allocate a fresh **eternal-alive** object with
+   `has_value = 1` and `value = N`. The object has no deadline,
+   no watch path, no awaited signal, no one-shot flag.
+4. Bind `VAR` to that object.
+
+Eternal-alive means the object outlives the program by default —
+"forty-two doesn't decay." A program that wants a mortal number
+composes it with a mortal carrier:
+
+```
+import number 42 as N;
+import mayfly M;          // dies in 5 min – 1 day
+BIFURCATE [N, M] MORTAL;  // MORTAL is alive while M is alive
+```
+
+`VAR` must not be `NULL` (§4.2).
 
 ### 4.5 Program termination
 
@@ -536,6 +648,80 @@ seeded by the `ATH_SEED` environment variable if set (decimal unsigned
 integer), or by the wall clock otherwise. Setting `ATH_SEED` makes
 library-sampled programs deterministic for testing.
 
+### 4.8 Numeric payload and built-in arithmetic
+
+An object may carry an int64 **payload** in addition to its alive bit
+and halves. Two struct fields hold it:
+
+- `has_value` — nonzero iff a payload is set. Zero by default.
+- `value` — signed 64-bit integer. Only meaningful when `has_value` is
+  nonzero.
+
+`import number N as VAR;` (§4.4.14) is the only surface form that
+allocates with a payload. The runtime built-ins `ath_add` ... `ath_parse`
+(§5.2) propagate payloads. The character atoms used by string
+encoding (§4.6) do **not** set `has_value` — they are pointer-identified,
+not value-identified.
+
+#### 4.8.1 Lifetime inheritance
+
+Derived values inherit death from their operands. The runtime
+allocator `ath_inherit_lifetime(result, x, y)` records `x` and `y` as
+dependencies of `result`. Every `ath_is_alive(result)` observation then
+returns false if either dependency is dead, in addition to checking
+`result`'s own alive bit and lifetime extensions (§4.7).
+
+Dependencies are recorded in two slots on `ath_obj` (`dep1`, `dep2`).
+Unary built-ins use only `dep1` and pass NULL for `dep2`. Calls beyond
+arity 2 are out of scope for v2.
+
+This inheritance is **dynamic**: once an operand dies, the derived
+object becomes dead at the next observation, even if it appeared alive
+at allocation time. The reverse never holds — dependency-driven death
+is one-way like every other form (§4.1).
+
+`BIFURCATE [L, R] V;` composition (§4.4.3) does **not** install
+dependencies. This preserves v0/v1 behavior: composites have their
+own lifetimes independent of their halves. Only `ath_inherit_lifetime`
+installs deps, and only the built-in C functions call it.
+
+#### 4.8.2 Arithmetic built-ins
+
+The runtime exports seven C functions, brought into a program via
+`importf <NAME> as NAME;` referencing the corresponding `stdlib/NAME.ath`
+shim (§4.4.13).
+
+| Name | Surface call | Result `value` | Born dead when |
+|---|---|---|---|
+| `add` | `ADD [X, Y] R;` | `X.value + Y.value` | overflow; either operand dead at call |
+| `sub` | `SUB [X, Y] R;` | `X.value - Y.value` | overflow; either operand dead |
+| `mul` | `MUL [X, Y] R;` | `X.value * Y.value` | overflow; either operand dead |
+| `div` | `DIV [X, Y] R;` | `X.value / Y.value` (trunc toward zero) | `Y.value == 0`; `INT64_MIN / -1`; either operand dead |
+| `mod` | `MOD [X, Y] R;` | `X.value % Y.value` | `Y.value == 0`; `INT64_MIN % -1`; either operand dead |
+| `to_string` | `TO_STRING [N, _] S;` | (string encoding §4.6 of `N.value`) | `N` dead or `has_value == 0` |
+| `parse` | `PARSE [S, _] N;` | (int64 parsed from string) | `S` dead, malformed digits, or overflow |
+
+All seven call `ath_inherit_lifetime(R, X, Y)` on success (with `_` =
+NULL for unary ops, which records only `X` as a dependency).
+
+"Born dead" objects have `alive = 0`, `has_value = 0`, `value = 0`.
+Subsequent arithmetic on a born-dead object propagates death.
+
+The second operand of `to_string` and `parse` is conventionally `NULL`
+but any value is accepted and ignored. Using `_` as a placeholder
+identifier is a stylistic convention; sema enforces the same in-scope
+rule as for any other operand (§6.1).
+
+Overflow detection uses `__builtin_add_overflow` / `__builtin_sub_overflow`
+/ `__builtin_mul_overflow` (or their portable equivalents). Division
+and modulo specially handle `INT64_MIN / -1` since that wraps in two's
+complement. Parse uses `strtoll` with full-string-consumed validation;
+trailing non-digit characters fail.
+
+`to_string` produces the canonical decimal representation: optional
+leading `-` for negatives, no leading zeros (except for `0` itself), no
+thousands separators.
+
 ---
 
 ## 5. Runtime ABI
@@ -549,11 +735,29 @@ that let us evolve semantics without touching the frontend.
 
 ```c
 typedef struct ath_obj {
-    int            alive;   /* nonzero = alive */
-    struct ath_obj *left;   /* NULL = UNSET    */
-    struct ath_obj *right;  /* NULL = UNSET    */
+    int            alive;       /* nonzero = alive */
+    struct ath_obj *left;       /* NULL = UNSET    */
+    struct ath_obj *right;      /* NULL = UNSET    */
+
+    /* §4.7 lifetime extensions (optional, any may be unused) */
+    double         deadline_s;
+    const char    *watch_path;
+    int            is_oneshot;
+    int            awaiting_signal;
+
+    /* §4.8 numeric payload */
+    int            has_value;
+    int64_t        value;
+
+    /* §4.8.1 dependency tracking */
+    struct ath_obj *dep1;       /* NULL = no dep */
+    struct ath_obj *dep2;       /* NULL = no dep */
 } ath_obj;
 ```
+
+The exact field order is an ABI commitment to the codegen — `alive`,
+`left`, `right` MUST remain the first three fields. The optional
+extension fields MAY be reordered or extended in subsequent revisions.
 
 ### 5.2 Functions and globals
 
@@ -581,6 +785,17 @@ ath_obj *ath_alloc_watching_signal_by_name(const char *name);
 ath_obj *ath_alloc_oneshot(void);
 ath_obj *ath_alloc_from_library(const char *name);
 int      ath_library_lookup(const char *name, double *min_out, double *max_out);
+
+/* Numeric payload + arithmetic (§4.8) */
+ath_obj *ath_alloc_number(int64_t v);
+void     ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b);
+ath_obj *ath_add(ath_obj *x, ath_obj *y);
+ath_obj *ath_sub(ath_obj *x, ath_obj *y);
+ath_obj *ath_mul(ath_obj *x, ath_obj *y);
+ath_obj *ath_div(ath_obj *x, ath_obj *y);
+ath_obj *ath_mod(ath_obj *x, ath_obj *y);
+ath_obj *ath_to_string(ath_obj *x, ath_obj *unused);
+ath_obj *ath_parse(ath_obj *s, ath_obj *unused);
 
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));
@@ -716,6 +931,26 @@ limit.
 `ath_halt` is invoked exactly when `THIS.DIE();` executes. Implementations
 typically call `_exit(0)`.
 
+### 5.4 Search path
+
+The search-path form of `importf` (§4.4.9) resolves bare stems against
+an ordered list of directories:
+
+1. Each entry of the `ATH_PATH` environment variable, colon-separated,
+   in order.
+2. The compiler-adjacent `stdlib/` directory (next to the `athc`
+   package — same parent as `runtime/`).
+
+The first directory that contains `STEM.ath` wins. Relative paths in
+`ATH_PATH` are resolved against the current working directory at
+compile time.
+
+Programs that ship without depending on `ATH_PATH` only see the
+default `stdlib/`, which is sufficient for all built-in arithmetic
+and any future standard-library additions. Programs that depend on
+project-local helpers should prefer quoted `importf` (relative to the
+importing file) over manipulating `ATH_PATH`.
+
 ---
 
 ## 6. Errors
@@ -734,9 +969,16 @@ v0 errors fall into two classes:
 - Reference to an unknown function in a `funcall-stmt`: matched
   case-insensitively against names registered by `importf`.
 - Binding `NULL` (any case variant in a write position) is rejected per §4.2.
-- File-not-found or parse error in an `importf` target.
+- File-not-found or parse error in an `importf` target. For the
+  search-path form (§4.4.9), "not found" means no `ATH_PATH` entry and
+  no compiler-adjacent `stdlib/` contains `STEM.ath`.
+- An `INT` literal in `import number` (§4.4.14) that does not fit
+  signed 64-bit range.
 - `watch` paths are *not* validated at compile time; missing files cause
   the watching object to be born dead at runtime, never a compile error.
+- Missing C symbols declared by `import builtin` (§4.4.13) surface as
+  **link-time** errors, not compile-time. The compiler trusts the
+  symbol will be resolved when `libath_<mode>.a` is linked.
 
 ### 6.2 Run-time behavior
 

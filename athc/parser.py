@@ -5,7 +5,9 @@ from athc.ast import (
     DieStmt,
     FuncCallComposeArg,
     FuncCallDecomposeRet,
+    ImportBuiltinStmt,
     ImportFuncStmt,
+    ImportNumberStmt,
     ImportStmt,
     InputStmt,
     Print2Stmt,
@@ -85,8 +87,15 @@ class Parser:
             tok.col,
         )
 
-    def _parse_import(self) -> ImportStmt:
+    def _parse_import(self):
         kw = self._expect(TokenKind.KW_IMPORT)
+        first = self._peek()
+        if first.kind is TokenKind.IDENT:
+            folded = first.value.lower()
+            if folded == "builtin":
+                return self._parse_import_builtin(kw)
+            if folded == "number":
+                return self._parse_import_number(kw)
         idents: list[str] = []
         while self._peek().kind is TokenKind.IDENT:
             idents.append(self._advance().value)
@@ -101,6 +110,32 @@ class Parser:
         return ImportStmt(
             name=" ".join(idents[:-1]),
             var=idents[-1],
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_import_builtin(self, kw: Token) -> ImportBuiltinStmt:
+        self._advance()  # consume 'builtin'
+        sym = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.KW_AS)
+        name = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return ImportBuiltinStmt(
+            symbol=sym.value,
+            name=name.value,
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_import_number(self, kw: Token) -> ImportNumberStmt:
+        self._advance()  # consume 'number'
+        n_tok = self._expect(TokenKind.INT)
+        self._expect(TokenKind.KW_AS)
+        var = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return ImportNumberStmt(
+            value=int(n_tok.value),
+            var=var.value,
             line=kw.line,
             col=kw.col,
         )
@@ -194,12 +229,33 @@ class Parser:
 
     def _parse_importf(self) -> ImportFuncStmt:
         kw = self._expect(TokenKind.KW_IMPORTF)
-        path = self._expect(TokenKind.STRING)
-        self._expect(TokenKind.KW_AS)
-        name = self._expect(TokenKind.IDENT)
-        self._expect(TokenKind.SEMI)
-        return ImportFuncStmt(
-            path=path.value, name=name.value, line=kw.line, col=kw.col
+        nxt = self._peek()
+        if nxt.kind is TokenKind.STRING:
+            path = self._advance().value
+            self._expect(TokenKind.KW_AS)
+            name = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return ImportFuncStmt(
+                path=path, name=name.value, line=kw.line, col=kw.col,
+            )
+        if nxt.kind is TokenKind.LANGLE:
+            self._advance()
+            stem = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.RANGLE)
+            self._expect(TokenKind.KW_AS)
+            name = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return ImportFuncStmt(
+                path=stem.value,
+                name=name.value,
+                line=kw.line,
+                col=kw.col,
+                search_path=True,
+            )
+        raise ParseError(
+            f"expected STRING or '<' after 'importf'; got {nxt.kind.name}",
+            nxt.line,
+            nxt.col,
         )
 
     def _parse_watch(self) -> WatchStmt:

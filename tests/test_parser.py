@@ -9,7 +9,9 @@ from athc.ast import (
     DieStmt,
     FuncCallComposeArg,
     FuncCallDecomposeRet,
+    ImportBuiltinStmt,
     ImportFuncStmt,
+    ImportNumberStmt,
     ImportStmt,
     InputStmt,
     Print2Stmt,
@@ -289,6 +291,83 @@ def test_positions_propagate_to_ast():
     p = parse("import x A;\n  BIFURCATE A[L,R];")
     assert (p.statements[0].line, p.statements[0].col) == (1, 1)
     assert (p.statements[1].line, p.statements[1].col) == (2, 3)
+
+
+def test_import_builtin_statement():
+    p = parse("import builtin ath_add as ADD;")
+    s = p.statements[0]
+    assert isinstance(s, ImportBuiltinStmt)
+    assert s.symbol == "ath_add"
+    assert s.name == "ADD"
+
+
+def test_import_builtin_marker_case_insensitive():
+    p = parse("Import Builtin ath_sub as SUB;")
+    assert isinstance(p.statements[0], ImportBuiltinStmt)
+
+
+def test_import_builtin_requires_as():
+    with pytest.raises(ParseError):
+        parse("import builtin ath_add ADD;")
+
+
+def test_import_number_statement():
+    p = parse("import number 42 as N;")
+    s = p.statements[0]
+    assert isinstance(s, ImportNumberStmt)
+    assert s.value == 42
+    assert s.var == "N"
+
+
+def test_import_number_negative():
+    p = parse("import number -7 as N;")
+    assert p.statements[0].value == -7
+
+
+def test_import_number_marker_case_insensitive():
+    p = parse("Import NUMBER 1 as O;")
+    assert isinstance(p.statements[0], ImportNumberStmt)
+
+
+def test_import_number_requires_int():
+    with pytest.raises(ParseError, match="expected INT"):
+        parse("import number foo as N;")
+
+
+def test_import_with_metadata_word_builtin_is_not_a_marker():
+    # When 'builtin' is not the second token after import, it's an ordinary
+    # identifier. `import the builtin BUILTIN;` is a 3-word concept form.
+    p = parse("import the builtin BUILTIN;")
+    s = p.statements[0]
+    assert isinstance(s, ImportStmt)
+    assert s.name == "the builtin"
+    assert s.var == "BUILTIN"
+
+
+def test_importf_angle_form():
+    p = parse("importf <add> as ADD;")
+    s = p.statements[0]
+    assert isinstance(s, ImportFuncStmt)
+    assert s.path == "add"
+    assert s.name == "ADD"
+    assert s.search_path is True
+
+
+def test_importf_quoted_form_still_works():
+    p = parse('importf "lib/add.ath" as ADD;')
+    s = p.statements[0]
+    assert isinstance(s, ImportFuncStmt)
+    assert s.search_path is False
+
+
+def test_importf_angle_requires_closing_bracket():
+    with pytest.raises(ParseError):
+        parse("importf <add as ADD;")
+
+
+def test_importf_after_keyword_must_be_string_or_angle():
+    with pytest.raises(ParseError, match="STRING or '<'"):
+        parse("importf foo as F;")
 
 
 def test_looptest_sample_parses():
