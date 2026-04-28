@@ -544,6 +544,40 @@ static int ath_string_to_buf(ath_obj *s, char *buf, size_t cap) {
     return (int)n;
 }
 
+/* --- Comparisons as verdicts (SPEC §4.8.3) ------------------------------ */
+
+/* Alive verdict with deps installed. */
+static ath_obj *ath_verdict_true(ath_obj *x, ath_obj *y) {
+    ath_obj *v = ath_alloc_alive();
+    ath_inherit_lifetime(v, x, y);
+    return v;
+}
+
+/* Dead-on-arrival verdict; no deps recorded. */
+static ath_obj *ath_verdict_false(void) {
+    ath_obj *v = (ath_obj *)calloc(1, sizeof(ath_obj));
+    if (!v) {
+        fputs("ath: out of memory\n", stderr);
+        exit(1);
+    }
+    return v;
+}
+
+ath_obj *ath_lt(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_verdict_false();
+    return x->value < y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+}
+
+ath_obj *ath_eq(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_verdict_false();
+    return x->value == y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+}
+
+ath_obj *ath_gt(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_verdict_false();
+    return x->value > y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+}
+
 ath_obj *ath_parse(ath_obj *s, ath_obj *unused) {
     (void)unused;
     if (s == NULL || !ath_is_alive(s)) return ath_alloc_dead_number();

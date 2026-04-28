@@ -1,0 +1,10 @@
+// SPEC §4.8.3 — equality verdict.
+//
+//   EQ [X, Y] V;
+//
+// V is alive iff X.value == Y.value, else born dead.
+
+import builtin ath_eq as ATH_EQ;
+BIFURCATE ARGS [X, Y];
+ATH_EQ [X, Y] R;
+THIS.DIE(R);

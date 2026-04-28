@@ -160,6 +160,30 @@ CASES = [
         "\n",
         id="tier1_arithmetic_dead_chain_on_bad_parse",
     ),
+    pytest.param(
+        "comparison/main.ath",
+        "3\n10\n",
+        "less\n",
+        id="tier2_comparison_less",
+    ),
+    pytest.param(
+        "comparison/main.ath",
+        "10\n3\n",
+        "greater\n",
+        id="tier2_comparison_greater",
+    ),
+    pytest.param(
+        "comparison/main.ath",
+        "7\n7\n",
+        "equal\n",
+        id="tier2_comparison_equal",
+    ),
+    pytest.param(
+        "comparison/main.ath",
+        "banana\n5\n",
+        "",
+        id="tier2_comparison_dead_chain_silent",
+    ),
 ]
 
 

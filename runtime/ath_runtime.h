@@ -85,6 +85,12 @@ ath_obj *ath_mod(ath_obj *x, ath_obj *y);
 ath_obj *ath_to_string(ath_obj *x, ath_obj *unused);
 ath_obj *ath_parse(ath_obj *s, ath_obj *unused);
 
+/* Comparisons as verdicts (SPEC §4.8.3). Each returns an object alive iff
+ * the comparison holds, with lifetime inherited from both operands. */
+ath_obj *ath_lt(ath_obj *x, ath_obj *y);
+ath_obj *ath_eq(ath_obj *x, ath_obj *y);
+ath_obj *ath_gt(ath_obj *x, ath_obj *y);
+
 _Noreturn void ath_halt(void);
 
 #endif

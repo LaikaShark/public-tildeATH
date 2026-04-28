@@ -722,6 +722,58 @@ trailing non-digit characters fail.
 leading `-` for negatives, no leading zeros (except for `0` itself), no
 thousands separators.
 
+#### 4.8.3 Comparisons as verdicts
+
+A **verdict** is an object whose alive bit carries the truth of a
+comparison: alive iff true, dead iff false. Verdicts carry no payload
+(`has_value == 0`) — they are observed only through `ath_is_alive`,
+typically in a `~ATH` loop header:
+
+```
+LT [X, Y] V;
+~ATH(V) {
+    print X is less than Y;
+    V.DIE();
+}
+```
+
+The runtime exports three comparison primitives, brought in via the
+search-path importf form:
+
+| Name | Surface call | Alive when | Born dead when |
+|---|---|---|---|
+| `lt` | `LT [X, Y] V;` | `X.value < Y.value`  | comparison false; either operand dead; either operand has no payload |
+| `eq` | `EQ [X, Y] V;` | `X.value == Y.value` | comparison false; either operand dead; either operand has no payload |
+| `gt` | `GT [X, Y] V;` | `X.value > Y.value`  | comparison false; either operand dead; either operand has no payload |
+
+The three derived comparisons (`<=`, `>=`, `!=`) are expressible
+without new primitives. `~ATH(!V)` inversion (§4.4.4) handles
+negation, and swapping operands handles asymmetric flips:
+
+```
+GT [X, Y] V;   ~ATH(!V) { ... }    // X <= Y (i.e. "not X > Y")
+LT [X, Y] V;   ~ATH(!V) { ... }    // X >= Y
+EQ [X, Y] V;   ~ATH(!V) { ... }    // X != Y
+```
+
+A true verdict's lifetime inherits from both operands via
+`ath_inherit_lifetime(V, X, Y)` (§4.8.1): if either operand dies after
+the comparison, `V` becomes dead at the next observation. A false
+verdict is allocated dead from the start, and its dependencies are
+not recorded (dead objects do not become alive again).
+
+Comparison of objects without `has_value` set — strings, generic
+composites, `NULL` — always yields a born-dead verdict. Object-identity
+comparison ("is X the same object as Y") is a deliberately separate
+question and is not in scope for v2; the verdict primitives compare
+int64 payloads only.
+
+Logical combinators (AND, OR, NOT) over verdicts are deferred to a
+control-flow extension. For now, AND of two verdicts can be expressed
+by composition under the existing dep-tracking rule (`BIFURCATE
+[V1, V2] AND;` followed by `ath_inherit_lifetime` is not yet exposed
+at the surface; explicit AND requires a runtime helper).
+
 ---
 
 ## 5. Runtime ABI
@@ -796,6 +848,9 @@ ath_obj *ath_div(ath_obj *x, ath_obj *y);
 ath_obj *ath_mod(ath_obj *x, ath_obj *y);
 ath_obj *ath_to_string(ath_obj *x, ath_obj *unused);
 ath_obj *ath_parse(ath_obj *s, ath_obj *unused);
+ath_obj *ath_lt(ath_obj *x, ath_obj *y);
+ath_obj *ath_eq(ath_obj *x, ath_obj *y);
+ath_obj *ath_gt(ath_obj *x, ath_obj *y);
 
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));

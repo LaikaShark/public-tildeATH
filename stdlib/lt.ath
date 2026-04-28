@@ -1,0 +1,10 @@
+// SPEC §4.8.3 — less-than verdict.
+//
+//   LT [X, Y] V;
+//
+// V is alive iff X.value < Y.value, else born dead.
+
+import builtin ath_lt as ATH_LT;
+BIFURCATE ARGS [X, Y];
+ATH_LT [X, Y] R;
+THIS.DIE(R);

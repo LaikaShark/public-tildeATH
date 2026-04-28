@@ -366,6 +366,66 @@ int main(void) {
     assert(ath_is_alive(neg_parsed));
     assert(neg_parsed->value == -7);
 
+    /* --- Comparisons (SPEC §4.8.3) --- */
+
+    ath_obj *five = ath_alloc_number(5);
+    ath_obj *seven = ath_alloc_number(7);
+
+    /* True verdict: alive, no payload. */
+    ath_obj *v_lt = ath_lt(five, seven);
+    assert(ath_is_alive(v_lt));
+    assert(!v_lt->has_value);
+
+    /* False verdict: dead. */
+    ath_obj *v_lt_false = ath_lt(seven, five);
+    assert(!ath_is_alive(v_lt_false));
+
+    /* Equality */
+    ath_obj *v_eq_true = ath_eq(five, ath_alloc_number(5));
+    assert(ath_is_alive(v_eq_true));
+    ath_obj *v_eq_false = ath_eq(five, seven);
+    assert(!ath_is_alive(v_eq_false));
+
+    /* Greater */
+    ath_obj *v_gt_true = ath_gt(seven, five);
+    assert(ath_is_alive(v_gt_true));
+    ath_obj *v_gt_false = ath_gt(five, seven);
+    assert(!ath_is_alive(v_gt_false));
+
+    /* Self-comparison: LT and GT both false, EQ true. */
+    assert(!ath_is_alive(ath_lt(five, five)));
+    assert(!ath_is_alive(ath_gt(five, five)));
+    assert(ath_is_alive(ath_eq(five, five)));
+
+    /* Negative comparisons work. */
+    ath_obj *neg = ath_alloc_number(-3);
+    assert(ath_is_alive(ath_lt(neg, five)));
+    assert(!ath_is_alive(ath_gt(neg, five)));
+
+    /* Verdict lifetime inherits from operands — kill an operand and the
+     * verdict dies on the next observation. */
+    ath_obj *lhs = ath_alloc_number(1);
+    ath_obj *rhs = ath_alloc_number(2);
+    ath_obj *v_inh = ath_lt(lhs, rhs);
+    assert(ath_is_alive(v_inh));
+    ath_die(rhs);
+    assert(!ath_is_alive(v_inh));
+
+    /* No-payload operand → born dead verdict (compares like dead operand). */
+    ath_obj *no_payload = ath_alloc_alive();
+    assert(!ath_is_alive(ath_lt(no_payload, five)));
+    assert(!ath_is_alive(ath_eq(five, no_payload)));
+    assert(!ath_is_alive(ath_gt(no_payload, no_payload)));
+
+    /* NULL operands → born dead. */
+    assert(!ath_is_alive(ath_lt(ath_NULL, five)));
+    assert(!ath_is_alive(ath_eq(five, ath_NULL)));
+
+    /* Dead operand → born dead. */
+    ath_obj *dead_five = ath_alloc_number(5);
+    ath_die(dead_five);
+    assert(!ath_is_alive(ath_lt(dead_five, seven)));
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

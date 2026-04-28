@@ -1,0 +1,10 @@
+// SPEC §4.8.3 — greater-than verdict.
+//
+//   GT [X, Y] V;
+//
+// V is alive iff X.value > Y.value, else born dead.
+
+import builtin ath_gt as ATH_GT;
+BIFURCATE ARGS [X, Y];
+ATH_GT [X, Y] R;
+THIS.DIE(R);
