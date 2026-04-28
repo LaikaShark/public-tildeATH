@@ -1,0 +1,10 @@
+// SPEC §4.8.2 — parse a decimal integer from a string-cons-list.
+//
+//   PARSE [S, _] N;            // _ is NULL by convention; ignored.
+//
+// N is born dead on malformed input or overflow.
+
+import builtin ath_parse as ATH_PARSE;
+BIFURCATE ARGS [S, IGNORED];
+ATH_PARSE [S, IGNORED] R;
+THIS.DIE(R);

@@ -2,6 +2,7 @@
 #define ATH_RUNTIME_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef struct ath_obj {
     int alive;
@@ -22,6 +23,13 @@ typedef struct ath_obj {
     const char *watch_path;
     int is_oneshot;
     int awaiting_signal;
+    /* SPEC §4.8 numeric payload. has_value is nonzero iff value is set. */
+    int has_value;
+    int64_t value;
+    /* SPEC §4.8.1 dependency tracking. ath_is_alive returns 0 if any non-null
+     * dep is dead. Installed by ath_inherit_lifetime; never written elsewhere. */
+    struct ath_obj *dep1;
+    struct ath_obj *dep2;
 } ath_obj;
 
 extern ath_obj *ath_NULL;
@@ -62,6 +70,20 @@ int      ath_library_lookup(const char *name, double *min_out, double *max_out);
  * from main's prologue by the compiler in response to --define-lifetime.
  * The `name` pointer must remain valid for the lifetime of the program. */
 void     ath_register_lifetime(const char *name, double min_s, double max_s);
+
+/* Numeric payload and arithmetic (SPEC §4.8). All arithmetic helpers return
+ * a fresh object that inherits the lifetimes of their operands via
+ * ath_inherit_lifetime. On overflow, divide-by-zero, dead operand, or
+ * missing payload the result is born dead (alive=0, has_value=0). */
+ath_obj *ath_alloc_number(int64_t v);
+void     ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b);
+ath_obj *ath_add(ath_obj *x, ath_obj *y);
+ath_obj *ath_sub(ath_obj *x, ath_obj *y);
+ath_obj *ath_mul(ath_obj *x, ath_obj *y);
+ath_obj *ath_div(ath_obj *x, ath_obj *y);
+ath_obj *ath_mod(ath_obj *x, ath_obj *y);
+ath_obj *ath_to_string(ath_obj *x, ath_obj *unused);
+ath_obj *ath_parse(ath_obj *s, ath_obj *unused);
 
 _Noreturn void ath_halt(void);
 

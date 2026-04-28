@@ -7,7 +7,9 @@ from athc.ast import (
     DieStmt,
     FuncCallComposeArg,
     FuncCallDecomposeRet,
+    ImportBuiltinStmt,
     ImportFuncStmt,
+    ImportNumberStmt,
     ImportStmt,
     InputStmt,
     Print2Stmt,
@@ -47,6 +49,8 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.var)
         elif isinstance(s, WatchStmt):
             names.add(s.var)
+        elif isinstance(s, ImportNumberStmt):
+            names.add(s.var)
         elif isinstance(s, FuncCallComposeArg):
             names.add(s.left)
             names.add(s.right)
@@ -79,6 +83,7 @@ class Codegen:
 
         self.i8 = ir.IntType(8)
         self.i32 = ir.IntType(32)
+        self.i64 = ir.IntType(64)
         self.size_t = ir.IntType(64)
 
         self.obj_ty = self.module.context.get_identified_type("ath_obj")
@@ -149,6 +154,18 @@ class Codegen:
             ),
             name="ath_register_lifetime",
         )
+        self.f_alloc_number = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i64]),
+            name="ath_alloc_number",
+        )
+
+        # Builtin C functions declared via `import builtin SYM as NAME;`.
+        # Keyed by raw C symbol name to dedupe across files.
+        self.c_builtin_fns: dict[str, ir.Function] = {}
+        # Per-program (file) local builtin tables: name (lower) → ir.Function.
+        # Populated in generate() before any FunctionEmitter runs.
+        self.local_builtins: dict[int, dict[str, ir.Function]] = {}
 
         self.g_null = ir.GlobalVariable(self.module, self.obj_ptr, name="ath_NULL")
         self.g_null.linkage = "external"
@@ -166,6 +183,31 @@ class Codegen:
             )
 
         self._str_id = 0
+
+        # Now that the module exists, register builtins for each program.
+        # All builtins use the fixed (ath_obj*, ath_obj*) -> ath_obj* ABI
+        # per SPEC §4.4.13.
+        for prog in [self.main_program, *self.function_table.values()]:
+            self._register_program_builtins(prog)
+
+    def _ensure_c_builtin(self, symbol: str) -> ir.Function:
+        if symbol in self.c_builtin_fns:
+            return self.c_builtin_fns[symbol]
+        fn = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.obj_ptr]),
+            name=symbol,
+        )
+        self.c_builtin_fns[symbol] = fn
+        return fn
+
+    def _register_program_builtins(self, prog: Program) -> None:
+        table: dict[str, ir.Function] = {}
+        for s in prog.statements:
+            if isinstance(s, ImportBuiltinStmt):
+                fn = self._ensure_c_builtin(s.symbol)
+                table[s.name.lower()] = fn
+        self.local_builtins[id(prog)] = table
 
     def make_string_global(self, s: str):
         b = s.encode("utf-8")
@@ -191,10 +233,20 @@ class Codegen:
         return g
 
     def generate(self) -> str:
-        FunctionEmitter(self, self.main_fn, self.main_program, is_main=True).emit()
+        FunctionEmitter(
+            self,
+            self.main_fn,
+            self.main_program,
+            is_main=True,
+            local_builtins=self.local_builtins[id(self.main_program)],
+        ).emit()
         for fname, fprog in self.function_table.items():
             FunctionEmitter(
-                self, self.user_fns[fname], fprog, is_main=False
+                self,
+                self.user_fns[fname],
+                fprog,
+                is_main=False,
+                local_builtins=self.local_builtins[id(fprog)],
             ).emit()
         return str(self.module)
 
@@ -206,11 +258,13 @@ class FunctionEmitter:
         llvm_fn: ir.Function,
         program: Program,
         is_main: bool,
+        local_builtins: dict[str, ir.Function] | None = None,
     ):
         self.cg = cg
         self.fn = llvm_fn
         self.program = program
         self.is_main = is_main
+        self.local_builtins = local_builtins or {}
         self.slots: dict[str, ir.AllocaInstr] = {}
         self.return_slot: ir.AllocaInstr | None = None
         self.tmp_l: ir.AllocaInstr | None = None
@@ -298,6 +352,10 @@ class FunctionEmitter:
     def _emit_stmt(self, builder: ir.IRBuilder, stmt) -> None:
         if isinstance(stmt, ImportStmt):
             self._emit_import(builder, stmt)
+        elif isinstance(stmt, ImportNumberStmt):
+            self._emit_import_number(builder, stmt)
+        elif isinstance(stmt, ImportBuiltinStmt):
+            pass  # declaration only; handled by Codegen at init time
         elif isinstance(stmt, DecomposeStmt):
             self._emit_decompose(builder, stmt)
         elif isinstance(stmt, ComposeStmt):
@@ -336,6 +394,23 @@ class FunctionEmitter:
             zero = ir.Constant(self.cg.i32, 0)
             name_ptr = builder.gep(name_g, [zero, zero], inbounds=True)
             fresh = builder.call(self.cg.f_alloc_from_library, [name_ptr])
+            builder.store(fresh, slot)
+
+    def _emit_import_number(
+        self, builder: ir.IRBuilder, stmt: ImportNumberStmt
+    ) -> None:
+        if stmt.var == "NULL":
+            raise CodegenError("cannot import into the predefined name 'NULL'")
+        slot = self.slots[stmt.var]
+        cur = builder.load(slot)
+        is_unbound = builder.icmp_unsigned(
+            "==", cur, ir.Constant(self.cg.obj_ptr, None)
+        )
+        with builder.if_then(is_unbound):
+            fresh = builder.call(
+                self.cg.f_alloc_number,
+                [ir.Constant(self.cg.i64, stmt.value)],
+            )
             builder.store(fresh, slot)
 
     def _emit_watch(self, builder: ir.IRBuilder, stmt: WatchStmt) -> None:
@@ -435,24 +510,31 @@ class FunctionEmitter:
         self, builder: ir.IRBuilder, stmt: FuncCallComposeArg
     ) -> None:
         fname = stmt.name.lower()
-        if fname not in self.cg.user_fns:
-            raise CodegenError(f"unknown function {stmt.name!r}")
-        fn = self.cg.user_fns[fname]
         l_val = self._read_var(builder, stmt.left)
         r_val = self._read_var(builder, stmt.right)
-        arg = builder.call(self.cg.f_compose, [l_val, r_val])
-        result = builder.call(fn, [arg])
+        if fname in self.local_builtins:
+            # Direct C call: builtins take (l, r), no compose-and-decompose.
+            result = builder.call(self.local_builtins[fname], [l_val, r_val])
+        elif fname in self.cg.user_fns:
+            arg = builder.call(self.cg.f_compose, [l_val, r_val])
+            result = builder.call(self.cg.user_fns[fname], [arg])
+        else:
+            raise CodegenError(f"unknown function {stmt.name!r}")
         self._write_var(builder, stmt.target, result)
 
     def _emit_funcall_decompose_ret(
         self, builder: ir.IRBuilder, stmt: FuncCallDecomposeRet
     ) -> None:
         fname = stmt.name.lower()
-        if fname not in self.cg.user_fns:
-            raise CodegenError(f"unknown function {stmt.name!r}")
-        fn = self.cg.user_fns[fname]
         arg = self._read_var(builder, stmt.arg)
-        result = builder.call(fn, [arg])
+        if fname in self.local_builtins:
+            # Builtins take two args; the second slot receives ath_NULL.
+            null = builder.load(self.cg.g_null)
+            result = builder.call(self.local_builtins[fname], [arg, null])
+        elif fname in self.cg.user_fns:
+            result = builder.call(self.cg.user_fns[fname], [arg])
+        else:
+            raise CodegenError(f"unknown function {stmt.name!r}")
         builder.call(self.cg.f_decompose, [result, self.tmp_l, self.tmp_r])
         l_val = builder.load(self.tmp_l)
         r_val = builder.load(self.tmp_r)

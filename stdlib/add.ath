@@ -1,0 +1,10 @@
+// SPEC §4.8.2 — integer addition.
+//
+//   ADD [X, Y] R;
+//
+// R is born dead on overflow or if either operand is dead at call.
+
+import builtin ath_add as ATH_ADD;
+BIFURCATE ARGS [X, Y];
+ATH_ADD [X, Y] R;
+THIS.DIE(R);

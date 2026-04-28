@@ -142,6 +142,24 @@ CASES = [
         "exactly one run\nafter\n",
         id="once_lifetime_runs_body_exactly_once",
     ),
+    pytest.param(
+        "arithmetic/main.ath",
+        "17\n25\n",
+        "42\n",
+        id="tier1_arithmetic_add",
+    ),
+    pytest.param(
+        "arithmetic/main.ath",
+        "-3\n10\n",
+        "7\n",
+        id="tier1_arithmetic_negative",
+    ),
+    pytest.param(
+        "arithmetic/main.ath",
+        "banana\n5\n",
+        "\n",
+        id="tier1_arithmetic_dead_chain_on_bad_parse",
+    ),
 ]
 
 

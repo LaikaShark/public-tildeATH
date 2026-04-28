@@ -264,6 +264,108 @@ int main(void) {
     raise(SIGUSR2);
     assert(!ath_is_alive(sig_case));
 
+    /* --- Numeric payload and arithmetic (SPEC §4.8) --- */
+
+    ath_obj *n3 = ath_alloc_number(3);
+    ath_obj *n4 = ath_alloc_number(4);
+    assert(ath_is_alive(n3));
+    assert(n3->has_value && n3->value == 3);
+    assert(n4->has_value && n4->value == 4);
+
+    ath_obj *sum = ath_add(n3, n4);
+    assert(ath_is_alive(sum));
+    assert(sum->has_value && sum->value == 7);
+
+    ath_obj *diff = ath_sub(n3, n4);
+    assert(ath_is_alive(diff));
+    assert(diff->value == -1);
+
+    ath_obj *prod = ath_mul(n3, n4);
+    assert(prod->value == 12);
+
+    ath_obj *quot = ath_div(ath_alloc_number(20), ath_alloc_number(6));
+    assert(quot->value == 3);
+
+    ath_obj *rem = ath_mod(ath_alloc_number(20), ath_alloc_number(6));
+    assert(rem->value == 2);
+
+    /* Overflow → born dead. */
+    ath_obj *big = ath_alloc_number(INT64_MAX);
+    ath_obj *overflow = ath_add(big, ath_alloc_number(1));
+    assert(!ath_is_alive(overflow));
+    assert(!overflow->has_value);
+
+    /* Multiplication overflow. */
+    ath_obj *mulover = ath_mul(big, ath_alloc_number(2));
+    assert(!ath_is_alive(mulover));
+
+    /* Division by zero → born dead. */
+    ath_obj *divzero = ath_div(ath_alloc_number(5), ath_alloc_number(0));
+    assert(!ath_is_alive(divzero));
+
+    /* INT64_MIN / -1 special case. */
+    ath_obj *intmin_div = ath_div(ath_alloc_number(INT64_MIN), ath_alloc_number(-1));
+    assert(!ath_is_alive(intmin_div));
+
+    /* Dead operand → born dead result. */
+    ath_obj *dead_op = ath_alloc_number(5);
+    ath_die(dead_op);
+    ath_obj *from_dead = ath_add(dead_op, ath_alloc_number(1));
+    assert(!ath_is_alive(from_dead));
+
+    /* --- Lifetime inheritance --- */
+
+    ath_obj *x = ath_alloc_number(10);
+    ath_obj *y = ath_alloc_number(20);
+    ath_obj *xy = ath_add(x, y);
+    assert(ath_is_alive(xy));
+    /* Kill an operand — derived value dies on the next observation. */
+    ath_die(x);
+    assert(!ath_is_alive(xy));
+    /* Recheck a few times: still dead. */
+    assert(!ath_is_alive(xy));
+
+    /* Chained: (an+bn)+cn dies if any of an, bn, cn dies. */
+    ath_obj *an = ath_alloc_number(1);
+    ath_obj *bn = ath_alloc_number(2);
+    ath_obj *cn2 = ath_alloc_number(3);
+    ath_obj *ab = ath_add(an, bn);
+    ath_obj *abc = ath_add(ab, cn2);
+    assert(ath_is_alive(abc));
+    assert(abc->value == 6);
+    ath_die(bn);   /* bn is a transitive dep via ab */
+    assert(!ath_is_alive(abc));
+
+    /* --- TO_STRING / PARSE round-trip --- */
+
+    ath_obj *s = ath_to_string(ath_alloc_number(-12345), ath_NULL);
+    fputs("expect -12345: ", stdout);
+    ath_print_obj(s);
+
+    /* Empty string for missing payload. */
+    ath_obj *empty = ath_to_string(ath_NULL, ath_NULL);
+    assert(empty == ath_NULL);
+
+    /* Parse a string back into a number. */
+    ath_obj *parse_src = ath_compose(ath_char_atom('4'),
+                          ath_compose(ath_char_atom('2'), ath_NULL));
+    ath_obj *parsed = ath_parse(parse_src, ath_NULL);
+    assert(ath_is_alive(parsed));
+    assert(parsed->has_value && parsed->value == 42);
+
+    /* Malformed string → born dead. */
+    ath_obj *bad_src = ath_compose(ath_char_atom('4'),
+                        ath_compose(ath_char_atom('z'), ath_NULL));
+    ath_obj *bad_parse = ath_parse(bad_src, ath_NULL);
+    assert(!ath_is_alive(bad_parse));
+
+    /* Negative parse. */
+    ath_obj *neg_src = ath_compose(ath_char_atom('-'),
+                        ath_compose(ath_char_atom('7'), ath_NULL));
+    ath_obj *neg_parsed = ath_parse(neg_src, ath_NULL);
+    assert(ath_is_alive(neg_parsed));
+    assert(neg_parsed->value == -7);
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

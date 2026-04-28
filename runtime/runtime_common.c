@@ -2,6 +2,8 @@
 
 #include "ath_runtime.h"
 
+#include <errno.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,6 +92,17 @@ int ath_is_alive(ath_obj *v) {
     /* Signal-watch lifetime: object dies once the awaited signal arrives. */
     if (v->awaiting_signal > 0 && v->awaiting_signal < ATH_MAX_SIGNAL
         && ath_signal_received[v->awaiting_signal]) {
+        v->alive = 0;
+        return 0;
+    }
+    /* Dependency-inherited lifetime (§4.8.1): if any installed dep is dead,
+     * this object is dead too. Recursive — dep chains propagate. The walk
+     * terminates because deps point to earlier-allocated objects. */
+    if (v->dep1 != NULL && !ath_is_alive(v->dep1)) {
+        v->alive = 0;
+        return 0;
+    }
+    if (v->dep2 != NULL && !ath_is_alive(v->dep2)) {
         v->alive = 0;
         return 0;
     }
@@ -403,6 +416,148 @@ ath_obj *ath_alloc_watching_file(const char *path) {
         o->alive = 0;
     }
     return o;
+}
+
+/* --- Numeric payload and arithmetic (SPEC §4.8) ------------------------- */
+
+ath_obj *ath_alloc_number(int64_t v) {
+    ath_obj *o = ath_alloc_alive();
+    o->has_value = 1;
+    o->value = v;
+    return o;
+}
+
+void ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b) {
+    if (result == NULL || result == ath_NULL) return;
+    /* Skip self-references and the immortal NULL — neither carries useful
+     * dependency info. */
+    if (a != NULL && a != ath_NULL && a != result) {
+        result->dep1 = a;
+    }
+    if (b != NULL && b != ath_NULL && b != result) {
+        result->dep2 = b;
+    }
+}
+
+/* Born-dead result for failed arithmetic. has_value stays 0. */
+static ath_obj *ath_alloc_dead_number(void) {
+    ath_obj *o = (ath_obj *)calloc(1, sizeof(ath_obj));
+    if (!o) {
+        fputs("ath: out of memory\n", stderr);
+        exit(1);
+    }
+    /* alive=0, has_value=0 are the calloc defaults. */
+    return o;
+}
+
+/* Both operands must be (a) alive at call time and (b) carry a payload.
+ * Returns 1 if usable, 0 if a born-dead result should be produced. */
+static int ath_operands_usable(ath_obj *x, ath_obj *y) {
+    if (x == NULL || !ath_is_alive(x) || !x->has_value) return 0;
+    if (y == NULL || !ath_is_alive(y) || !y->has_value) return 0;
+    return 1;
+}
+
+ath_obj *ath_add(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    int64_t r;
+    if (__builtin_add_overflow(x->value, y->value, &r)) {
+        return ath_alloc_dead_number();
+    }
+    ath_obj *out = ath_alloc_number(r);
+    ath_inherit_lifetime(out, x, y);
+    return out;
+}
+
+ath_obj *ath_sub(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    int64_t r;
+    if (__builtin_sub_overflow(x->value, y->value, &r)) {
+        return ath_alloc_dead_number();
+    }
+    ath_obj *out = ath_alloc_number(r);
+    ath_inherit_lifetime(out, x, y);
+    return out;
+}
+
+ath_obj *ath_mul(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    int64_t r;
+    if (__builtin_mul_overflow(x->value, y->value, &r)) {
+        return ath_alloc_dead_number();
+    }
+    ath_obj *out = ath_alloc_number(r);
+    ath_inherit_lifetime(out, x, y);
+    return out;
+}
+
+ath_obj *ath_div(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (y->value == 0) return ath_alloc_dead_number();
+    /* INT64_MIN / -1 overflows two's-complement. */
+    if (x->value == INT64_MIN && y->value == -1) return ath_alloc_dead_number();
+    ath_obj *out = ath_alloc_number(x->value / y->value);
+    ath_inherit_lifetime(out, x, y);
+    return out;
+}
+
+ath_obj *ath_mod(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (y->value == 0) return ath_alloc_dead_number();
+    if (x->value == INT64_MIN && y->value == -1) return ath_alloc_dead_number();
+    ath_obj *out = ath_alloc_number(x->value % y->value);
+    ath_inherit_lifetime(out, x, y);
+    return out;
+}
+
+ath_obj *ath_to_string(ath_obj *x, ath_obj *unused) {
+    (void)unused;
+    if (x == NULL || !ath_is_alive(x) || !x->has_value) {
+        /* No payload → empty string. */
+        return ath_NULL;
+    }
+    char buf[32];
+    int n = snprintf(buf, sizeof(buf), "%lld", (long long)x->value);
+    if (n <= 0) return ath_NULL;
+    ath_obj *acc = ath_NULL;
+    for (int i = n; i > 0; i--) {
+        ath_obj *c = ath_char_atom((unsigned char)buf[i - 1]);
+        acc = ath_compose(c, acc);
+    }
+    ath_inherit_lifetime(acc, x, NULL);
+    return acc;
+}
+
+/* Walk a string-cons-list into a flat byte buffer. Returns -1 if the chain
+ * contains a non-character atom (malformed string), else byte count. */
+static int ath_string_to_buf(ath_obj *s, char *buf, size_t cap) {
+    size_t n = 0;
+    while (s != NULL && s != ath_NULL && ath_is_alive(s) && n + 1 < cap) {
+        ath_obj *l, *r;
+        ath_decompose(s, &l, &r);
+        int ch = ath_atom_to_char(l);
+        if (ch < 0) return -1;
+        buf[n++] = (char)ch;
+        s = r;
+    }
+    buf[n] = '\0';
+    return (int)n;
+}
+
+ath_obj *ath_parse(ath_obj *s, ath_obj *unused) {
+    (void)unused;
+    if (s == NULL || !ath_is_alive(s)) return ath_alloc_dead_number();
+    char buf[64];
+    int n = ath_string_to_buf(s, buf, sizeof(buf));
+    if (n <= 0) return ath_alloc_dead_number();
+    char *end;
+    errno = 0;
+    long long v = strtoll(buf, &end, 10);
+    if (end == buf || *end != '\0') return ath_alloc_dead_number();
+    if (errno == ERANGE) return ath_alloc_dead_number();
+    ath_obj *out = ath_alloc_number((int64_t)v);
+    ath_inherit_lifetime(out, s, NULL);
+    return out;
 }
 
 _Noreturn void ath_halt(void) {
