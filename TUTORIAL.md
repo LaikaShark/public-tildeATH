@@ -736,6 +736,204 @@ deleted, random 0-100 second timeout}.
 
 ---
 
+## 10c. Real numbers and the arithmetic stdlib
+
+§10's cons-cell encoding is still valid — useful for understanding
+the language structure, and for any place an object's *shape* should
+carry meaning. For straight numerical work there is a more direct
+option: `import number N as V;` binds an object that carries an
+int64 payload.
+
+```ath
+import number 42 as N;
+import number -7 as M;
+```
+
+Imported numbers are **eternal** by default — π doesn't decay — so
+they stay alive unless you compose them with a mortal carrier or
+kill them explicitly. To make a number mortal, give it a deadline by
+composing with a carrier from the lifetime library:
+
+```ath
+import number 42 as N;
+import mayfly M;             // 5 minutes – 1 day, random
+BIFURCATE [N, M] MORTAL;     // MORTAL dies when M does
+```
+
+The arithmetic ops live in `stdlib/` and are brought in via the
+**search-path form** of `importf`, written with angle brackets:
+
+```ath
+importf <add>       as ADD;
+importf <sub>       as SUB;
+importf <mul>       as MUL;
+importf <div>       as DIV;
+importf <mod>       as MOD;
+importf <to_string> as TO_STRING;
+importf <parse>     as PARSE;
+```
+
+The angle-bracket form walks `ATH_PATH` (colon-separated, like
+`PATH`) and then the compiler-adjacent `stdlib/` directory. The
+quoted form (`importf "lib/foo.ath" as F;`) still works for
+project-local files relative to the importing file.
+
+Each op uses the existing two-argument call form:
+
+```ath
+ADD [X, Y] R;        // R.value = X.value + Y.value
+SUB [X, Y] R;
+MUL [X, Y] R;
+DIV [X, Y] R;        // truncating toward zero
+MOD [X, Y] R;
+TO_STRING [N, _] S;  // S is a string-cons-list of digit chars
+PARSE [S, _] N;      // N gets the int64 parsed from S
+```
+
+`TO_STRING` and `PARSE` are unary; the second argument is ignored.
+Convention is to pass `NULL` (or any in-scope name) as a placeholder.
+
+### 10c.1 Failure is death
+
+If anything goes wrong, the result is **born dead** — alive=0, no
+payload. This includes:
+
+- Either operand was already dead at the call site.
+- Either operand has no int64 payload (a string head, a generic
+  composite, `NULL`).
+- Arithmetic overflow (e.g. `INT64_MAX + 1`, `INT64_MIN / -1`).
+- Division or modulo by zero.
+- `PARSE` on a malformed string ("banana") or one that overflows
+  signed 64-bit range.
+
+Born-dead results propagate: an `ADD` whose result feeds another
+`ADD` yields a dead result, and so on. A complete arithmetic chain
+dies as a unit on any single failure, with no crash and no need for
+exception handling.
+
+### 10c.2 Derived values inherit operand death
+
+Results don't only die on overflow — they also die when their
+*operands* die later. Each op records both operands as dependencies
+of the result; killing either input flips the result to dead on the
+next observation:
+
+```ath
+import number 10 as X;
+import number 20 as Y;
+ADD [X, Y] R;
+~ATH(R) { print sum is alive; R.DIE(); }    // runs
+X.DIE();
+~ATH(R) { print still alive; R.DIE(); }     // never runs — R died with X
+```
+
+This propagates through chains: `(A+B)+C` dies if any of `A`, `B`,
+`C` dies. It's the runtime's way of saying that a computation has
+been invalidated by something outside the computation.
+
+### 10c.3 A complete example
+
+`examples/arithmetic/main.ath`:
+
+```ath
+importf <parse>     as PARSE;
+importf <add>       as ADD;
+importf <to_string> as TO_STRING;
+
+INPUT LINE_X;
+INPUT LINE_Y;
+
+PARSE [LINE_X, NULL] X;
+PARSE [LINE_Y, NULL] Y;
+ADD   [X, Y]         SUM;
+
+TO_STRING [SUM, NULL] OUT;
+PRINT2 OUT;
+
+THIS.DIE();
+```
+
+On `17\n25\n`, it prints `42`. On `banana\n5\n`, the parse fails,
+the addition fails, the to_string fails, and the program prints an
+empty line — death has propagated end-to-end without crashing.
+
+### 10c.4 Adding your own builtin
+
+The seven ops above are C functions in the runtime, exposed to ~ATH
+via `import builtin`. If you want to wrap your own C function or add
+a domain-specific op, write a stdlib file like:
+
+```ath
+// stdlib/double.ath  (or anywhere on ATH_PATH)
+import builtin my_double as MY_DOUBLE;
+BIFURCATE ARGS [X, IGNORED];
+MY_DOUBLE [X, IGNORED] R;
+THIS.DIE(R);
+```
+
+…and provide `ath_obj *my_double(ath_obj *, ath_obj *)` to the
+linker. The signature is fixed: every builtin takes two `ath_obj *`
+and returns one. See `SPEC.md` §4.4.13 for details.
+
+---
+
+## 10d. Comparisons and the verdict idiom
+
+`~ATH` has no `if`. The way you condition on a number's *value*
+(rather than its liveness) is to compute a **verdict** — an object
+that is alive iff the comparison holds — and run it through `~ATH`:
+
+```ath
+importf <lt> as LT;
+import number 17 as X;
+import number 25 as Y;
+
+LT [X, Y] V;
+~ATH(V) {
+    print X is less than Y;
+    V.DIE();             // kill the verdict so the loop exits
+}
+```
+
+Three primitives are shipped:
+
+```ath
+LT [X, Y] V;     // V alive iff X.value <  Y.value
+EQ [X, Y] V;     // V alive iff X.value == Y.value
+GT [X, Y] V;     // V alive iff X.value >  Y.value
+```
+
+The other three — `<=`, `>=`, `!=` — are expressible without new
+primitives. `~ATH(!V)` inversion (§11.2) handles negation, and
+swapping operands handles asymmetric flips:
+
+```ath
+GT [X, Y] V;   ~ATH(!V) { ... }    // X <= Y  (not greater)
+LT [X, Y] V;   ~ATH(!V) { ... }    // X >= Y  (not less)
+EQ [X, Y] V;   ~ATH(!V) { ... }    // X != Y  (not equal)
+```
+
+Verdicts inherit lifetimes the same way arithmetic results do: a
+true verdict dies if either operand dies, so stale comparisons over
+killed data are observed as false. False verdicts are born dead from
+the start.
+
+A verdict has no payload — there is no boolean value to extract. It
+is observed only through `ath_is_alive`, which is to say through
+`~ATH` (or through composition with another dep-tracking value).
+
+Comparing two non-numeric objects — strings, generic composites,
+`NULL` — always yields a born-dead verdict, since the verdict
+machinery only looks at int64 payloads. Object identity comparison
+("are X and Y the same object?") is a separate primitive and is
+not currently in scope.
+
+`examples/comparison/main.ath` reads two ints from stdin and runs
+all three verdicts in sequence; on `3\n10\n` it prints `less`, on
+`7\n7\n` it prints `equal`, on `10\n3\n` it prints `greater`.
+
+---
+
 ## 11. The Homestuck surface
 
 Three features of the dialect are syntactic concessions to the original
@@ -800,25 +998,31 @@ THIS.DIE();
 
 To save time hunting for features that aren't there:
 
-- **No integers, floats, booleans, or any scalar type.** Numbers are
-  encoded as object structure (§10).
-- **No conditionals** — `if`, `?:`, `switch`, none of them. The only
-  branching is `~ATH(V) { ... }`, which is a loop.
-- **No operators.** No `+`, `*`, `==`, `&&`. There is `!` but it only
+- **No floats or booleans.** Numbers exist (§10c) but only as int64.
+  Verdicts (§10d) carry no truth value — they are alive or dead, not
+  `true` or `false`.
+- **No conditionals.** No `if`, `?:`, `switch`. The only branching is
+  `~ATH(V) { ... }`, which is a loop. Combined with comparison
+  verdicts (§10d) it gives you an if-then idiom (§9.1).
+- **No infix operators.** No `+`, `*`, `==`, `&&`. Arithmetic and
+  comparison are function calls — `ADD [X, Y] R;`, `LT [X, Y] V;` —
+  imported from `stdlib/` (§10c, §10d). There is `!` but it only
   prefixes a variable in an `~ATH` condition.
-- **No early return or `break`** — exit a function by killing its
+- **No early return or `break`.** Exit a function by killing its
   `THIS`; exit a loop by making its variable dead.
-- **No expressions.** Every statement is structural manipulation. There
-  is no "computed value" you can save except via variable bindings.
-- **No string escapes, no string literals outside `print`.** Strings are
-  cons-lists built up by composing character atoms (§6).
+- **No expressions.** Every statement is structural manipulation.
+  There is no "computed value" you can save except via variable
+  bindings.
+- **No string escapes, no string literals outside `print`.** Strings
+  are cons-lists built up by composing character atoms (§6).
 - **No top-level `ARGS`.** Only function bodies see `ARGS`.
 
-Reasonable things you *might* expect from the spec but won't find in v1:
+Reasonable things you *might* expect but won't find:
 
 - Cross-compilation-unit linking. Everything is one program plus its
-  `importf`'d files, resolved at compile time.
-- A standard library beyond what you write yourself.
+  `importf`'d files (and the runtime), resolved at compile time.
+- String manipulation: concat, substring, index, length, etc. These
+  are planned but not yet shipped.
 - Re-running a dead object (it really is permanent).
 
 ---
