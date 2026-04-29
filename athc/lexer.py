@@ -27,6 +27,7 @@ class TokenKind(Enum):
     COMMA = auto()
     SEMI = auto()
     BANG = auto()
+    DOTDOT = auto()
     INT = auto()
     RAWTEXT = auto()
     RESERVED = auto()
@@ -201,6 +202,11 @@ class Lexer:
                 continue
 
             if c == ".":
+                if self._peek(1) == ".":
+                    self._advance()
+                    self._advance()
+                    self._emit(TokenKind.DOTDOT, "..", line, col)
+                    continue
                 self._advance()
                 word = self._read_word()
                 if word.lower() != "die":

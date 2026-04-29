@@ -126,6 +126,27 @@ class FuncCallDecomposeRet:
     col: int
 
 
+@dataclass
+class SubscriptStmt:
+    """S[N] X; — read the Nth right-spine head of S into X (§4.4.15)."""
+    source: str
+    index: str
+    target: str
+    line: int
+    col: int
+
+
+@dataclass
+class SliceStmt:
+    """S[I..J] X; — fresh cons-list of elements I..J-1 from S (§4.4.16)."""
+    source: str
+    start: str
+    end: str
+    target: str
+    line: int
+    col: int
+
+
 Stmt = Union[
     ImportStmt,
     DecomposeStmt,
@@ -141,6 +162,8 @@ Stmt = Union[
     FuncCallComposeArg,
     FuncCallDecomposeRet,
     WatchStmt,
+    SubscriptStmt,
+    SliceStmt,
 ]
 
 

@@ -17,6 +17,8 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    SliceStmt,
+    SubscriptStmt,
     WatchStmt,
 )
 from athc.parser import ParseError, parse
@@ -368,6 +370,46 @@ def test_importf_angle_requires_closing_bracket():
 def test_importf_after_keyword_must_be_string_or_angle():
     with pytest.raises(ParseError, match="STRING or '<'"):
         parse("importf foo as F;")
+
+
+def test_subscript_statement():
+    p = parse("S[N] X;")
+    s = p.statements[0]
+    assert isinstance(s, SubscriptStmt)
+    assert s.source == "S" and s.index == "N" and s.target == "X"
+
+
+def test_slice_statement():
+    p = parse("S[I..J] X;")
+    s = p.statements[0]
+    assert isinstance(s, SliceStmt)
+    assert s.source == "S" and s.start == "I" and s.end == "J" and s.target == "X"
+
+
+def test_bracket_form_dispatch_funcall_compose_arg():
+    # Comma between bracket contents → funcall, not subscript.
+    p = parse("F [L, R] V;")
+    assert isinstance(p.statements[0], FuncCallComposeArg)
+
+
+def test_subscript_distinct_from_funcall():
+    # No comma → subscript.
+    p = parse("F [L] V;")
+    assert isinstance(p.statements[0], SubscriptStmt)
+
+
+def test_bracket_form_rejects_unknown_separator():
+    # Two consecutive idents inside brackets — neither COMMA, DOTDOT, nor RBRACKET
+    # follows the first inner ident.
+    with pytest.raises(ParseError, match=r"',', '\.\.', or '\]'"):
+        parse("S [I J K] X;")
+
+
+def test_dot_alone_still_lexes_DIE():
+    # Regression: don't accidentally break .DIE by treating its leading
+    # '.' as the start of '..'.
+    p = parse("import x A; A.DIE();")
+    assert isinstance(p.statements[1], DieStmt)
 
 
 def test_looptest_sample_parses():

@@ -15,6 +15,8 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    SliceStmt,
+    SubscriptStmt,
     WatchStmt,
 )
 
@@ -126,6 +128,17 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
         elif isinstance(s, WatchStmt):
             _check_write(s.var, s)
             defined.add(s.var)
+        elif isinstance(s, SubscriptStmt):
+            _check_read(s.source, defined, s)
+            _check_read(s.index, defined, s)
+            _check_write(s.target, s)
+            defined.add(s.target)
+        elif isinstance(s, SliceStmt):
+            _check_read(s.source, defined, s)
+            _check_read(s.start, defined, s)
+            _check_read(s.end, defined, s)
+            _check_write(s.target, s)
+            defined.add(s.target)
         else:
             raise SemaError(
                 f"unknown statement {type(s).__name__}",

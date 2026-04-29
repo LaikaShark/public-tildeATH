@@ -77,6 +77,27 @@ def test_lone_minus_without_digits_errors():
         tokenize("-foo")
 
 
+def test_dotdot_token():
+    toks = tokenize("..")
+    assert toks[0].kind is TokenKind.DOTDOT
+    assert toks[0].value == ".."
+
+
+def test_single_dot_starts_die():
+    toks = tokenize(".DIE")
+    assert toks[0].kind is TokenKind.DIE
+
+
+def test_dotdot_in_range_subscript():
+    toks = tokenize("S[I..J]X;")
+    # We just want to confirm a DOTDOT appears between the two idents.
+    kinds_only = [t.kind for t in toks if t.kind is not TokenKind.EOF]
+    assert TokenKind.DOTDOT in kinds_only
+    dotdot_idx = kinds_only.index(TokenKind.DOTDOT)
+    assert kinds_only[dotdot_idx - 1] is TokenKind.IDENT
+    assert kinds_only[dotdot_idx + 1] is TokenKind.IDENT
+
+
 def test_punctuation():
     assert kinds("(){}[],;") == [
         TokenKind.LPAREN,

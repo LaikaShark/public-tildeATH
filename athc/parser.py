@@ -13,6 +13,8 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    SliceStmt,
+    SubscriptStmt,
     WatchStmt,
 )
 from athc.lexer import Token, TokenKind, tokenize
@@ -295,7 +297,7 @@ class Parser:
         if nxt.kind is TokenKind.DIE:
             return self._parse_die_after_var(first)
         if nxt.kind is TokenKind.LBRACKET:
-            return self._parse_funcall_compose_arg(first)
+            return self._parse_bracket_form(first)
         if nxt.kind is TokenKind.IDENT:
             return self._parse_funcall_decompose_ret(first)
         raise ParseError(
@@ -303,6 +305,59 @@ class Parser:
             f"got {nxt.kind.name}",
             nxt.line,
             nxt.col,
+        )
+
+    def _parse_bracket_form(self, name_tok: Token):
+        """Three statements share the IDENT '[' IDENT ... ']' IDENT ';'
+        shape. Dispatch on what appears after the first inner ident:
+        ',' → funcall compose-arg; '..' → slice; ']' → subscript."""
+        self._expect(TokenKind.LBRACKET)
+        inner = self._expect(TokenKind.IDENT)
+        sep = self._peek()
+        if sep.kind is TokenKind.COMMA:
+            self._advance()
+            right = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.RBRACKET)
+            target = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return FuncCallComposeArg(
+                name=name_tok.value,
+                left=inner.value,
+                right=right.value,
+                target=target.value,
+                line=name_tok.line,
+                col=name_tok.col,
+            )
+        if sep.kind is TokenKind.DOTDOT:
+            self._advance()
+            end = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.RBRACKET)
+            target = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return SliceStmt(
+                source=name_tok.value,
+                start=inner.value,
+                end=end.value,
+                target=target.value,
+                line=name_tok.line,
+                col=name_tok.col,
+            )
+        if sep.kind is TokenKind.RBRACKET:
+            self._advance()
+            target = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return SubscriptStmt(
+                source=name_tok.value,
+                index=inner.value,
+                target=target.value,
+                line=name_tok.line,
+                col=name_tok.col,
+            )
+        raise ParseError(
+            f"expected ',', '..', or ']' after '[{inner.value}'; "
+            f"got {sep.kind.name}",
+            sep.line,
+            sep.col,
         )
 
     def _parse_die_after_var(self, var_tok: Token) -> DieStmt:
@@ -315,23 +370,6 @@ class Parser:
         self._expect(TokenKind.RPAREN)
         self._expect(TokenKind.SEMI)
         return DieStmt(var=var_tok.value, arg=arg, line=var_tok.line, col=var_tok.col)
-
-    def _parse_funcall_compose_arg(self, name_tok: Token) -> FuncCallComposeArg:
-        self._expect(TokenKind.LBRACKET)
-        left = self._expect(TokenKind.IDENT)
-        self._expect(TokenKind.COMMA)
-        right = self._expect(TokenKind.IDENT)
-        self._expect(TokenKind.RBRACKET)
-        target = self._expect(TokenKind.IDENT)
-        self._expect(TokenKind.SEMI)
-        return FuncCallComposeArg(
-            name=name_tok.value,
-            left=left.value,
-            right=right.value,
-            target=target.value,
-            line=name_tok.line,
-            col=name_tok.col,
-        )
 
     def _parse_funcall_decompose_ret(self, name_tok: Token) -> FuncCallDecomposeRet:
         arg = self._expect(TokenKind.IDENT)

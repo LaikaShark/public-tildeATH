@@ -71,6 +71,12 @@ case-insensitively in that position. This is the same pattern as
 appear in the search-path form of `importf` (§4.4.9). They have no other
 syntactic role.
 
+**Two-character punctuation.** The lexer recognizes one multi-char
+operator: `..` (DOTDOT, §4.4.16). When the lexer sees `.`, it looks at
+the next character: another `.` produces `DOTDOT`; otherwise the
+single `.` begins a `.DIE` method token (§2.2 DIE). A lone `.` followed
+by anything other than `die` or `.` is a lexical error.
+
 **Case sensitivity.** Keywords, the `~ATH` loop-start token, the `.DIE`
 method token, and (in v1+) function names match **case-insensitively**:
 `IMPORT`, `Import`, and `import` all denote the same keyword;
@@ -138,7 +144,9 @@ statement     = import-stmt
               | print-stmt
               | input-stmt
               | print2-stmt
-              | funcall-stmt ;
+              | funcall-stmt
+              | subscript-stmt
+              | slice-stmt ;
 
 import-stmt   = import-concept
               | import-builtin
@@ -196,6 +204,11 @@ print2-stmt   = 'PRINT2' IDENT ';' ;
 
 funcall-stmt  = IDENT '[' IDENT ',' IDENT ']' IDENT ';'        (* compose-arg form *)
               | IDENT IDENT '[' IDENT ',' IDENT ']' ';' ;      (* decompose-result form *)
+
+subscript-stmt
+              = IDENT '[' IDENT ']' IDENT ';' ;                (* S[N] X; *)
+
+slice-stmt    = IDENT '[' IDENT '..' IDENT ']' IDENT ';' ;     (* S[I..J] X; *)
 ```
 
 Notes:
@@ -204,9 +217,14 @@ Notes:
 - A statement may not appear outside a `program` or `ath-loop` body.
 - The two `BIFURCATE` forms are distinguished by the token following
   `BIFURCATE`: an `IDENT` selects decompose; a `[` selects compose.
-- An `IDENT`-starting statement is disambiguated by the next token:
-  `.DIE` → die-stmt; `[` → funcall compose-arg form;
-  `IDENT` → funcall decompose-result form.
+- An `IDENT`-starting statement is disambiguated by the next token,
+  and (for the bracket forms) by what appears between the brackets:
+  - `.DIE` → die-stmt.
+  - `[` followed by `IDENT ',' IDENT ']'` → funcall compose-arg.
+  - `[` followed by `IDENT ']'` → subscript-stmt (single bracket
+    contents, no comma, no `..`).
+  - `[` followed by `IDENT '..' IDENT ']'` → slice-stmt.
+  - `IDENT` → funcall decompose-result form.
 
 ---
 
@@ -571,6 +589,75 @@ BIFURCATE [N, M] MORTAL;  // MORTAL is alive while M is alive
 
 `VAR` must not be `NULL` (§4.2).
 
+#### 4.4.15 `S[N] VAR;` (subscript / element access)
+
+Element access on any object treated as a right-nested cons-list. `S`
+is the source, `N` is a number-payload object holding the index, and
+`VAR` receives the Nth element of the right-spine walk.
+
+1. Read `S` and `N`.
+2. Invoke `ath_index(S, N)` (§5.2).
+3. Bind `VAR` to the result.
+
+`ath_index` walks `S` `n` steps to the right (i.e. follows `right`
+halves `n` times), then takes the `left` half of the resulting object.
+For strings (cons-lists of character atoms terminated with `NULL`),
+this returns the Nth character **atom** — not a length-1 string. To
+wrap an atom into a printable single-char string, use
+`BIFURCATE [VAR, NULL] STR;` (§4.4.3).
+
+The result is born dead if any of the following holds:
+
+- `S` is dead, `NULL`, or unbound.
+- `N` is dead, lacks `has_value`, or holds a negative value.
+- The walk encounters `NULL` or a dead object before reaching position
+  `n` (out-of-range).
+
+The result inherits both `S` and `N` as dependencies (§4.8.1), so
+killing either invalidates the indexed value on the next observation.
+
+Subscripting is **not** restricted to strings. For any cons-list
+shape (lists of numbers, lists of objects, future SPLIT results),
+`S[N] X;` reads the Nth right-spine head.
+
+`VAR` must not be `NULL`.
+
+#### 4.4.16 `S[I..J] VAR;` (range / slice)
+
+Right-spine slice. `S` is the source, `I` and `J` are number-payload
+objects holding the inclusive start and exclusive end indices, and
+`VAR` receives a fresh cons-list of the elements in `S[I..J-1]`,
+terminated with `NULL`.
+
+1. Read `S`, `I`, `J`.
+2. The compiler emits `ath_compose(I, J)` to form a range pair,
+   then calls `ath_inherit_lifetime(range_pair, I, J)` so that the
+   pair tracks both endpoints (§4.8.1).
+3. Invoke `ath_slice(S, range_pair)` (§5.2). Inside, the runtime
+   decomposes the pair to recover `I` and `J`, walks `S` to position
+   `I`, and accumulates `J - I` consecutive elements as a new
+   right-nested composition terminated with `NULL`.
+4. Bind `VAR` to the result.
+
+The result is born dead if:
+
+- `S` is dead, `NULL`, or unbound.
+- `I` or `J` is dead, lacks `has_value`, or is negative.
+- `I > J` (empty-or-invalid range — empty slice is also dead, by
+  design, to keep failure-as-death uniform).
+- The walk encounters `NULL` or a dead object before reaching
+  position `J` (out-of-range).
+
+The result inherits `S` and the range pair as dependencies, and the
+range pair inherits `I` and `J`, so killing any of `S`, `I`, or `J`
+invalidates the slice on the next observation.
+
+For strings, `S[I..J]` is a substring. For a list of numbers, it's
+a sublist. The slice's right-spine terminator is always `NULL`,
+regardless of what terminated `S`.
+
+`VAR` must not be `NULL`.
+
 ### 4.5 Program termination
 
 A program terminates when its main activation returns. This happens when:
@@ -774,6 +861,39 @@ by composition under the existing dep-tracking rule (`BIFURCATE
 [V1, V2] AND;` followed by `ath_inherit_lifetime` is not yet exposed
 at the surface; explicit AND requires a runtime helper).
 
+#### 4.8.4 String operations
+
+Strings are right-nested cons-lists of character atoms (§4.6). The
+runtime exports four operations over them; two are surfaced as
+function calls via `stdlib/`, two as dedicated statement syntax
+(§4.4.15, §4.4.16).
+
+| Name | Surface form | Result | Born dead when |
+|---|---|---|---|
+| `length` | `LENGTH [S, _] N;` | int64 payload = number of right-spine elements walked before hitting `NULL` or a dead object | `S` is `NULL` (yields `0` rather than dead) — never dead unless walk encounters a dead non-`NULL` cell |
+| `concat` | `CONCAT [A, B] R;` | fresh cons-list: elements of `A` followed by elements of `B`, terminated with `NULL` | `A` or `B` is dead at the call |
+| index | `S[N] X;` (§4.4.15) | the Nth right-spine head of `S` | `S`/`N` dead or unbound; `N` has no payload or is negative; walk hits `NULL`/dead before position `N` |
+| slice | `S[I..J] X;` (§4.4.16) | fresh cons-list of elements `I..J-1`, terminated with `NULL` | `S`/`I`/`J` dead; `I` or `J` has no payload or is negative; `I > J`; walk hits `NULL`/dead before `J` |
+
+`LENGTH` on `NULL` returns the eternal payload object `0` (not a
+dead result) — the empty string is a real cons-list with a known
+length. This is the one place "absent" is distinguished from
+"failed."
+
+All four operations install operand dependencies on their results
+via `ath_inherit_lifetime` (§4.8.1). Slicing a string and then
+killing the source kills the slice on the next observation.
+
+In `intern` composition mode (§4.4.3), concatenated and sliced
+results allocate fresh cons cells; sharing only happens at the
+char-atom level (which is canonical regardless of mode). Equal
+substrings produced by separate operations remain distinct objects.
+
+`LENGTH`'s second operand and `INDEX`/`SLICE`'s output type follow
+the same conventions as the arithmetic ops (§4.8.2): unary calls
+pass `NULL` (or any name) as the ignored second argument, and the
+chain dies on the first failure.
+
 ---
 
 ## 5. Runtime ABI
@@ -851,6 +971,14 @@ ath_obj *ath_parse(ath_obj *s, ath_obj *unused);
 ath_obj *ath_lt(ath_obj *x, ath_obj *y);
 ath_obj *ath_eq(ath_obj *x, ath_obj *y);
 ath_obj *ath_gt(ath_obj *x, ath_obj *y);
+
+/* String operations (SPEC §4.8.4). All install operand deps on results
+ * via ath_inherit_lifetime. ath_index and ath_slice are also invoked
+ * by the subscript and range-subscript statement codegen. */
+ath_obj *ath_length(ath_obj *s, ath_obj *unused);
+ath_obj *ath_concat(ath_obj *a, ath_obj *b);
+ath_obj *ath_index(ath_obj *s, ath_obj *n);
+ath_obj *ath_slice(ath_obj *s, ath_obj *range);
 
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));

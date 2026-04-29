@@ -270,3 +270,42 @@ def test_import_builtin_call_resolves_case_insensitively():
         " import number 1 as A; import number 2 as B;"
         " ath_add [A, B] R;"
     )
+
+
+# --- subscript / slice ---
+
+
+def test_subscript_introduces_target():
+    check("import x S; import number 0 as N; S[N] X; X.DIE();")
+
+
+def test_subscript_source_must_be_in_scope():
+    with pytest.raises(SemaError, match="S.*not in scope"):
+        check("import number 0 as N; S[N] X;")
+
+
+def test_subscript_index_must_be_in_scope():
+    with pytest.raises(SemaError, match="N.*not in scope"):
+        check("import x S; S[N] X;")
+
+
+def test_subscript_target_cannot_be_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check("import x S; import number 0 as N; S[N] NULL;")
+
+
+def test_slice_introduces_target():
+    check(
+        "import x S; import number 1 as I; import number 4 as J;"
+        " S[I..J] R; R.DIE();"
+    )
+
+
+def test_slice_start_must_be_in_scope():
+    with pytest.raises(SemaError, match="I.*not in scope"):
+        check("import x S; import number 4 as J; S[I..J] R;")
+
+
+def test_slice_end_must_be_in_scope():
+    with pytest.raises(SemaError, match="J.*not in scope"):
+        check("import x S; import number 1 as I; S[I..J] R;")
