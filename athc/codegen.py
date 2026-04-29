@@ -15,6 +15,8 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    SliceStmt,
+    SubscriptStmt,
     WatchStmt,
 )
 
@@ -59,6 +61,15 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.arg)
             names.add(s.left)
             names.add(s.right)
+        elif isinstance(s, SubscriptStmt):
+            names.add(s.source)
+            names.add(s.index)
+            names.add(s.target)
+        elif isinstance(s, SliceStmt):
+            names.add(s.source)
+            names.add(s.start)
+            names.add(s.end)
+            names.add(s.target)
         # ImportFuncStmt and PrintStmt contribute no variable names.
 
 
@@ -158,6 +169,24 @@ class Codegen:
             self.module,
             ir.FunctionType(self.obj_ptr, [self.i64]),
             name="ath_alloc_number",
+        )
+        self.f_inherit_lifetime = ir.Function(
+            self.module,
+            ir.FunctionType(
+                ir.VoidType(),
+                [self.obj_ptr, self.obj_ptr, self.obj_ptr],
+            ),
+            name="ath_inherit_lifetime",
+        )
+        self.f_index = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.obj_ptr]),
+            name="ath_index",
+        )
+        self.f_slice = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.obj_ptr]),
+            name="ath_slice",
         )
 
         # Builtin C functions declared via `import builtin SYM as NAME;`.
@@ -378,6 +407,10 @@ class FunctionEmitter:
             self._emit_funcall_decompose_ret(builder, stmt)
         elif isinstance(stmt, WatchStmt):
             self._emit_watch(builder, stmt)
+        elif isinstance(stmt, SubscriptStmt):
+            self._emit_subscript(builder, stmt)
+        elif isinstance(stmt, SliceStmt):
+            self._emit_slice(builder, stmt)
         else:
             raise CodegenError(f"no codegen for {type(stmt).__name__}")
 
@@ -540,6 +573,27 @@ class FunctionEmitter:
         r_val = builder.load(self.tmp_r)
         self._write_var(builder, stmt.left, l_val)
         self._write_var(builder, stmt.right, r_val)
+
+    def _emit_subscript(
+        self, builder: ir.IRBuilder, stmt: SubscriptStmt
+    ) -> None:
+        s_val = self._read_var(builder, stmt.source)
+        n_val = self._read_var(builder, stmt.index)
+        result = builder.call(self.cg.f_index, [s_val, n_val])
+        self._write_var(builder, stmt.target, result)
+
+    def _emit_slice(self, builder: ir.IRBuilder, stmt: SliceStmt) -> None:
+        s_val = self._read_var(builder, stmt.source)
+        i_val = self._read_var(builder, stmt.start)
+        j_val = self._read_var(builder, stmt.end)
+        # Bundle the indices into a composite the slice runtime can
+        # decompose, then explicitly install I and J as deps of the pair
+        # so that killing either endpoint kills the slice on next
+        # observation (§4.4.16 step 2).
+        range_pair = builder.call(self.cg.f_compose, [i_val, j_val])
+        builder.call(self.cg.f_inherit_lifetime, [range_pair, i_val, j_val])
+        result = builder.call(self.cg.f_slice, [s_val, range_pair])
+        self._write_var(builder, stmt.target, result)
 
 
 def generate_ir(

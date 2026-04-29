@@ -1,0 +1,45 @@
+// Reads two lines from stdin and demonstrates the string ops:
+//   - LENGTH (function call)
+//   - subscript S[N]
+//   - range subscript S[I..J]
+//   - CONCAT (function call)
+//
+// Try:
+//   athc examples/strings/main.ath -o strs
+//   printf 'hello\nworld\n' | ./strs
+//
+// Expected output:
+//   5
+//   h
+//   ell
+//   helloworld
+
+importf <length>    as LENGTH;
+importf <concat>    as CONCAT;
+importf <to_string> as TO_STRING;
+
+INPUT A;
+INPUT B;
+
+// Length of A as a decimal string.
+LENGTH [A, NULL] LA;
+TO_STRING [LA, NULL] LA_STR;
+PRINT2 LA_STR;
+
+// First character of A, printed by wrapping the atom in a length-1 string.
+import number 0 as I0;
+A[I0] HEAD_ATOM;
+BIFURCATE [HEAD_ATOM, NULL] HEAD_STR;
+PRINT2 HEAD_STR;
+
+// Slice A[1..4] (exclusive end).
+import number 1 as I1;
+import number 4 as I4;
+A[I1..I4] MID;
+PRINT2 MID;
+
+// Concatenate A and B.
+CONCAT [A, B] AB;
+PRINT2 AB;
+
+THIS.DIE();

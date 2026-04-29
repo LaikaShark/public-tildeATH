@@ -91,6 +91,15 @@ ath_obj *ath_lt(ath_obj *x, ath_obj *y);
 ath_obj *ath_eq(ath_obj *x, ath_obj *y);
 ath_obj *ath_gt(ath_obj *x, ath_obj *y);
 
+/* String operations on cons-list-structured objects (SPEC §4.8.4).
+ * ath_index and ath_slice are also invoked by the subscript and
+ * range-subscript statement codegen (§4.4.15, §4.4.16). All install
+ * operand dependencies on results via ath_inherit_lifetime. */
+ath_obj *ath_length(ath_obj *s, ath_obj *unused);
+ath_obj *ath_concat(ath_obj *a, ath_obj *b);
+ath_obj *ath_index(ath_obj *s, ath_obj *n);
+ath_obj *ath_slice(ath_obj *s, ath_obj *range);
+
 _Noreturn void ath_halt(void);
 
 #endif

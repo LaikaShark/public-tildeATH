@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — fresh cons-list: A's elements then B's, terminated NULL.
+//
+//   CONCAT [A, B] R;
+//
+// NULL operands are treated as the empty string. A non-NULL dead operand
+// produces a born-dead result.
+
+import builtin ath_concat as ATH_CONCAT;
+BIFURCATE ARGS [A, B];
+ATH_CONCAT [A, B] R;
+THIS.DIE(R);

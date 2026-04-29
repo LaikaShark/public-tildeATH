@@ -426,6 +426,106 @@ int main(void) {
     ath_die(dead_five);
     assert(!ath_is_alive(ath_lt(dead_five, seven)));
 
+    /* --- String operations (SPEC §4.8.4) --- */
+
+    /* Build "Hi" via cons. */
+    ath_obj *s_hi = ath_compose(ath_char_atom('H'),
+                    ath_compose(ath_char_atom('i'), ath_NULL));
+
+    /* LENGTH */
+    ath_obj *len_hi = ath_length(s_hi, ath_NULL);
+    assert(ath_is_alive(len_hi));
+    assert(len_hi->has_value && len_hi->value == 2);
+
+    /* LENGTH(NULL) = 0 (empty string is real). */
+    ath_obj *len_empty = ath_length(ath_NULL, ath_NULL);
+    assert(ath_is_alive(len_empty));
+    assert(len_empty->value == 0);
+
+    /* INDEX */
+    ath_obj *idx0 = ath_index(s_hi, ath_alloc_number(0));
+    assert(ath_is_alive(idx0));
+    assert(idx0 == ath_char_atom('H'));   /* atom identity */
+    ath_obj *idx1 = ath_index(s_hi, ath_alloc_number(1));
+    assert(idx1 == ath_char_atom('i'));
+
+    /* INDEX out of range → dead. */
+    ath_obj *idx_oob = ath_index(s_hi, ath_alloc_number(5));
+    assert(!ath_is_alive(idx_oob));
+
+    /* INDEX with negative index → dead. */
+    ath_obj *idx_neg = ath_index(s_hi, ath_alloc_number(-1));
+    assert(!ath_is_alive(idx_neg));
+
+    /* INDEX with no-payload → dead. */
+    ath_obj *idx_no_payload = ath_index(s_hi, ath_alloc_alive());
+    assert(!ath_is_alive(idx_no_payload));
+
+    /* CONCAT */
+    ath_obj *world = ath_compose(ath_char_atom('!'), ath_NULL);
+    ath_obj *hi_bang = ath_concat(s_hi, world);
+    fputs("expect Hi!: ", stdout);
+    ath_print_obj(hi_bang);
+    assert(ath_length(hi_bang, ath_NULL)->value == 3);
+
+    /* CONCAT with empty operand. */
+    ath_obj *just_hi = ath_concat(s_hi, ath_NULL);
+    fputs("expect Hi: ", stdout);
+    ath_print_obj(just_hi);
+    ath_obj *just_world = ath_concat(ath_NULL, world);
+    fputs("expect !: ", stdout);
+    ath_print_obj(just_world);
+
+    /* CONCAT of two empties returns ath_NULL. */
+    ath_obj *empty_cat = ath_concat(ath_NULL, ath_NULL);
+    assert(empty_cat == ath_NULL);
+
+    /* SLICE */
+    /* "Hello" = H e l l o */
+    ath_obj *hello = ath_compose(ath_char_atom('H'),
+                     ath_compose(ath_char_atom('e'),
+                     ath_compose(ath_char_atom('l'),
+                     ath_compose(ath_char_atom('l'),
+                     ath_compose(ath_char_atom('o'), ath_NULL)))));
+
+    ath_obj *range_1_4 = ath_compose(ath_alloc_number(1), ath_alloc_number(4));
+    ath_obj *ell = ath_slice(hello, range_1_4);
+    fputs("expect ell: ", stdout);
+    ath_print_obj(ell);
+    assert(ath_length(ell, ath_NULL)->value == 3);
+
+    /* Slice [0..5] should be the whole string. */
+    ath_obj *range_0_5 = ath_compose(ath_alloc_number(0), ath_alloc_number(5));
+    ath_obj *whole = ath_slice(hello, range_0_5);
+    fputs("expect Hello: ", stdout);
+    ath_print_obj(whole);
+
+    /* Out-of-range slice → dead. */
+    ath_obj *range_2_10 = ath_compose(ath_alloc_number(2), ath_alloc_number(10));
+    ath_obj *oob = ath_slice(hello, range_2_10);
+    assert(!ath_is_alive(oob));
+
+    /* I > J → dead. */
+    ath_obj *range_3_1 = ath_compose(ath_alloc_number(3), ath_alloc_number(1));
+    ath_obj *bad_range = ath_slice(hello, range_3_1);
+    assert(!ath_is_alive(bad_range));
+
+    /* Empty slice [2..2] → dead by design. */
+    ath_obj *range_2_2 = ath_compose(ath_alloc_number(2), ath_alloc_number(2));
+    ath_obj *empty_slice = ath_slice(hello, range_2_2);
+    assert(!ath_is_alive(empty_slice));
+
+    /* Lifetime inheritance: kill source, derived string dies. */
+    ath_obj *src = ath_compose(ath_char_atom('A'),
+                   ath_compose(ath_char_atom('B'), ath_NULL));
+    ath_obj *src_len = ath_length(src, ath_NULL);
+    ath_obj *src_idx = ath_index(src, ath_alloc_number(0));
+    /* Mark src dead by killing its own cell; deps on derived results
+     * should propagate. */
+    ath_die(src);
+    assert(!ath_is_alive(src_len));
+    assert(!ath_is_alive(src_idx));
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

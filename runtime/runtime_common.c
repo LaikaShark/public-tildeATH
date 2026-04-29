@@ -594,6 +594,168 @@ ath_obj *ath_parse(ath_obj *s, ath_obj *unused) {
     return out;
 }
 
+/* --- String operations (SPEC §4.8.4) ----------------------------------- */
+
+/* Born-dead generic object (no payload, no deps). */
+static ath_obj *ath_alloc_dead(void) {
+    ath_obj *o = (ath_obj *)calloc(1, sizeof(ath_obj));
+    if (!o) {
+        fputs("ath: out of memory\n", stderr);
+        exit(1);
+    }
+    return o;
+}
+
+/* Walk the right-spine counting elements. Stops at NULL, ath_NULL,
+ * or a dead cell. Returns the count. */
+static int64_t ath_spine_length(ath_obj *s) {
+    int64_t n = 0;
+    while (s != NULL && s != ath_NULL && ath_is_alive(s)) {
+        ath_obj *l, *r;
+        ath_decompose(s, &l, &r);
+        (void)l;
+        n++;
+        s = r;
+    }
+    return n;
+}
+
+ath_obj *ath_length(ath_obj *s, ath_obj *unused) {
+    (void)unused;
+    /* §4.8.4: LENGTH(NULL) = 0 (empty string is real). Only fails on a
+     * dead non-NULL cell, which we treat as "walk stops, count so far". */
+    int64_t n = ath_spine_length(s);
+    ath_obj *out = ath_alloc_number(n);
+    ath_inherit_lifetime(out, s, NULL);
+    return out;
+}
+
+/* Walk the right-spine collecting heads into an array. Returns the number
+ * of elements actually collected (≤ cap). On a dead/NULL terminator before
+ * reaching cap, fewer elements are collected. */
+static int64_t ath_collect_spine(ath_obj *s, ath_obj **heads, int64_t cap) {
+    int64_t n = 0;
+    while (s != NULL && s != ath_NULL && ath_is_alive(s) && n < cap) {
+        ath_obj *l, *r;
+        ath_decompose(s, &l, &r);
+        heads[n++] = l;
+        s = r;
+    }
+    return n;
+}
+
+/* Build a fresh right-nested cons-list terminated with ath_NULL from an
+ * array of element heads. Returns ath_NULL on empty input. */
+static ath_obj *ath_build_spine(ath_obj **heads, int64_t n) {
+    ath_obj *acc = ath_NULL;
+    for (int64_t i = n; i > 0; i--) {
+        acc = ath_compose(heads[i - 1], acc);
+    }
+    return acc;
+}
+
+ath_obj *ath_concat(ath_obj *a, ath_obj *b) {
+    /* NULL/ath_NULL operands are the empty string (alive). A non-NULL
+     * dead operand is a real failure. */
+    int a_empty = (a == NULL || a == ath_NULL);
+    int b_empty = (b == NULL || b == ath_NULL);
+    if (!a_empty && !ath_is_alive(a)) return ath_alloc_dead();
+    if (!b_empty && !ath_is_alive(b)) return ath_alloc_dead();
+
+    int64_t na = a_empty ? 0 : ath_spine_length(a);
+    int64_t nb = b_empty ? 0 : ath_spine_length(b);
+    int64_t total = na + nb;
+    if (total < 0) return ath_alloc_dead();  /* overflow guard */
+
+    if (total == 0) return ath_NULL;
+
+    ath_obj **buf = (ath_obj **)calloc((size_t)total, sizeof(ath_obj *));
+    if (!buf) {
+        fputs("ath: out of memory\n", stderr);
+        exit(1);
+    }
+    int64_t actual = 0;
+    if (na > 0) actual += ath_collect_spine(a, buf + actual, na);
+    if (nb > 0) actual += ath_collect_spine(b, buf + actual, nb);
+    ath_obj *out = ath_build_spine(buf, actual);
+    free(buf);
+    ath_inherit_lifetime(out, a, b);
+    return out;
+}
+
+ath_obj *ath_index(ath_obj *s, ath_obj *n) {
+    if (s == NULL || !ath_is_alive(s)) return ath_alloc_dead();
+    if (n == NULL || !ath_is_alive(n) || !n->has_value) return ath_alloc_dead();
+    if (n->value < 0) return ath_alloc_dead();
+    int64_t target = n->value;
+    int64_t i = 0;
+    ath_obj *cur = s;
+    while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        if (i == target) {
+            ath_inherit_lifetime(l, s, n);
+            return l;
+        }
+        i++;
+        cur = r;
+    }
+    return ath_alloc_dead();  /* out of range */
+}
+
+ath_obj *ath_slice(ath_obj *s, ath_obj *range) {
+    if (s == NULL || !ath_is_alive(s)) return ath_alloc_dead();
+    if (range == NULL || range == ath_NULL || !ath_is_alive(range))
+        return ath_alloc_dead();
+    ath_obj *i_obj, *j_obj;
+    ath_decompose(range, &i_obj, &j_obj);
+    if (i_obj == NULL || !ath_is_alive(i_obj) || !i_obj->has_value)
+        return ath_alloc_dead();
+    if (j_obj == NULL || !ath_is_alive(j_obj) || !j_obj->has_value)
+        return ath_alloc_dead();
+    int64_t i = i_obj->value;
+    int64_t j = j_obj->value;
+    if (i < 0 || j < 0 || i > j) return ath_alloc_dead();
+
+    /* Walk to position i. */
+    ath_obj *cur = s;
+    for (int64_t k = 0; k < i; k++) {
+        if (cur == NULL || cur == ath_NULL || !ath_is_alive(cur))
+            return ath_alloc_dead();
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        (void)l;
+        cur = r;
+    }
+    /* Collect j - i elements. */
+    int64_t want = j - i;
+    if (want == 0) {
+        /* §4.8.4: empty slice (i == j) is dead, by design. */
+        return ath_alloc_dead();
+    }
+    ath_obj **buf = (ath_obj **)calloc((size_t)want, sizeof(ath_obj *));
+    if (!buf) {
+        fputs("ath: out of memory\n", stderr);
+        exit(1);
+    }
+    int64_t collected = 0;
+    while (collected < want && cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        buf[collected++] = l;
+        cur = r;
+    }
+    if (collected < want) {
+        /* walk hit the end early — out of range */
+        free(buf);
+        return ath_alloc_dead();
+    }
+    ath_obj *out = ath_build_spine(buf, collected);
+    free(buf);
+    ath_inherit_lifetime(out, s, range);
+    return out;
+}
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);

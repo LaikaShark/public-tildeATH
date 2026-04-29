@@ -184,6 +184,24 @@ CASES = [
         "",
         id="tier2_comparison_dead_chain_silent",
     ),
+    pytest.param(
+        "strings/main.ath",
+        "hello\nworld\n",
+        "5\nh\nell\nhelloworld\n",
+        id="tier3_strings_golden_path",
+    ),
+    pytest.param(
+        "strings/main.ath",
+        "abcdef\nXYZ\n",
+        "6\na\nbcd\nabcdefXYZ\n",
+        id="tier3_strings_alt_input",
+    ),
+    pytest.param(
+        "strings/main.ath",
+        "\nfoo\n",
+        "0\n\n\nfoo\n",
+        id="tier3_strings_empty_first_line",
+    ),
 ]
 
 

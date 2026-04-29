@@ -1,0 +1,10 @@
+// SPEC §4.8.4 — number of right-spine elements walked before NULL.
+//
+//   LENGTH [S, _] N;
+//
+// LENGTH(NULL) is 0 (the empty string is real). Result inherits from S.
+
+import builtin ath_length as ATH_LENGTH;
+BIFURCATE ARGS [S, IGNORED];
+ATH_LENGTH [S, IGNORED] R;
+THIS.DIE(R);
