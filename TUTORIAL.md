@@ -1086,6 +1086,141 @@ runtime keeps observing aliveness all the way through.
 
 ---
 
+## 10f. BRANCH and CLONE
+
+The `~ATH(V) { ...; V.DIE(); }` idiom of §9.1 is the canonical
+if-then in ~ATH — but it's verbose, awkward (the kill is buried in
+the body), and gets weirder when you want an else clause. **BRANCH**
+is the dedicated sugar.
+
+### 10f.1 BRANCH
+
+```ath
+import x V;
+BRANCH(V) {
+    print V was alive;
+} ELSE {
+    print V was dead;
+}
+```
+
+Semantics:
+
+1. Read `V`. Check `ath_is_alive(V)` (or its negation, if you wrote
+   `BRANCH(!V)`).
+2. Run the appropriate body.
+3. **Kill `V`.** Whether the alive body ran (the kill flips it to
+   dead) or the dead body ran (the kill is a no-op on an
+   already-dead object), `V` is dead after the BRANCH.
+
+The else clause is optional, and the `ELSE` keyword is optional too —
+a bare second `{ ... }` works:
+
+```ath
+BRANCH(V) { print yes; } { print no; }       // ELSE keyword omitted
+BRANCH(V) { print yes; }                     // no else at all
+BRANCH(!V) { print V was dead; } ELSE { print V was alive; }
+```
+
+BRANCH is **one-shot**. Unlike `~ATH(V)`, the condition is checked
+exactly once. There's no re-check, no loop, no rebind idiom needed.
+
+### 10f.2 Why V is consumed
+
+A common pattern in earlier sections was `~ATH(V) { body; V.DIE(); }`
+— the body explicitly kills V to exit the loop. BRANCH bakes that
+kill in automatically because:
+
+- The kill is the *only* reasonable thing to do after dispatching:
+  leaving `V` alive after a one-shot check would mean the alive
+  branch's effects are invisible to any downstream `~ATH(V)` (it'd
+  still be alive!).
+- Forcing the kill removes the "did this code path kill V?" ambiguity.
+  After a BRANCH, `V` is dead. No need to read the body to find out.
+
+This does mean BRANCH is destructive. If you want to *inspect* `V`
+without losing it, clone first.
+
+### 10f.3 CLONE: non-destructive checking
+
+```ath
+CLONE V as VCHECK;
+BRANCH(VCHECK) {
+    print V was alive;
+} ELSE {
+    print V was dead;
+}
+// V is untouched — still alive (or still dead) as it was before.
+```
+
+`CLONE V as W;` produces a fresh object `W` that snapshots `V`'s
+state. The clone copies:
+
+- `alive` — `W` is born with the same alive bit as `V`.
+- the cons-list halves (`left`, `right`) — pointer-shared, not
+  deep-copied.
+- the int64 payload (if any) — full value copy.
+- all lifetime extensions: deadline, watched file, oneshot flag,
+  watched signal. A clone of a `mayfly` is itself a mayfly with
+  the same deadline; a clone of a file-watcher watches the same
+  path; a clone of a `once` object is itself a one-shot.
+
+The clone does **not** copy `V`'s dep chain. If `V` was a derived
+value tracking upstream operands (e.g. an `ADD` result tracking
+its inputs), the clone is independent of those — it's a snapshot
+of the moment, frozen against future upstream deaths.
+
+```ath
+import number 3 as A;
+import number 4 as B;
+ADD [A, B] SUM;        // SUM tracks A and B
+CLONE SUM as FROZEN;   // FROZEN does not track A or B
+A.DIE();
+// SUM is now dead (dep propagated). FROZEN is still alive at 7.
+```
+
+Killing `V` after the clone leaves the clone alone, and vice versa.
+
+### 10f.4 The canonical idiom
+
+> When you need to test `V` without consuming it, clone first.
+
+```ath
+CLONE V as VCHECK;
+BRANCH(VCHECK) { ... }
+// V is still alive (or dead) as before.
+```
+
+This pattern shows up wherever a verdict is needed in two places, a
+number needs to be inspected before arithmetic that would consume
+its mortality chain, or a file-watcher needs to be checked while
+the original keeps watching. CLONE costs one heap allocation per
+call; in real programs it's a rounding error against I/O cost.
+
+`examples/branch/main.ath` is the worked example: it reads two
+integers, computes a verdict, clones it, BRANCHes on the clone
+(consuming the clone), then BRANCHes on the original (consuming
+the original):
+
+```
+$ printf '3\n10\n' | ./br
+less
+verdict was alive
+$ printf '10\n3\n' | ./br
+not less
+verdict was dead
+```
+
+### 10f.5 Comparison to the §9.1 idiom
+
+The old `~ATH(V) { ...; V.DIE(); }` if-then still works — BRANCH is
+purely additive. But for new code, BRANCH is shorter, doesn't bury
+the kill, and has a real else clause. The §9.1 idiom is now mostly
+of historical interest, though it remains useful when you want the
+*loop* form (run the body until some inner code kills V).
+
+---
+
 ## 11. The Homestuck surface
 
 Three features of the dialect are syntactic concessions to the original
@@ -1153,9 +1288,11 @@ To save time hunting for features that aren't there:
 - **No floats or booleans.** Numbers exist (§10c) but only as int64.
   Verdicts (§10d) carry no truth value — they are alive or dead, not
   `true` or `false`.
-- **No conditionals.** No `if`, `?:`, `switch`. The only branching is
-  `~ATH(V) { ... }`, which is a loop. Combined with comparison
-  verdicts (§10d) it gives you an if-then idiom (§9.1).
+- **No `if`/`?:`/`switch` syntax.** Conditional dispatch is via
+  `BRANCH(V) { ... } ELSE { ... }` (§10f), which is one-shot and
+  destructive (V is consumed). For non-destructive checking, clone
+  first with `CLONE V as VCHECK;`. The looping conditional remains
+  `~ATH(V) { ... }`, which re-checks every iteration.
 - **No infix operators.** No `+`, `*`, `==`, `&&`. Arithmetic and
   comparison are function calls — `ADD [X, Y] R;`, `LT [X, Y] V;` —
   imported from `stdlib/` (§10c, §10d). There is `!` but it only
