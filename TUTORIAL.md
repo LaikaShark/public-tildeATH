@@ -934,6 +934,158 @@ all three verdicts in sequence; on `3\n10\n` it prints `less`, on
 
 ---
 
+## 10e. Manipulating strings (and any cons-list)
+
+Strings are right-nested cons-lists of character atoms (§6). Four
+operations work on them — two as function calls imported from
+`stdlib/`, and two as dedicated bracket syntax.
+
+### 10e.1 LENGTH and CONCAT
+
+```ath
+importf <length> as LENGTH;
+importf <concat> as CONCAT;
+
+INPUT A;
+INPUT B;
+
+LENGTH [A, NULL] LA;        // LA carries an int64 payload
+CONCAT [A, B]    AB;        // AB is a fresh cons-list
+```
+
+- **`LENGTH`** walks the right-spine of its argument until it hits
+  `NULL` or a dead cell, returning a number-payload object. The empty
+  string (`NULL`) has length 0 — this is the one place where "absent"
+  is explicitly *not* "failed."
+- **`CONCAT`** copies A's elements then B's into a fresh chain
+  terminated with `NULL`. A `NULL` operand is treated as the empty
+  string (alive); a non-`NULL` dead operand fails per the usual
+  rule. The result inherits both A and B as deps — killing either
+  source kills the concatenation.
+
+### 10e.2 Subscript: `S[N] X;`
+
+A real new statement form. `S[N] X;` reads the Nth right-spine head
+of `S` into `X`:
+
+```ath
+import number 0 as I0;
+A[I0] HEAD_ATOM;            // first element of A
+```
+
+For strings, `S[N]` returns the Nth character **atom** — a single
+object, not a length-1 string. To print it via `PRINT2` you have to
+wrap it back into a one-element cons-list:
+
+```ath
+BIFURCATE [HEAD_ATOM, NULL] HEAD_STR;
+PRINT2 HEAD_STR;            // prints the character followed by '\n'
+```
+
+The reason: subscript is deliberately generalized — `S[N]` works on
+any right-nested object (lists of numbers, lists of objects, future
+SPLIT results), not just strings. Returning a length-1 string would
+be string-specific and break that generalization.
+
+The result is born dead if `N` lacks an int64 payload, `N` is
+negative, or the walk hits the end of `S` before reaching position
+`N`. Out-of-range silently dies; the program doesn't crash.
+
+### 10e.3 Range subscript: `S[I..J] X;`
+
+End-exclusive slice into a fresh cons-list:
+
+```ath
+import number 1 as I1;
+import number 4 as I4;
+A[I1..I4] MID;              // chars 1, 2, 3 (J = 4 is exclusive)
+PRINT2 MID;
+```
+
+- `[I..J]` is end-exclusive, like Python — `S[0..3]` is the first
+  three elements.
+- The result is born dead if either endpoint is negative or missing
+  a payload, if `I > J`, if `I == J` (empty slice — deliberately
+  failure-as-death so silent successes don't look like silent
+  empties), or if the walk hits the end of `S` before reaching
+  position `J`.
+- The result inherits `S`, `I`, and `J` as deps. Killing any of
+  them invalidates the slice on the next observation.
+
+### 10e.4 Dispatch between bracket forms
+
+Three statement forms now share the `IDENT '[' ... ']' IDENT ';'`
+shape:
+
+| Inside the brackets | Statement                   |
+|---------------------|-----------------------------|
+| `L, R`              | function call (§8.2)        |
+| `N`                 | subscript (§10e.2)          |
+| `I..J`              | slice (§10e.3)              |
+
+The compiler dispatches on what follows the first inner identifier:
+`,` is a funcall, `..` is a slice, `]` is a subscript. None of them
+collide; you don't need to remember a precedence rule.
+
+### 10e.5 A complete example
+
+`examples/strings/main.ath` reads two lines from stdin and exercises
+all four ops:
+
+```ath
+importf <length>    as LENGTH;
+importf <concat>    as CONCAT;
+importf <to_string> as TO_STRING;
+
+INPUT A;
+INPUT B;
+
+LENGTH [A, NULL] LA;
+TO_STRING [LA, NULL] LA_STR;
+PRINT2 LA_STR;
+
+import number 0 as I0;
+A[I0] HEAD_ATOM;
+BIFURCATE [HEAD_ATOM, NULL] HEAD_STR;
+PRINT2 HEAD_STR;
+
+import number 1 as I1;
+import number 4 as I4;
+A[I1..I4] MID;
+PRINT2 MID;
+
+CONCAT [A, B] AB;
+PRINT2 AB;
+
+THIS.DIE();
+```
+
+On `hello\nworld\n` it prints:
+
+```
+5
+h
+ell
+helloworld
+```
+
+On `\nfoo\n` (empty first line), the LENGTH prints `0`, the
+subscript and slice die silently (the empty string has no chars at
+position 0 or in `[1..4]`), and CONCAT of empty + `foo` is `foo`:
+
+```
+0
+
+
+foo
+```
+
+Death propagating quietly through a chain of operations is the
+normal mode — programs read input, build derived values, and the
+runtime keeps observing aliveness all the way through.
+
+---
+
 ## 11. The Homestuck surface
 
 Three features of the dialect are syntactic concessions to the original
@@ -1021,8 +1173,10 @@ Reasonable things you *might* expect but won't find:
 
 - Cross-compilation-unit linking. Everything is one program plus its
   `importf`'d files (and the runtime), resolved at compile time.
-- String manipulation: concat, substring, index, length, etc. These
-  are planned but not yet shipped.
+- Substring search (`FIND`), in-place rewriting (`REPLACE`), and
+  list-of-string operations (`SPLIT`, `JOIN`). These are planned for
+  a later string-ops tier; current support is length, concat,
+  subscript, slice (§10e).
 - Re-running a dead object (it really is permanent).
 
 ---
