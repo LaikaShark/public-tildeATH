@@ -756,6 +756,34 @@ ath_obj *ath_slice(ath_obj *s, ath_obj *range) {
     return out;
 }
 
+/* --- Shallow clone (SPEC §4.4.18) --------------------------------------- */
+
+ath_obj *ath_clone(ath_obj *v) {
+    ath_obj *w = (ath_obj *)calloc(1, sizeof(ath_obj));
+    if (!w) {
+        fputs("ath: out of memory\n", stderr);
+        exit(1);
+    }
+    if (v == NULL || v == ath_NULL) {
+        /* Cloning NULL yields a born-dead object. calloc already gave us
+         * alive=0 and no payload; just return it. */
+        return w;
+    }
+    /* Snapshot: copy alive bit and every observable field. Skip dep1/dep2
+     * — the clone is independent of v's upstream operand chain. */
+    w->alive = v->alive;
+    w->left = v->left;
+    w->right = v->right;
+    w->deadline_s = v->deadline_s;
+    w->watch_path = v->watch_path;
+    w->is_oneshot = v->is_oneshot;
+    w->awaiting_signal = v->awaiting_signal;
+    w->has_value = v->has_value;
+    w->value = v->value;
+    /* dep1 and dep2 stay zeroed by calloc. */
+    return w;
+}
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);

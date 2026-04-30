@@ -1,0 +1,38 @@
+// BRANCH and CLONE demonstration.
+//
+// Reads two integers from stdin. Reports whether the first is less than
+// the second, then reports the verdict's liveness a second time —
+// possible only because we cloned the verdict before the first BRANCH
+// consumed its check.
+//
+// Try:
+//   athc examples/branch/main.ath -o br
+//   printf '3\n10\n' | ./br      # less / verdict was alive
+//   printf '10\n3\n' | ./br      # not less / verdict was dead
+//   printf '7\n7\n'  | ./br      # not less / verdict was dead
+
+importf <parse> as PARSE;
+importf <lt>    as LT;
+
+INPUT XS;
+INPUT YS;
+PARSE [XS, NULL] X;
+PARSE [YS, NULL] Y;
+LT [X, Y] V;
+
+// CLONE V so the first BRANCH consumes a copy and V stays available.
+CLONE V as VCHECK;
+BRANCH(VCHECK) {
+    print less;
+} ELSE {
+    print not less;
+}
+
+// V is still alive — confirm by branching on it again.
+BRANCH(V) {
+    print verdict was alive;
+} ELSE {
+    print verdict was dead;
+}
+
+THIS.DIE();

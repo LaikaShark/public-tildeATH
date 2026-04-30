@@ -526,6 +526,59 @@ int main(void) {
     assert(!ath_is_alive(src_len));
     assert(!ath_is_alive(src_idx));
 
+    /* --- Clone (SPEC §4.4.18) --- */
+
+    /* Number clone preserves payload. */
+    ath_obj *orig = ath_alloc_number(99);
+    ath_obj *copy = ath_clone(orig);
+    assert(copy != orig);                  /* independent identity */
+    assert(ath_is_alive(copy));
+    assert(copy->has_value && copy->value == 99);
+
+    /* Killing the clone does not kill the original. */
+    ath_die(copy);
+    assert(!ath_is_alive(copy));
+    assert(ath_is_alive(orig));
+    assert(orig->value == 99);
+
+    /* Killing the original does not kill a clone made before the kill. */
+    ath_obj *copy2 = ath_clone(orig);
+    assert(ath_is_alive(copy2));
+    ath_die(orig);
+    assert(!ath_is_alive(orig));
+    assert(ath_is_alive(copy2));
+
+    /* Cloning a dead object yields a dead clone. */
+    ath_obj *dead_clone = ath_clone(orig);
+    assert(!ath_is_alive(dead_clone));
+
+    /* Cloning NULL yields a dead, payload-less object. */
+    ath_obj *null_clone = ath_clone(ath_NULL);
+    assert(!ath_is_alive(null_clone));
+    assert(!null_clone->has_value);
+
+    /* Lifetime extensions are preserved. */
+    ath_obj *oneshot = ath_alloc_oneshot();
+    ath_obj *oneshot_copy = ath_clone(oneshot);
+    /* Each oneshot has its own first-observation flip; they are independent. */
+    assert(ath_is_alive(oneshot));
+    assert(!ath_is_alive(oneshot));       /* original used up */
+    assert(ath_is_alive(oneshot_copy));   /* clone still has its one observation */
+    assert(!ath_is_alive(oneshot_copy));
+
+    /* Clone of a derived value does NOT inherit its deps. */
+    ath_obj *a_num = ath_alloc_number(3);
+    ath_obj *b_num = ath_alloc_number(4);
+    ath_obj *sum_ab = ath_add(a_num, b_num);     /* sum has deps on a, b */
+    ath_obj *sum_clone = ath_clone(sum_ab);      /* clone is independent */
+    assert(ath_is_alive(sum_clone));
+    assert(sum_clone->value == 7);
+    /* Killing the original sum's operand kills sum_ab via deps, but the
+     * clone is unaffected. */
+    ath_die(a_num);
+    assert(!ath_is_alive(sum_ab));               /* dep propagated */
+    assert(ath_is_alive(sum_clone));             /* clone is its own snapshot */
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

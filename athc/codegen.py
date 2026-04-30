@@ -2,6 +2,8 @@ from llvmlite import binding, ir
 
 from athc.ast import (
     AthLoop,
+    BranchStmt,
+    CloneStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -69,6 +71,14 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.source)
             names.add(s.start)
             names.add(s.end)
+            names.add(s.target)
+        elif isinstance(s, BranchStmt):
+            names.add(s.var)
+            _collect_names(s.then_body, names)
+            if s.else_body is not None:
+                _collect_names(s.else_body, names)
+        elif isinstance(s, CloneStmt):
+            names.add(s.source)
             names.add(s.target)
         # ImportFuncStmt and PrintStmt contribute no variable names.
 
@@ -188,6 +198,11 @@ class Codegen:
             ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.obj_ptr]),
             name="ath_slice",
         )
+        self.f_clone = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
+            name="ath_clone",
+        )
 
         # Builtin C functions declared via `import builtin SYM as NAME;`.
         # Keyed by raw C symbol name to dedupe across files.
@@ -300,6 +315,7 @@ class FunctionEmitter:
         self.tmp_r: ir.AllocaInstr | None = None
         self._loop_id = 0
         self._dead_id = 0
+        self._branch_id = 0
 
     def emit(self) -> None:
         names: set[str] = set()
@@ -411,6 +427,10 @@ class FunctionEmitter:
             self._emit_subscript(builder, stmt)
         elif isinstance(stmt, SliceStmt):
             self._emit_slice(builder, stmt)
+        elif isinstance(stmt, BranchStmt):
+            self._emit_branch(builder, stmt)
+        elif isinstance(stmt, CloneStmt):
+            self._emit_clone(builder, stmt)
         else:
             raise CodegenError(f"no codegen for {type(stmt).__name__}")
 
@@ -593,6 +613,43 @@ class FunctionEmitter:
         range_pair = builder.call(self.cg.f_compose, [i_val, j_val])
         builder.call(self.cg.f_inherit_lifetime, [range_pair, i_val, j_val])
         result = builder.call(self.cg.f_slice, [s_val, range_pair])
+        self._write_var(builder, stmt.target, result)
+
+    def _emit_branch(self, builder: ir.IRBuilder, stmt: BranchStmt) -> None:
+        fn = builder.function
+        bid = self._branch_id
+        self._branch_id += 1
+
+        then_blk = fn.append_basic_block(f"branch_then_{bid}")
+        else_blk = fn.append_basic_block(f"branch_else_{bid}")
+        after_blk = fn.append_basic_block(f"branch_after_{bid}")
+
+        v = self._read_var(builder, stmt.var)
+        alive = builder.call(self.cg.f_is_alive, [v])
+        op = "==" if stmt.inverted else "!="
+        cond = builder.icmp_signed(op, alive, ir.Constant(self.cg.i32, 0))
+        builder.cbranch(cond, then_blk, else_blk)
+
+        builder.position_at_start(then_blk)
+        self._emit_block(builder, stmt.then_body)
+        if not builder.block.is_terminated:
+            builder.branch(after_blk)
+
+        builder.position_at_start(else_blk)
+        if stmt.else_body is not None:
+            self._emit_block(builder, stmt.else_body)
+        if not builder.block.is_terminated:
+            builder.branch(after_blk)
+
+        builder.position_at_start(after_blk)
+        # Consume V (§4.4.17). Re-read in case a body rebound V; matches
+        # the semantics of a literal `V.DIE();` placed after the branch.
+        v_after = self._read_var(builder, stmt.var)
+        builder.call(self.cg.f_die, [v_after])
+
+    def _emit_clone(self, builder: ir.IRBuilder, stmt: CloneStmt) -> None:
+        src = self._read_var(builder, stmt.source)
+        result = builder.call(self.cg.f_clone, [src])
         self._write_var(builder, stmt.target, result)
 
 

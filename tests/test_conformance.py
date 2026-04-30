@@ -202,6 +202,24 @@ CASES = [
         "0\n\n\nfoo\n",
         id="tier3_strings_empty_first_line",
     ),
+    pytest.param(
+        "branch/main.ath",
+        "3\n10\n",
+        "less\nverdict was alive\n",
+        id="tier6_branch_clone_alive_verdict",
+    ),
+    pytest.param(
+        "branch/main.ath",
+        "10\n3\n",
+        "not less\nverdict was dead\n",
+        id="tier6_branch_clone_dead_verdict",
+    ),
+    pytest.param(
+        "branch/main.ath",
+        "7\n7\n",
+        "not less\nverdict was dead\n",
+        id="tier6_branch_equal_is_not_less",
+    ),
 ]
 
 

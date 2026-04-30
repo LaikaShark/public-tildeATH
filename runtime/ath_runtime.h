@@ -100,6 +100,11 @@ ath_obj *ath_concat(ath_obj *a, ath_obj *b);
 ath_obj *ath_index(ath_obj *s, ath_obj *n);
 ath_obj *ath_slice(ath_obj *s, ath_obj *range);
 
+/* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
+ * dep1/dep2, which are zeroed. Independent identity — killing one of
+ * (v, result) does not kill the other. */
+ath_obj *ath_clone(ath_obj *v);
+
 _Noreturn void ath_halt(void);
 
 #endif
