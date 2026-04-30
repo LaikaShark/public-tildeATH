@@ -1,5 +1,7 @@
 from athc.ast import (
     AthLoop,
+    BranchStmt,
+    CloneStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -75,6 +77,10 @@ class Parser:
             return self._parse_print2()
         if tok.kind is TokenKind.ATH:
             return self._parse_ath_loop()
+        if tok.kind is TokenKind.KW_BRANCH:
+            return self._parse_branch()
+        if tok.kind is TokenKind.KW_CLONE:
+            return self._parse_clone()
         if tok.kind is TokenKind.IDENT:
             return self._parse_die_or_funcall()
         if tok.kind is TokenKind.RESERVED:
@@ -227,6 +233,60 @@ class Parser:
             self._expect(TokenKind.SEMI)
         return AthLoop(
             var=var.value, body=body, line=kw.line, col=kw.col, inverted=inverted
+        )
+
+    def _parse_branch(self) -> BranchStmt:
+        kw = self._expect(TokenKind.KW_BRANCH)
+        self._expect(TokenKind.LPAREN)
+        inverted = False
+        if self._peek().kind is TokenKind.BANG:
+            self._advance()
+            inverted = True
+        var = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.RPAREN)
+        then_body = self._parse_brace_block()
+        else_body: list | None = None
+        nxt = self._peek()
+        if nxt.kind is TokenKind.KW_ELSE:
+            self._advance()
+            else_body = self._parse_brace_block()
+        elif nxt.kind is TokenKind.LBRACE:
+            # Bare second block — sugar for ELSE { ... }.
+            else_body = self._parse_brace_block()
+        return BranchStmt(
+            var=var.value,
+            inverted=inverted,
+            then_body=then_body,
+            else_body=else_body,
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_brace_block(self) -> list:
+        self._expect(TokenKind.LBRACE)
+        body: list = []
+        while self._peek().kind is not TokenKind.RBRACE:
+            if self._peek().kind is TokenKind.EOF:
+                raise ParseError(
+                    "unexpected end of input inside { } block",
+                    self._peek().line,
+                    self._peek().col,
+                )
+            body.append(self._parse_statement())
+        self._expect(TokenKind.RBRACE)
+        return body
+
+    def _parse_clone(self) -> CloneStmt:
+        kw = self._expect(TokenKind.KW_CLONE)
+        src = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return CloneStmt(
+            source=src.value,
+            target=tgt.value,
+            line=kw.line,
+            col=kw.col,
         )
 
     def _parse_importf(self) -> ImportFuncStmt:

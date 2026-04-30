@@ -4,6 +4,8 @@ import pytest
 
 from athc.ast import (
     AthLoop,
+    BranchStmt,
+    CloneStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -434,3 +436,82 @@ def test_looptest_sample_parses():
     assert loop.body[2].text == "APPLE"
     assert isinstance(loop.body[3], PrintStmt)
     assert loop.body[3].text == "ORANGE"
+
+
+# --- BRANCH / CLONE ---
+
+
+def test_branch_with_else_keyword():
+    p = parse("import x V; BRANCH(V) { print yes; } ELSE { print no; }")
+    s = p.statements[1]
+    assert isinstance(s, BranchStmt)
+    assert s.var == "V" and not s.inverted
+    assert len(s.then_body) == 1 and len(s.else_body) == 1
+
+
+def test_branch_with_bare_second_block():
+    p = parse("import x V; BRANCH(V) { print yes; } { print no; }")
+    s = p.statements[1]
+    assert isinstance(s, BranchStmt)
+    assert s.else_body is not None
+    assert len(s.else_body) == 1
+
+
+def test_branch_without_else():
+    p = parse("import x V; BRANCH(V) { print yes; }")
+    s = p.statements[1]
+    assert isinstance(s, BranchStmt)
+    assert s.else_body is None
+
+
+def test_branch_inversion():
+    p = parse("import x V; BRANCH(!V) { print dead; }")
+    s = p.statements[1]
+    assert s.inverted is True
+
+
+def test_branch_case_insensitive():
+    p = parse("import x V; branch(V) { print yes; } else { print no; }")
+    s = p.statements[1]
+    assert isinstance(s, BranchStmt)
+    assert s.else_body is not None
+
+
+def test_branch_nested():
+    p = parse(
+        "import x A; import y B;"
+        " BRANCH(A) { BRANCH(B) { print both; } }"
+    )
+    outer = p.statements[2]
+    assert isinstance(outer, BranchStmt)
+    inner = outer.then_body[0]
+    assert isinstance(inner, BranchStmt)
+    assert inner.var == "B"
+
+
+def test_branch_unclosed_then_block():
+    with pytest.raises(ParseError, match="end of input"):
+        parse("import x V; BRANCH(V) { print never;")
+
+
+def test_clone_statement():
+    p = parse("import x V; CLONE V as W;")
+    s = p.statements[1]
+    assert isinstance(s, CloneStmt)
+    assert s.source == "V" and s.target == "W"
+
+
+def test_clone_case_insensitive():
+    p = parse("import x V; clone V as W;")
+    assert isinstance(p.statements[1], CloneStmt)
+
+
+def test_clone_requires_as():
+    with pytest.raises(ParseError):
+        parse("import x V; CLONE V W;")
+
+
+def test_else_alone_is_reserved():
+    # 'else' is a keyword, so it can't be used as a variable name.
+    with pytest.raises(ParseError):
+        parse("import x else;")

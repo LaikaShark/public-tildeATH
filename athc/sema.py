@@ -2,6 +2,8 @@ from pathlib import Path
 
 from athc.ast import (
     AthLoop,
+    BranchStmt,
+    CloneStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -137,6 +139,15 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             _check_read(s.source, defined, s)
             _check_read(s.start, defined, s)
             _check_read(s.end, defined, s)
+            _check_write(s.target, s)
+            defined.add(s.target)
+        elif isinstance(s, BranchStmt):
+            _check_read(s.var, defined, s)
+            _walk(s.then_body, defined, fnames, local_builtins)
+            if s.else_body is not None:
+                _walk(s.else_body, defined, fnames, local_builtins)
+        elif isinstance(s, CloneStmt):
+            _check_read(s.source, defined, s)
             _check_write(s.target, s)
             defined.add(s.target)
         else:

@@ -147,6 +147,28 @@ class SliceStmt:
     col: int
 
 
+@dataclass
+class BranchStmt:
+    """BRANCH(V) { then } [ELSE] { else }; — one-shot dispatch (§4.4.17).
+
+    Consumes V at the end of dispatch."""
+    var: str
+    inverted: bool
+    then_body: list = field(default_factory=list)
+    else_body: list | None = None  # None = no else clause
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class CloneStmt:
+    """CLONE V as W; — shallow snapshot, independent identity (§4.4.18)."""
+    source: str
+    target: str
+    line: int
+    col: int
+
+
 Stmt = Union[
     ImportStmt,
     DecomposeStmt,
@@ -164,6 +186,8 @@ Stmt = Union[
     WatchStmt,
     SubscriptStmt,
     SliceStmt,
+    BranchStmt,
+    CloneStmt,
 ]
 
 

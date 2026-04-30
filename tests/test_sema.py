@@ -309,3 +309,36 @@ def test_slice_start_must_be_in_scope():
 def test_slice_end_must_be_in_scope():
     with pytest.raises(SemaError, match="J.*not in scope"):
         check("import x S; import number 1 as I; S[I..J] R;")
+
+
+# --- BRANCH / CLONE ---
+
+
+def test_branch_var_must_be_in_scope():
+    with pytest.raises(SemaError, match="V.*not in scope"):
+        check("BRANCH(V) { print yes; }")
+
+
+def test_branch_bodies_share_scope():
+    # Variables defined in the then-body are visible after the branch —
+    # sema is currently flat per-activation (§9 open question).
+    check("import x V; BRANCH(V) { import y W; } W.DIE();")
+
+
+def test_branch_NULL_in_condition_is_fine():
+    # NULL is readable; BRANCH(NULL) just runs the else (dead) branch.
+    check("BRANCH(NULL) { print never; } ELSE { print always; }")
+
+
+def test_clone_writes_target():
+    check("import x V; CLONE V as W; W.DIE();")
+
+
+def test_clone_source_must_be_in_scope():
+    with pytest.raises(SemaError, match="V.*not in scope"):
+        check("CLONE V as W;")
+
+
+def test_clone_target_cannot_be_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check("import x V; CLONE V as NULL;")

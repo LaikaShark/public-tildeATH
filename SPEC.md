@@ -51,7 +51,8 @@ Comments:
 
 ```
 KEYWORD     := 'import' | 'importf' | 'as' | 'watch' | 'BIFURCATE'
-              | 'print' | 'INPUT' | 'PRINT2' | 'EXECUTE'   [matched case-insensitively]
+              | 'print' | 'INPUT' | 'PRINT2' | 'EXECUTE'
+              | 'BRANCH' | 'ELSE' | 'CLONE'                [matched case-insensitively]
 LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
@@ -89,7 +90,7 @@ variables.
 identifier):
 
 - Active: `import`, `importf`, `as`, `watch`, `BIFURCATE`, `print`,
-  `INPUT`, `PRINT2`, `EXECUTE`.
+  `INPUT`, `PRINT2`, `EXECUTE`, `BRANCH`, `ELSE`, `CLONE`.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
 they follow the case-sensitive identifier rule. The names `this`, `Null`,
@@ -146,7 +147,9 @@ statement     = import-stmt
               | print2-stmt
               | funcall-stmt
               | subscript-stmt
-              | slice-stmt ;
+              | slice-stmt
+              | branch-stmt
+              | clone-stmt ;
 
 import-stmt   = import-concept
               | import-builtin
@@ -209,7 +212,22 @@ subscript-stmt
               = IDENT '[' IDENT ']' IDENT ';' ;                (* S[N] X; *)
 
 slice-stmt    = IDENT '[' IDENT '..' IDENT ']' IDENT ';' ;     (* S[I..J] X; *)
-```
+
+branch-stmt   = 'BRANCH' '(' [ '!' ] IDENT ')'
+                '{' statement* '}'
+                [ [ 'ELSE' ] '{' statement* '}' ] ;
+                (* One-shot dispatch. After whichever body runs (or after the
+                   skipped dispatch when V is dead and no else clause is
+                   present), the runtime kills V — BRANCH consumes its
+                   subject. ELSE is optional sugar before the second block;
+                   `BRANCH(V) { } { }` and `BRANCH(V) { } ELSE { }` parse
+                   identically. *)
+
+clone-stmt    = 'CLONE' IDENT 'as' IDENT ';' ;
+                (* Shallow snapshot. The clone copies V's alive bit, halves,
+                   payload, and lifetime extensions, but not V's dep chain.
+                   Independent identity — killing one does not kill the
+                   other. *)
 
 Notes:
 
@@ -658,6 +676,83 @@ regardless of what terminated `S`.
 
 `VAR` must not be `NULL`.
 
+#### 4.4.17 `BRANCH(V) { ... } [ELSE] { ... }` (one-shot dispatch)
+
+A non-looping conditional that dispatches on `V`'s liveness exactly
+once, then consumes `V`.
+
+1. Read `V`. Compute `alive = ath_is_alive(V)` (or its negation, if
+   the `!` inversion form is used).
+2. If `alive` is true, execute the first body. Otherwise, execute the
+   else body if one is present; if not, execute nothing.
+3. After dispatch (whichever body ran, or after no body if none was
+   selected), re-read `V` and invoke `ath_die(V)`.
+
+`BRANCH` is the direct sugar over the canonical if-then idiom:
+
+```
+~ATH(V) { S* ; V.DIE(); }
+```
+
+extended with an optional else block. It is **one-shot**: the
+condition is evaluated exactly once, unlike `~ATH` which re-evaluates
+every iteration.
+
+**V is consumed.** After a `BRANCH`, `V` is guaranteed dead — whether
+the alive body ran (the explicit kill happens) or the dead body ran
+(`V` was already dead, the kill is a no-op). This eliminates the
+"was V killed?" ambiguity of the `~ATH(V) { ...; V.DIE(); }` idiom
+where the kill is buried in the body.
+
+To check `V` without losing it, use `CLONE V as VCHECK;` (§4.4.18)
+and `BRANCH(VCHECK) { ... }` on the clone. `V` is then untouched.
+
+If the body rebinds `V` (e.g. `BIFURCATE [NULL, NULL] V;`), the
+post-dispatch `ath_die` reads the *current* binding and kills that
+object. Same semantics as a literal `V.DIE();` at the end of the
+body.
+
+`THIS.DIE(...)` inside a body terminates the function as usual
+(§4.4.5); the post-dispatch kill never runs in that case.
+
+The inverted form `BRANCH(!V)` swaps which body runs (the first body
+runs when `V` is dead, the else body when `V` is alive). `V` is
+still consumed after dispatch.
+
+#### 4.4.18 `CLONE V as W;`
+
+Allocates a fresh object `W` that is a shallow snapshot of `V` at
+clone time. `W` and `V` have **independent identity** — killing one
+has no effect on the other.
+
+`W` copies, field by field, from `V`:
+
+- `alive` — if `V` is dead at clone time, `W` is born dead.
+- `left`, `right` — pointer-copied (shared with `V`'s halves; the
+  cons-list structure beneath is not deep-copied).
+- `has_value`, `value` — full int64 payload copy.
+- `deadline_s`, `watch_path`, `is_oneshot`, `awaiting_signal` — all
+  lifetime extensions are copied, so the clone has the same
+  intrinsic mortality as the original. A clone of a `mayfly` dies
+  at the same deadline; a clone of a file-watcher watches the same
+  path; a clone of a `once` object is itself a one-shot.
+
+`W` does **not** copy `V`'s `dep1`/`dep2`. Inherited mortality
+(`ath_inherit_lifetime` from upstream operands) is *not* preserved
+across the clone — `W` is a snapshot at the moment of cloning,
+independent of what `V` was tracking. Killing one of `V`'s dep
+sources will kill `V` but not `W`.
+
+`CLONE` is the canonical primitive for **non-destructive checking**:
+
+```
+CLONE V as VCHECK;
+BRANCH(VCHECK) { ... } { ... }   // VCHECK is consumed; V is untouched
+```
+
+`W` must not be `NULL`. Cloning `NULL` yields a fresh born-dead
+object (alive=0, no payload, no halves).
+
 ### 4.5 Program termination
 
 A program terminates when its main activation returns. This happens when:
@@ -979,6 +1074,10 @@ ath_obj *ath_length(ath_obj *s, ath_obj *unused);
 ath_obj *ath_concat(ath_obj *a, ath_obj *b);
 ath_obj *ath_index(ath_obj *s, ath_obj *n);
 ath_obj *ath_slice(ath_obj *s, ath_obj *range);
+
+/* Shallow clone for non-destructive checking (SPEC §4.4.18). Copies all
+ * fields of v except dep1/dep2, which are zeroed. */
+ath_obj *ath_clone(ath_obj *v);
 
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));
