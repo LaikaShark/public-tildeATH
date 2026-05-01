@@ -186,6 +186,44 @@ class TimerStmt:
     col: int
 
 
+@dataclass
+class ReadStmt:
+    """read "PATH" as VAR; — slurp file into a string-cons-list owning the
+    file (§4.4.21). Explicit .DIE() or BRANCH consumption deletes it."""
+    path: str
+    target: str
+    line: int
+    col: int
+
+
+@dataclass
+class WriteStmt:
+    """write SRC to "PATH" [as VERDICT]; — truncate-and-write (§4.4.22)."""
+    source: str
+    path: str
+    verdict: str | None      # None when the 'as' clause is omitted
+    line: int
+    col: int
+
+
+@dataclass
+class AppendStmt:
+    """append SRC to "PATH" [as VERDICT]; — like write but appends (§4.4.23)."""
+    source: str
+    path: str
+    verdict: str | None
+    line: int
+    col: int
+
+
+@dataclass
+class CloseStmt:
+    """close VAR; — disown the file (if owned) and kill VAR (§4.4.24)."""
+    target: str
+    line: int
+    col: int
+
+
 Stmt = Union[
     ImportStmt,
     DecomposeStmt,
@@ -207,6 +245,10 @@ Stmt = Union[
     CloneStmt,
     SleepStmt,
     TimerStmt,
+    ReadStmt,
+    WriteStmt,
+    AppendStmt,
+    CloseStmt,
 ]
 
 

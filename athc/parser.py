@@ -1,7 +1,9 @@
 from athc.ast import (
+    AppendStmt,
     AthLoop,
     BranchStmt,
     CloneStmt,
+    CloseStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -15,11 +17,13 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    ReadStmt,
     SleepStmt,
     SliceStmt,
     SubscriptStmt,
     TimerStmt,
     WatchStmt,
+    WriteStmt,
 )
 from athc.lexer import Token, TokenKind, tokenize
 
@@ -87,6 +91,14 @@ class Parser:
             return self._parse_sleep()
         if tok.kind is TokenKind.KW_TIMER:
             return self._parse_timer()
+        if tok.kind is TokenKind.KW_READ:
+            return self._parse_read()
+        if tok.kind is TokenKind.KW_WRITE:
+            return self._parse_write_or_append(append=False)
+        if tok.kind is TokenKind.KW_APPEND:
+            return self._parse_write_or_append(append=True)
+        if tok.kind is TokenKind.KW_CLOSE:
+            return self._parse_close()
         if tok.kind is TokenKind.IDENT:
             return self._parse_die_or_funcall()
         if tok.kind is TokenKind.RESERVED:
@@ -313,6 +325,61 @@ class Parser:
         self._expect(TokenKind.SEMI)
         return TimerStmt(
             duration=dur.value,
+            target=tgt.value,
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_read(self) -> ReadStmt:
+        kw = self._expect(TokenKind.KW_READ)
+        path = self._expect(TokenKind.STRING)
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return ReadStmt(
+            path=path.value,
+            target=tgt.value,
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_write_or_append(self, *, append: bool):
+        kw = self._expect(
+            TokenKind.KW_APPEND if append else TokenKind.KW_WRITE
+        )
+        src = self._expect(TokenKind.IDENT)
+        # 'to' is a contextual marker: an IDENT whose value matches "to"
+        # (case-insensitive). Anywhere else it's a normal identifier.
+        to_tok = self._peek()
+        if to_tok.kind is not TokenKind.IDENT or to_tok.value.lower() != "to":
+            raise ParseError(
+                f"expected 'to' between source and destination; got "
+                f"{to_tok.kind.name} ({to_tok.value!r})",
+                to_tok.line,
+                to_tok.col,
+            )
+        self._advance()
+        path = self._expect(TokenKind.STRING)
+        verdict: str | None = None
+        if self._peek().kind is TokenKind.KW_AS:
+            self._advance()
+            verdict_tok = self._expect(TokenKind.IDENT)
+            verdict = verdict_tok.value
+        self._expect(TokenKind.SEMI)
+        cls = AppendStmt if append else WriteStmt
+        return cls(
+            source=src.value,
+            path=path.value,
+            verdict=verdict,
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_close(self) -> CloseStmt:
+        kw = self._expect(TokenKind.KW_CLOSE)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return CloseStmt(
             target=tgt.value,
             line=kw.line,
             col=kw.col,

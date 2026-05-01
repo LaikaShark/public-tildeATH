@@ -369,3 +369,39 @@ def test_timer_duration_must_be_in_scope():
 def test_timer_target_cannot_be_NULL():
     with pytest.raises(SemaError, match="NULL.*read-only"):
         check("import number 100 as N; TIMER N as NULL;")
+
+
+# --- read / write / append / close ---
+
+
+def test_read_introduces_target():
+    check('read "/tmp/foo" as S; S.DIE();')
+
+
+def test_read_target_cannot_be_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check('read "/tmp/foo" as NULL;')
+
+
+def test_write_source_must_be_in_scope():
+    with pytest.raises(SemaError, match="S.*not in scope"):
+        check('write S to "/tmp/out";')
+
+
+def test_write_optional_verdict_writes_target():
+    check('import x S; write S to "/tmp/out" as OK; OK.DIE();')
+
+
+def test_write_verdict_cannot_be_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check('import x S; write S to "/tmp/out" as NULL;')
+
+
+def test_append_source_must_be_in_scope():
+    with pytest.raises(SemaError, match="S.*not in scope"):
+        check('append S to "/tmp/log";')
+
+
+def test_close_target_must_be_in_scope():
+    with pytest.raises(SemaError, match="S.*not in scope"):
+        check("close S;")

@@ -3,9 +3,11 @@ from pathlib import Path
 import pytest
 
 from athc.ast import (
+    AppendStmt,
     AthLoop,
     BranchStmt,
     CloneStmt,
+    CloseStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -19,11 +21,13 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    ReadStmt,
     SleepStmt,
     SliceStmt,
     SubscriptStmt,
     TimerStmt,
     WatchStmt,
+    WriteStmt,
 )
 from athc.parser import ParseError, parse
 
@@ -554,3 +558,65 @@ def test_timer_case_insensitive():
 def test_timer_requires_as():
     with pytest.raises(ParseError):
         parse("import number 100 as N; TIMER N T;")
+
+
+# --- read / write / append / close ---
+
+
+def test_read_statement():
+    p = parse('read "foo.txt" as S;')
+    s = p.statements[0]
+    assert isinstance(s, ReadStmt)
+    assert s.path == "foo.txt" and s.target == "S"
+
+
+def test_read_case_insensitive():
+    p = parse('READ "foo.txt" as S;')
+    assert isinstance(p.statements[0], ReadStmt)
+
+
+def test_write_without_verdict():
+    p = parse('import x S; write S to "out.txt";')
+    s = p.statements[1]
+    assert isinstance(s, WriteStmt)
+    assert s.source == "S" and s.path == "out.txt"
+    assert s.verdict is None
+
+
+def test_write_with_verdict():
+    p = parse('import x S; write S to "out.txt" as OK;')
+    s = p.statements[1]
+    assert isinstance(s, WriteStmt)
+    assert s.verdict == "OK"
+
+
+def test_append_with_verdict():
+    p = parse('import x S; append S to "log.txt" as OK;')
+    s = p.statements[1]
+    assert isinstance(s, AppendStmt)
+    assert s.source == "S" and s.path == "log.txt" and s.verdict == "OK"
+
+
+def test_write_requires_to_marker():
+    with pytest.raises(ParseError, match="'to'"):
+        parse('import x S; write S "out.txt";')
+
+
+def test_to_is_contextual_not_reserved():
+    # 'to' must still be usable as an ordinary identifier name.
+    p = parse("import x to;")
+    s = p.statements[0]
+    assert isinstance(s, ImportStmt)
+    assert s.var == "to"
+
+
+def test_close_statement():
+    p = parse("import x S; close S;")
+    s = p.statements[1]
+    assert isinstance(s, CloseStmt)
+    assert s.target == "S"
+
+
+def test_close_case_insensitive():
+    p = parse("import x S; CLOSE S;")
+    assert isinstance(p.statements[1], CloseStmt)

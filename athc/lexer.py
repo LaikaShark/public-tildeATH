@@ -17,6 +17,10 @@ class TokenKind(Enum):
     KW_CLONE = auto()
     KW_SLEEP = auto()
     KW_TIMER = auto()
+    KW_READ = auto()
+    KW_WRITE = auto()
+    KW_APPEND = auto()
+    KW_CLOSE = auto()
     ATH = auto()
     DIE = auto()
     IDENT = auto()
@@ -70,6 +74,10 @@ KEYWORDS = {
     "clone": TokenKind.KW_CLONE,
     "sleep": TokenKind.KW_SLEEP,
     "timer": TokenKind.KW_TIMER,
+    "read": TokenKind.KW_READ,
+    "write": TokenKind.KW_WRITE,
+    "append": TokenKind.KW_APPEND,
+    "close": TokenKind.KW_CLOSE,
 }
 
 RESERVED_V1: set[str] = set()

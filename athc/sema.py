@@ -1,9 +1,11 @@
 from pathlib import Path
 
 from athc.ast import (
+    AppendStmt,
     AthLoop,
     BranchStmt,
     CloneStmt,
+    CloseStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -17,11 +19,13 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    ReadStmt,
     SleepStmt,
     SliceStmt,
     SubscriptStmt,
     TimerStmt,
     WatchStmt,
+    WriteStmt,
 )
 
 
@@ -158,6 +162,16 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             _check_read(s.duration, defined, s)
             _check_write(s.target, s)
             defined.add(s.target)
+        elif isinstance(s, ReadStmt):
+            _check_write(s.target, s)
+            defined.add(s.target)
+        elif isinstance(s, (WriteStmt, AppendStmt)):
+            _check_read(s.source, defined, s)
+            if s.verdict is not None:
+                _check_write(s.verdict, s)
+                defined.add(s.verdict)
+        elif isinstance(s, CloseStmt):
+            _check_read(s.target, defined, s)
         else:
             raise SemaError(
                 f"unknown statement {type(s).__name__}",

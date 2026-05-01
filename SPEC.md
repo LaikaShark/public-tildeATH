@@ -53,7 +53,8 @@ Comments:
 KEYWORD     := 'import' | 'importf' | 'as' | 'watch' | 'BIFURCATE'
               | 'print' | 'INPUT' | 'PRINT2' | 'EXECUTE'
               | 'BRANCH' | 'ELSE' | 'CLONE'
-              | 'sleep' | 'TIMER'                          [matched case-insensitively]
+              | 'sleep' | 'TIMER'
+              | 'read' | 'write' | 'append' | 'close'      [matched case-insensitively]
 LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
@@ -62,12 +63,18 @@ STRING      := '"' (any char except '"')* '"'  [no escapes in v1]
 PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | ',' | ';' | '!'
 ```
 
-**Contextual markers.** Two bare identifiers (`builtin`, `number`) are
-recognized as contextual markers only when they appear as the **second
-token after `import`** (§3, §4.4.13, §4.4.14). Elsewhere they are
-ordinary identifiers and may be used as variable names. They are matched
-case-insensitively in that position. This is the same pattern as
-`signal` after `watch` (§4.4.12).
+**Contextual markers.** Three bare identifiers act as contextual
+markers — they look like ordinary `IDENT` tokens to the lexer but the
+parser checks for their literal value at specific positions:
+
+- `builtin` and `number` as the second token after `import` (§4.4.13,
+  §4.4.14).
+- `signal` as the second token after `watch` (§4.4.12).
+- `to` between the source ident and the destination string in
+  `write` and `append` (§4.4.22, §4.4.23).
+
+Outside those positions the words are perfectly legal variable names.
+Matching is case-insensitive in the marker position.
 
 **Angle brackets.** `<` and `>` are tokenized as PUNCT but currently only
 appear in the search-path form of `importf` (§4.4.9). They have no other
@@ -92,7 +99,7 @@ identifier):
 
 - Active: `import`, `importf`, `as`, `watch`, `BIFURCATE`, `print`,
   `INPUT`, `PRINT2`, `EXECUTE`, `BRANCH`, `ELSE`, `CLONE`, `sleep`,
-  `TIMER`.
+  `TIMER`, `read`, `write`, `append`, `close`.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
 they follow the case-sensitive identifier rule. The names `this`, `Null`,
@@ -153,7 +160,11 @@ statement     = import-stmt
               | branch-stmt
               | clone-stmt
               | sleep-stmt
-              | timer-stmt ;
+              | timer-stmt
+              | read-stmt
+              | write-stmt
+              | append-stmt
+              | close-stmt ;
 
 import-stmt   = import-concept
               | import-builtin
@@ -243,6 +254,24 @@ timer-stmt    = 'TIMER' IDENT 'as' IDENT ';' ;
                    deadline of IDENT.value milliseconds from now. The
                    duration is a parameter, not a dependency — killing it
                    later does not kill the timer. See §4.4.20. *)
+
+read-stmt     = 'read' STRING 'as' IDENT ';' ;
+                (* Slurp the file as a string-cons-list bound to IDENT.
+                   The result *owns* the file: explicit .DIE() or BRANCH
+                   consumption deletes it. See §4.4.21. *)
+
+write-stmt    = 'write' IDENT 'to' STRING [ 'as' IDENT ] ';' ;
+                (* Truncate-and-write the source string to the path.
+                   The optional 'as' clause binds a verdict object alive
+                   iff the write succeeded. 'to' is a contextual marker.
+                   See §4.4.22. *)
+
+append-stmt   = 'append' IDENT 'to' STRING [ 'as' IDENT ] ';' ;
+                (* Like write-stmt but appends. See §4.4.23. *)
+
+close-stmt    = 'close' IDENT ';' ;
+                (* Disown the file (clear owns_path) and kill IDENT. The
+                   file persists; the object is dead. See §4.4.24. *)
 
 Notes:
 
@@ -430,6 +459,15 @@ With an `EXECUTE` postfix, the construct terminates with `;`. Without
 4. Otherwise: set `o.alive = false`. This affects only `o` itself — its
    halves, any composites it is part of, and any other aliases of `o`
    continue to observe `o` as dead, but no other object is modified.
+5. **If `o` was alive *and* `o.owns_path` is set *and* `o.watch_path`
+   is not NULL**, the runtime calls `unlink(o.watch_path)` *before*
+   flipping `o.alive` to false. `unlink` errors are silently ignored
+   (a file already deleted externally is fine). See §4.7 ext 5 and
+   §4.7.1 for the rationale and the full direct-kill rule. This is
+   the only path in the runtime that deletes files; passive deaths
+   via deadline expiration, dep propagation, watch-path observation,
+   one-shot consumption, or signal arrival do not unlink. `close VAR;`
+   (§4.4.24) sidesteps step 5 by clearing `owns_path` first.
 
 Step 1 happens before step 3, so `THIS.DIE(THIS);` returns the activation's
 own THIS object — the read of `THIS` is well-defined because the kill
@@ -815,6 +853,87 @@ TIMER FIVE_SEC as T;
 print timed out;
 ```
 
+#### 4.4.21 `read "PATH" as VAR;`
+
+Slurp the entire file at `PATH` into a string-cons-list (§4.6) and
+bind it to `VAR`.
+
+1. The runtime opens `PATH` for reading (relative to the program's
+   current working directory).
+2. On any failure — file does not exist, permission denied, I/O
+   error during read — `VAR` is bound to a born-dead object.
+3. On success, the file's bytes are turned into a cons-list of
+   character atoms (§4.6). The head of the cons-list is a freshly
+   allocated wrapper (not subject to intern-mode hash-consing, even
+   when `--compose intern` is selected) carrying:
+   - `watch_path` set to a copy of `PATH`,
+   - **`owns_path` set to 1** (§4.7),
+   - the file's bytes as its right-spine.
+4. `VAR` is bound to that wrapper.
+
+The wrapper observes the file's continued existence the same way
+`watch "PATH" as F;` does (§4.4.12): every `ath_is_alive(VAR)` call
+runs `access(PATH, F_OK)` and flips the wrapper to dead if the file
+is gone. **Additionally**, because `owns_path` is set, killing the
+wrapper via explicit `.DIE()` or BRANCH consumption (§4.4.18)
+**deletes the file** (`unlink(PATH)`); see §4.7 for the precise
+rule. Death triggered by the watch-path check itself does *not*
+attempt to delete (the file is already gone).
+
+To release the file without deleting it, use `close VAR;`
+(§4.4.24).
+
+The head's `owns_path` is not propagated by `BIFURCATE` composition
+or by `CLONE` (§4.4.18). Derived strings (via subscript,
+range subscript, or `CONCAT`) inherit only the watch_path-driven
+lifetime through the existing dep machinery — they observe the file
+but do not own it.
+
+`VAR` must not be `NULL` (§4.2).
+
+#### 4.4.22 `write SRC to "PATH" [as VERDICT];`
+
+Open `PATH` for writing (truncating any existing file), walk `SRC`
+as a string per §4.6, write each character atom's byte, then close
+the file.
+
+1. Read `SRC`. If `SRC` is `NULL` or dead, the file is created and
+   left empty.
+2. Walk `SRC`'s right-spine until reaching `NULL`, a dead cell, or a
+   non-character left-half. Each character atom encountered is
+   written verbatim. The walk follows the same termination rules as
+   `PRINT2` (§4.4.8).
+3. If the `as VERDICT` clause is present, bind `VERDICT` to a fresh
+   object that is alive iff every step above succeeded (open, all
+   writes, close). On any I/O failure `VERDICT` is born dead.
+4. Without the `as` clause, the verdict is allocated and discarded.
+
+`to` is a contextual keyword (§2.2). `VERDICT` must not be `NULL`
+when the clause is present.
+
+`write` is fire-and-forget by default — no return value, no error
+propagation. Capture the verdict if you need to react to failure.
+
+#### 4.4.23 `append SRC to "PATH" [as VERDICT];`
+
+Identical to `write` (§4.4.22) except the file is opened in append
+mode: if `PATH` exists, the new bytes are added after the existing
+contents; if not, the file is created. Failure semantics and the
+optional verdict clause are the same.
+
+#### 4.4.24 `close VAR;`
+
+Release a file-owning object without deleting the file.
+
+1. Read `VAR`. If `NULL` or already dead, this is a no-op.
+2. Clear `VAR`'s `owns_path` flag (so the upcoming kill will not
+   trigger `unlink`).
+3. Set `VAR`'s `alive` field to false.
+
+`close` is the canonical primitive for "I'm done reading this file
+but want it to stay." On objects without `owns_path` set, `close` is
+indistinguishable from `VAR.DIE();` — it just kills the object.
+
 ### 4.5 Program termination
 
 A program terminates when its main activation returns. This happens when:
@@ -853,7 +972,7 @@ The encoding is deliberately the same as drocta `~ATH`'s `getStrObj` /
 
 ### 4.7 Lifetime extensions
 
-Every object carries four optional lifetime conditions in addition to
+Every object carries five optional lifetime conditions in addition to
 its explicit `.DIE`-driven mortality:
 
 1. **Deadline.** A monotonic-clock timestamp (in seconds since some
@@ -875,6 +994,17 @@ its explicit `.DIE`-driven mortality:
    false; every subsequent observation returns dead. Combined with the
    `~ATH` loop's "re-check before every iteration" rule, this causes
    the body to execute exactly once.
+5. **Path-ownership flag (`owns_path`).** When set in combination with
+   `watch_path`, the object is the **owner** of the underlying file.
+   An explicit `ath_die` call on a still-alive owner triggers
+   `unlink(watch_path)` *before* the alive bit is cleared. Passive
+   deaths via the other extensions (deadline expiration,
+   dep-propagation from §4.8.1, watch-path observation, one-shot
+   consumption, signal arrival) do **not** trigger unlink — the
+   ownership semantics only fire on direct kills. Set exclusively by
+   `read "PATH" as VAR;` (§4.4.21). Not copied by `CLONE` (§4.4.18),
+   not propagated by `BIFURCATE` composition, not installed by
+   `watch "PATH" as VAR;` (which is observation-only).
 
 These conditions are independent of the object's `alive` field — they
 are *additional* ways an object can be observed dead. An object with
@@ -884,13 +1014,41 @@ explicitly killed). An object may have any combination set.
 `import NAME... VAR;` sets the deadline when `NAME` matches a
 range-based library entry (§5.3), or sets the one-shot flag when
 `NAME` matches the special entry `once`. `watch "PATH" as VAR;` sets
-the watched path. There are no other surface forms that set these —
-they are entry-point allocations, not mutators.
+the watched path (only). `read "PATH" as VAR;` (§4.4.21) sets the
+watched path *and* the ownership flag. `TIMER N as T;` (§4.4.20)
+sets the deadline. There are no other surface forms that set these
+— they are entry-point allocations, not mutators.
 
 The lifetime sampling is **uniform** over the library entry's range,
 seeded by the `ATH_SEED` environment variable if set (decimal unsigned
 integer), or by the wall clock otherwise. Setting `ATH_SEED` makes
 library-sampled programs deterministic for testing.
+
+### 4.7.1 Direct-kill rules and the unlink trigger
+
+When `V.DIE();` runs on a still-alive `V` (§4.4.5), or when `BRANCH`
+consumes a still-alive `V` (§4.4.17), the runtime invokes
+`ath_die(V)`. The rule is:
+
+```
+if V is alive and V.owns_path is set and V.watch_path != NULL:
+    unlink(V.watch_path)                # errors silently ignored
+V.alive = false
+```
+
+This is the *only* place `unlink` is called by the runtime. All
+other deaths — deadline expiration, dep propagation, one-shot
+observation, watch-path detection, signal handling — flip the alive
+bit without touching the filesystem.
+
+`close VAR;` (§4.4.24) sidesteps this by clearing `owns_path` before
+calling the kill primitive, so the resulting `unlink` check fails
+and the file persists.
+
+**Warning.** Because `BRANCH(V)` always consumes its subject (§4.4.17),
+running a read-result through `BRANCH` deletes the file. If you want
+to *check* a read-result without releasing the file, `CLONE` it
+first (§4.4.18) — clones never carry `owns_path`.
 
 ### 4.8 Numeric payload and built-in arithmetic
 
@@ -1105,6 +1263,7 @@ typedef struct ath_obj {
     const char    *watch_path;
     int            is_oneshot;
     int            awaiting_signal;
+    int            owns_path;   /* §4.7 ext 5; only set by read */
 
     /* §4.8 numeric payload */
     int            has_value;
@@ -1181,6 +1340,17 @@ void     ath_sleep_ms(ath_obj *n);
 ath_obj *ath_alloc_timer_ms(ath_obj *n);
 ath_obj *ath_now(ath_obj *a, ath_obj *b);
 ath_obj *ath_random_range(ath_obj *lo, ath_obj *hi);
+
+/* File I/O (SPEC §4.4.21-24, §4.7 ext 5). ath_alloc_read_file slurps the
+ * file into a cons-list whose head is a non-interned wrapper carrying
+ * watch_path and owns_path=1. ath_write_file/ath_append_file return a
+ * fresh verdict object. ath_close clears owns_path before killing v so
+ * the file is not unlinked. ath_die is modified to unlink the file when
+ * a still-alive owner is killed via explicit .DIE() or BRANCH. */
+ath_obj *ath_alloc_read_file(const char *path);
+ath_obj *ath_write_file(ath_obj *s, const char *path);
+ath_obj *ath_append_file(ath_obj *s, const char *path);
+void     ath_close(ath_obj *v);
 
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));
