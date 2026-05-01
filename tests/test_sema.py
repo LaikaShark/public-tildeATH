@@ -342,3 +342,30 @@ def test_clone_source_must_be_in_scope():
 def test_clone_target_cannot_be_NULL():
     with pytest.raises(SemaError, match="NULL.*read-only"):
         check("import x V; CLONE V as NULL;")
+
+
+# --- sleep / TIMER ---
+
+
+def test_sleep_duration_must_be_in_scope():
+    with pytest.raises(SemaError, match="N.*not in scope"):
+        check("sleep N;")
+
+
+def test_sleep_duration_can_be_NULL():
+    # NULL is readable; runtime treats it as a no-op.
+    check("sleep NULL;")
+
+
+def test_timer_writes_target():
+    check("import number 100 as N; TIMER N as T; T.DIE();")
+
+
+def test_timer_duration_must_be_in_scope():
+    with pytest.raises(SemaError, match="N.*not in scope"):
+        check("TIMER N as T;")
+
+
+def test_timer_target_cannot_be_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check("import number 100 as N; TIMER N as NULL;")

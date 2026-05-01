@@ -19,8 +19,10 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    SleepStmt,
     SliceStmt,
     SubscriptStmt,
+    TimerStmt,
     WatchStmt,
 )
 from athc.parser import ParseError, parse
@@ -515,3 +517,40 @@ def test_else_alone_is_reserved():
     # 'else' is a keyword, so it can't be used as a variable name.
     with pytest.raises(ParseError):
         parse("import x else;")
+
+
+# --- sleep / TIMER ---
+
+
+def test_sleep_statement():
+    p = parse("import number 100 as N; sleep N;")
+    s = p.statements[1]
+    assert isinstance(s, SleepStmt)
+    assert s.duration == "N"
+
+
+def test_sleep_case_insensitive():
+    p = parse("import number 100 as N; SLEEP N;")
+    assert isinstance(p.statements[1], SleepStmt)
+
+
+def test_sleep_requires_identifier():
+    with pytest.raises(ParseError):
+        parse("sleep 100;")  # raw INT not allowed; must be a bound name
+
+
+def test_timer_statement():
+    p = parse("import number 100 as N; TIMER N as T;")
+    s = p.statements[1]
+    assert isinstance(s, TimerStmt)
+    assert s.duration == "N" and s.target == "T"
+
+
+def test_timer_case_insensitive():
+    p = parse("import number 100 as N; timer N as T;")
+    assert isinstance(p.statements[1], TimerStmt)
+
+
+def test_timer_requires_as():
+    with pytest.raises(ParseError):
+        parse("import number 100 as N; TIMER N T;")

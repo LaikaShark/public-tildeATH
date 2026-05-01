@@ -15,6 +15,8 @@ class TokenKind(Enum):
     KW_BRANCH = auto()
     KW_ELSE = auto()
     KW_CLONE = auto()
+    KW_SLEEP = auto()
+    KW_TIMER = auto()
     ATH = auto()
     DIE = auto()
     IDENT = auto()
@@ -66,6 +68,8 @@ KEYWORDS = {
     "branch": TokenKind.KW_BRANCH,
     "else": TokenKind.KW_ELSE,
     "clone": TokenKind.KW_CLONE,
+    "sleep": TokenKind.KW_SLEEP,
+    "timer": TokenKind.KW_TIMER,
 }
 
 RESERVED_V1: set[str] = set()

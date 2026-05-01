@@ -52,7 +52,8 @@ Comments:
 ```
 KEYWORD     := 'import' | 'importf' | 'as' | 'watch' | 'BIFURCATE'
               | 'print' | 'INPUT' | 'PRINT2' | 'EXECUTE'
-              | 'BRANCH' | 'ELSE' | 'CLONE'                [matched case-insensitively]
+              | 'BRANCH' | 'ELSE' | 'CLONE'
+              | 'sleep' | 'TIMER'                          [matched case-insensitively]
 LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
@@ -90,7 +91,8 @@ variables.
 identifier):
 
 - Active: `import`, `importf`, `as`, `watch`, `BIFURCATE`, `print`,
-  `INPUT`, `PRINT2`, `EXECUTE`, `BRANCH`, `ELSE`, `CLONE`.
+  `INPUT`, `PRINT2`, `EXECUTE`, `BRANCH`, `ELSE`, `CLONE`, `sleep`,
+  `TIMER`.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
 they follow the case-sensitive identifier rule. The names `this`, `Null`,
@@ -149,7 +151,9 @@ statement     = import-stmt
               | subscript-stmt
               | slice-stmt
               | branch-stmt
-              | clone-stmt ;
+              | clone-stmt
+              | sleep-stmt
+              | timer-stmt ;
 
 import-stmt   = import-concept
               | import-builtin
@@ -228,6 +232,17 @@ clone-stmt    = 'CLONE' IDENT 'as' IDENT ';' ;
                    payload, and lifetime extensions, but not V's dep chain.
                    Independent identity — killing one does not kill the
                    other. *)
+
+sleep-stmt    = 'sleep' IDENT ';' ;
+                (* Block the current activation for IDENT.value milliseconds
+                   if IDENT carries a payload and is alive; otherwise no-op.
+                   See §4.4.19. *)
+
+timer-stmt    = 'TIMER' IDENT 'as' IDENT ';' ;
+                (* Bind the second IDENT to a fresh alive object with a
+                   deadline of IDENT.value milliseconds from now. The
+                   duration is a parameter, not a dependency — killing it
+                   later does not kill the timer. See §4.4.20. *)
 
 Notes:
 
@@ -753,6 +768,53 @@ BRANCH(VCHECK) { ... } { ... }   // VCHECK is consumed; V is untouched
 `W` must not be `NULL`. Cloning `NULL` yields a fresh born-dead
 object (alive=0, no payload, no halves).
 
+#### 4.4.19 `sleep N;`
+
+Block the current activation for `N.value` milliseconds, then continue.
+
+1. Read `N`.
+2. If `N` is `NULL`, dead, lacks `has_value`, or carries a non-positive
+   value, return immediately (no-op).
+3. Otherwise, sleep for `N.value` milliseconds using a monotonic clock.
+   The implementation uses POSIX `nanosleep`; interrupted sleeps may
+   return early. The spec does not guarantee that the full duration
+   elapses, only that the runtime does not block longer than `N.value`
+   ms plus scheduler jitter.
+
+`sleep` produces no return value and does not consume `N`. The
+parameter `N` is read at the start of the call; subsequent mutations
+to `N`'s binding do not affect the in-progress sleep.
+
+#### 4.4.20 `TIMER N as T;`
+
+Bind `T` to a fresh alive object that becomes observably dead after
+`N.value` milliseconds.
+
+1. Read `N`. If `N` is `NULL`, dead, lacks `has_value`, or carries a
+   non-positive value, allocate `T` born dead and return.
+2. Otherwise, allocate a fresh alive object with
+   `deadline_s = ath_now_s() + N.value / 1000.0` (§4.7 deadline).
+3. Bind `T` to that object.
+
+`T` is **independent of `N`** — no dependency is installed. Killing
+`N` after the TIMER call does not affect `T`. This is deliberate: the
+duration is a parameter consumed at allocation time, not a lifetime
+source. Once started, the timer's death is governed solely by the
+clock.
+
+`T` must not be `NULL` (§4.2). The combination of `TIMER` and
+`~ATH(T)` gives the canonical bounded-loop idiom:
+
+```
+import number 5000 as FIVE_SEC;     // 5000 ms = 5 seconds
+TIMER FIVE_SEC as T;
+~ATH(T) {
+    print still running;
+    sleep ONE_SEC;
+}
+print timed out;
+```
+
 ### 4.5 Program termination
 
 A program terminates when its main activation returns. This happens when:
@@ -989,6 +1051,38 @@ the same conventions as the arithmetic ops (§4.8.2): unary calls
 pass `NULL` (or any name) as the ignored second argument, and the
 chain dies on the first failure.
 
+#### 4.8.5 Time and randomness built-ins
+
+Two function-call builtins read the runtime clock and the random
+source. Both are brought in via `importf <NAME> as NAME;` against
+the corresponding `stdlib/NAME.ath` shims.
+
+| Name | Surface call | Result `value` | Born dead when |
+|---|---|---|---|
+| `now` | `NOW [_, _] T;` | monotonic milliseconds since boot | never (always alive) |
+| `random` | `RANDOM [LO, HI] R;` | uniform-ish int64 in `[LO.value, HI.value)` | LO or HI dead; either lacks payload; `LO.value >= HI.value` |
+
+`NOW` ignores both operands; convention is to pass `NULL` for both.
+Each call returns a fresh number-payload object. The result is
+**not** dep-tracked against its operands — `NOW` is a clock reading,
+not a derived value.
+
+`RANDOM` produces a uniformly-distributed value over the half-open
+interval `[LO, HI)`. The random source is the global `rand()`
+seeded at runtime startup by `ATH_SEED` (if set) or by the wall
+clock (§4.7). Multiple `rand()` calls are combined to span the full
+int64 range; the distribution has minor modulo bias for very wide
+ranges but is uniform for any practical use.
+
+`RANDOM` results are **not** dep-tracked against `LO`/`HI` either —
+the bounds are parameters, not lifetime sources. Once a random
+value has been drawn, killing the bounds does not invalidate it.
+
+`NOW` is monotonic — successive calls within an activation observe
+non-decreasing values. The zero point is the system's monotonic
+clock origin (typically boot), not a wall-clock epoch. Programs that
+care only about elapsed time between two readings can subtract.
+
 ---
 
 ## 5. Runtime ABI
@@ -1078,6 +1172,15 @@ ath_obj *ath_slice(ath_obj *s, ath_obj *range);
 /* Shallow clone for non-destructive checking (SPEC §4.4.18). Copies all
  * fields of v except dep1/dep2, which are zeroed. */
 ath_obj *ath_clone(ath_obj *v);
+
+/* Time and timer (SPEC §4.4.19, §4.4.20, §4.8.5). All times are int64
+ * milliseconds. ath_sleep_ms is called directly by sleep-stmt codegen
+ * and is a no-op if n is dead/no-payload. ath_alloc_timer_ms produces
+ * an alive object with a deadline; the duration is not dep-tracked. */
+void     ath_sleep_ms(ath_obj *n);
+ath_obj *ath_alloc_timer_ms(ath_obj *n);
+ath_obj *ath_now(ath_obj *a, ath_obj *b);
+ath_obj *ath_random_range(ath_obj *lo, ath_obj *hi);
 
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));

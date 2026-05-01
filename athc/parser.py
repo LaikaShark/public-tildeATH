@@ -15,8 +15,10 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    SleepStmt,
     SliceStmt,
     SubscriptStmt,
+    TimerStmt,
     WatchStmt,
 )
 from athc.lexer import Token, TokenKind, tokenize
@@ -81,6 +83,10 @@ class Parser:
             return self._parse_branch()
         if tok.kind is TokenKind.KW_CLONE:
             return self._parse_clone()
+        if tok.kind is TokenKind.KW_SLEEP:
+            return self._parse_sleep()
+        if tok.kind is TokenKind.KW_TIMER:
+            return self._parse_timer()
         if tok.kind is TokenKind.IDENT:
             return self._parse_die_or_funcall()
         if tok.kind is TokenKind.RESERVED:
@@ -284,6 +290,29 @@ class Parser:
         self._expect(TokenKind.SEMI)
         return CloneStmt(
             source=src.value,
+            target=tgt.value,
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_sleep(self) -> SleepStmt:
+        kw = self._expect(TokenKind.KW_SLEEP)
+        dur = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return SleepStmt(
+            duration=dur.value,
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_timer(self) -> TimerStmt:
+        kw = self._expect(TokenKind.KW_TIMER)
+        dur = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return TimerStmt(
+            duration=dur.value,
             target=tgt.value,
             line=kw.line,
             col=kw.col,

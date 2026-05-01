@@ -17,8 +17,10 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    SleepStmt,
     SliceStmt,
     SubscriptStmt,
+    TimerStmt,
     WatchStmt,
 )
 
@@ -148,6 +150,12 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
                 _walk(s.else_body, defined, fnames, local_builtins)
         elif isinstance(s, CloneStmt):
             _check_read(s.source, defined, s)
+            _check_write(s.target, s)
+            defined.add(s.target)
+        elif isinstance(s, SleepStmt):
+            _check_read(s.duration, defined, s)
+        elif isinstance(s, TimerStmt):
+            _check_read(s.duration, defined, s)
             _check_write(s.target, s)
             defined.add(s.target)
         else:

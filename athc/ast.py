@@ -169,6 +169,23 @@ class CloneStmt:
     col: int
 
 
+@dataclass
+class SleepStmt:
+    """sleep N; — block for N.value ms; no-op on dead/no-payload N (§4.4.19)."""
+    duration: str
+    line: int
+    col: int
+
+
+@dataclass
+class TimerStmt:
+    """TIMER N as T; — fresh alive object with deadline = now + N ms (§4.4.20)."""
+    duration: str
+    target: str
+    line: int
+    col: int
+
+
 Stmt = Union[
     ImportStmt,
     DecomposeStmt,
@@ -188,6 +205,8 @@ Stmt = Union[
     SliceStmt,
     BranchStmt,
     CloneStmt,
+    SleepStmt,
+    TimerStmt,
 ]
 
 
