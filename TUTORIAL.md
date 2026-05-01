@@ -1221,6 +1221,143 @@ of historical interest, though it remains useful when you want the
 
 ---
 
+## 10g. Time, sleep, randomness
+
+Real programs need a clock and a way to wait. ~ATH exposes four
+primitives — two new statements (`sleep`, `TIMER`) and two builtins
+(`NOW`, `RANDOM`). All durations are **int64 milliseconds**, so a
+two-second pause is `import number 2000 as TWO_SEC;`.
+
+### 10g.1 The clock: `NOW`
+
+```ath
+importf <now> as NOW;
+NOW [NULL, NULL] T;          // T.value = monotonic ms since boot
+```
+
+`NOW` is a two-argument builtin that ignores both operands and
+returns a fresh number-payload object holding the current monotonic
+millisecond reading. Both args are passed as `NULL` by convention.
+
+The clock is monotonic — successive `NOW` calls observe
+non-decreasing values. The zero point is the system's clock origin
+(typically boot), so absolute values aren't portable across runs,
+but differences between two readings are meaningful elapsed times:
+
+```ath
+NOW [NULL, NULL] T0;
+// ... do something ...
+NOW [NULL, NULL] T1;
+SUB [T1, T0] ELAPSED_MS;
+```
+
+### 10g.2 Blocking: `sleep`
+
+```ath
+import number 250 as QUARTER_SEC;
+sleep QUARTER_SEC;           // block for 250 milliseconds
+```
+
+`sleep N;` blocks the current activation for `N.value` milliseconds.
+Dead, zero, negative, or no-payload N values are silently no-ops —
+death propagates through sleep the same way it propagates through
+everything else.
+
+`sleep` is a statement, not a function. There's no return value to
+bind, and no possibility of failure (death just means "don't sleep").
+
+### 10g.3 Time-bounded loops: `TIMER`
+
+```ath
+import number 3000 as THREE_SEC;
+import number 100  as POLL_MS;
+
+TIMER THREE_SEC as T;
+~ATH(T) {
+    print working;
+    sleep POLL_MS;
+}
+print done;
+```
+
+`TIMER N as T;` binds `T` to a fresh alive object whose `deadline_s`
+field (§4.7) is set to "now + N ms." `T` becomes observably dead
+once the clock crosses that deadline, so any `~ATH(T)` loop watching
+it exits naturally.
+
+The duration `N` is a **parameter**, not a dependency — killing
+`N` after the TIMER call has no effect on `T`. Once started, the
+timer's death is governed solely by the clock. This is the same
+"intrinsic mortality" model as the lifetime library entries from
+§10b — TIMER is just the user-controllable knob.
+
+`TIMER` with bad input (dead, zero, negative, or no-payload N)
+allocates `T` born dead. So a typo'd duration produces a loop that
+never runs, not a crash.
+
+### 10g.4 Randomness: `RANDOM`
+
+```ath
+importf <random> as RANDOM;
+import number 1 as LO;
+import number 7 as HI;       // exclusive — gives [1, 7) = 1..6
+RANDOM [LO, HI] DIE_ROLL;
+```
+
+`RANDOM [LO, HI] R;` returns a uniform-ish int64 in the half-open
+interval `[LO.value, HI.value)`. The result is a fresh number-payload
+object. Each call draws a new value; killing LO or HI later has no
+effect on the result (bounds are parameters, not dependencies).
+
+The random source is seeded at runtime startup:
+
+- `ATH_SEED=42 ./roll` — deterministic, reproducible.
+- (no env var) — seeded from the wall clock; each run differs.
+
+So `examples/random/main.ath` is conformance-testable when
+`ATH_SEED` is set:
+
+```
+$ ATH_SEED=42 ./roll
+1
+$ ATH_SEED=99 ./roll
+3
+```
+
+Failure modes follow the standard rule: `LO >= HI`, either operand
+dead, or either operand without a payload, and the result is born
+dead. Bad bounds don't crash — they just propagate death.
+
+### 10g.5 Putting it together
+
+`examples/timer/main.ath` is the canonical "run for N ms" pattern:
+
+```ath
+import number 100 as DURATION_MS;
+import number 10  as TICK_MS;
+
+TIMER DURATION_MS as T;
+print go;
+~ATH(T) {
+    sleep TICK_MS;
+}
+print stop;
+
+THIS.DIE();
+```
+
+The TIMER drives the loop's lifetime, the `sleep` keeps the loop
+from busy-spinning, and the program exits after roughly 100 ms with
+a deterministic two-line output ("go\nstop\n").
+
+For a program that wants to do *real work* on an interval (poll a
+file, hit an API, advance a simulation), the inner body of the
+~ATH(T) loop is where the work goes. `sleep` controls the cadence;
+`TIMER` controls the duration; `NOW` lets the body measure its own
+progress.
+
+---
+
 ## 11. The Homestuck surface
 
 Three features of the dialect are syntactic concessions to the original
