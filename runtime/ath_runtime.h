@@ -105,6 +105,15 @@ ath_obj *ath_slice(ath_obj *s, ath_obj *range);
  * (v, result) does not kill the other. */
 ath_obj *ath_clone(ath_obj *v);
 
+/* Time and randomness (SPEC §4.4.19, §4.4.20, §4.8.5). All durations
+ * are int64 milliseconds. ath_sleep_ms is a no-op on dead/no-payload
+ * n. ath_alloc_timer_ms binds a fresh alive object with a deadline;
+ * the duration argument is not dep-tracked on the result. */
+void     ath_sleep_ms(ath_obj *n);
+ath_obj *ath_alloc_timer_ms(ath_obj *n);
+ath_obj *ath_now(ath_obj *a, ath_obj *b);
+ath_obj *ath_random_range(ath_obj *lo, ath_obj *hi);
+
 _Noreturn void ath_halt(void);
 
 #endif

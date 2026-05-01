@@ -1,0 +1,35 @@
+// TIMER + sleep + ~ATH loop. Prints "go", then waits 100ms, then
+// prints "stop". The TIMER drives the loop's lifetime; sleep keeps it
+// from busy-waiting.
+//
+// Try:
+//   athc examples/timer/main.ath -o timer_demo
+//   time ./timer_demo
+//   # go
+//   # stop
+//   # real ~0.10s
+//
+// To see NOW and RANDOM in use:
+//
+//   importf <now>       as NOW;
+//   importf <random>    as RANDOM;
+//   importf <to_string> as TO_STRING;
+//
+//   NOW [NULL, NULL] T;          // T.value = monotonic ms since boot
+//   import number 1 as LO;
+//   import number 7 as HI;
+//   RANDOM [LO, HI] DIE_ROLL;    // DIE_ROLL.value in [1, 7)
+//
+// Random is deterministic with ATH_SEED=N set in the environment.
+
+import number 100 as DURATION_MS;
+import number 10  as TICK_MS;
+
+TIMER DURATION_MS as T;
+print go;
+~ATH(T) {
+    sleep TICK_MS;
+}
+print stop;
+
+THIS.DIE();

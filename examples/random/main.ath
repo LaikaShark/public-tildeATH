@@ -1,0 +1,21 @@
+// Roll a single d6, print the result. Random is seeded by ATH_SEED
+// (env var); without ATH_SEED, the seed comes from the wall clock and
+// runs are non-deterministic.
+//
+//   athc examples/random/main.ath -o roll
+//   ATH_SEED=42 ./roll
+//   # => 1
+//
+//   ATH_SEED=99 ./roll
+//   # => 5
+
+importf <random>    as RANDOM;
+importf <to_string> as TO_STRING;
+
+import number 1 as LO;
+import number 7 as HI;        // exclusive — gives [1, 7) = 1..6
+RANDOM [LO, HI] ROLL;
+TO_STRING [ROLL, NULL] OUT;
+PRINT2 OUT;
+
+THIS.DIE();

@@ -1,0 +1,12 @@
+// SPEC §4.8.5 — monotonic milliseconds since boot.
+//
+//   NOW [_, _] T;            // T.value = current monotonic ms
+//
+// Both arguments are ignored; convention is to pass NULL. Each call
+// returns a fresh number-payload object. The result is not dep-tracked
+// against its operands — NOW is a clock reading.
+
+import builtin ath_now as ATH_NOW;
+BIFURCATE ARGS [A, B];
+ATH_NOW [A, B] R;
+THIS.DIE(R);

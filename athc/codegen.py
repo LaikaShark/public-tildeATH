@@ -17,8 +17,10 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    SleepStmt,
     SliceStmt,
     SubscriptStmt,
+    TimerStmt,
     WatchStmt,
 )
 
@@ -79,6 +81,11 @@ def _collect_names(stmts, names: set) -> None:
                 _collect_names(s.else_body, names)
         elif isinstance(s, CloneStmt):
             names.add(s.source)
+            names.add(s.target)
+        elif isinstance(s, SleepStmt):
+            names.add(s.duration)
+        elif isinstance(s, TimerStmt):
+            names.add(s.duration)
             names.add(s.target)
         # ImportFuncStmt and PrintStmt contribute no variable names.
 
@@ -202,6 +209,16 @@ class Codegen:
             self.module,
             ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
             name="ath_clone",
+        )
+        self.f_sleep_ms = ir.Function(
+            self.module,
+            ir.FunctionType(ir.VoidType(), [self.obj_ptr]),
+            name="ath_sleep_ms",
+        )
+        self.f_alloc_timer_ms = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
+            name="ath_alloc_timer_ms",
         )
 
         # Builtin C functions declared via `import builtin SYM as NAME;`.
@@ -431,6 +448,10 @@ class FunctionEmitter:
             self._emit_branch(builder, stmt)
         elif isinstance(stmt, CloneStmt):
             self._emit_clone(builder, stmt)
+        elif isinstance(stmt, SleepStmt):
+            self._emit_sleep(builder, stmt)
+        elif isinstance(stmt, TimerStmt):
+            self._emit_timer(builder, stmt)
         else:
             raise CodegenError(f"no codegen for {type(stmt).__name__}")
 
@@ -650,6 +671,15 @@ class FunctionEmitter:
     def _emit_clone(self, builder: ir.IRBuilder, stmt: CloneStmt) -> None:
         src = self._read_var(builder, stmt.source)
         result = builder.call(self.cg.f_clone, [src])
+        self._write_var(builder, stmt.target, result)
+
+    def _emit_sleep(self, builder: ir.IRBuilder, stmt: SleepStmt) -> None:
+        n = self._read_var(builder, stmt.duration)
+        builder.call(self.cg.f_sleep_ms, [n])
+
+    def _emit_timer(self, builder: ir.IRBuilder, stmt: TimerStmt) -> None:
+        n = self._read_var(builder, stmt.duration)
+        result = builder.call(self.cg.f_alloc_timer_ms, [n])
         self._write_var(builder, stmt.target, result)
 
 

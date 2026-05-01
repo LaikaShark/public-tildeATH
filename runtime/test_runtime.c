@@ -579,6 +579,77 @@ int main(void) {
     assert(!ath_is_alive(sum_ab));               /* dep propagated */
     assert(ath_is_alive(sum_clone));             /* clone is its own snapshot */
 
+    /* --- Time and randomness (SPEC §4.4.19, §4.4.20, §4.8.5) --- */
+
+    /* NOW returns a fresh number-payload object. */
+    ath_obj *t0 = ath_now(ath_NULL, ath_NULL);
+    assert(ath_is_alive(t0));
+    assert(t0->has_value && t0->value >= 0);
+
+    /* NOW is monotonic — a later reading is >= an earlier one. */
+    ath_obj *t1 = ath_now(ath_NULL, ath_NULL);
+    assert(t1->value >= t0->value);
+
+    /* sleep advances NOW by approximately the requested interval. */
+    ath_obj *fifty = ath_alloc_number(50);  /* 50 ms */
+    int64_t before = ath_now(ath_NULL, ath_NULL)->value;
+    ath_sleep_ms(fifty);
+    int64_t after = ath_now(ath_NULL, ath_NULL)->value;
+    assert(after - before >= 40);  /* allow a bit of slack below */
+    assert(after - before <= 200); /* and a bit of slack above */
+
+    /* sleep on dead/no-payload is a no-op (no observable hang). */
+    ath_sleep_ms(NULL);
+    ath_sleep_ms(ath_NULL);
+    ath_obj *dead_dur = ath_alloc_number(100);
+    ath_die(dead_dur);
+    ath_sleep_ms(dead_dur);     /* dead duration → no-op */
+    ath_sleep_ms(ath_alloc_number(0));   /* zero → no-op */
+    ath_sleep_ms(ath_alloc_number(-5));  /* negative → no-op */
+
+    /* TIMER allocates an alive object that becomes dead after the deadline. */
+    ath_obj *short_dur = ath_alloc_number(30);  /* 30 ms */
+    ath_obj *timer = ath_alloc_timer_ms(short_dur);
+    assert(ath_is_alive(timer));
+    /* Killing the duration parameter does NOT affect the timer. */
+    ath_die(short_dur);
+    assert(ath_is_alive(timer));
+    /* Wait past the deadline — timer becomes observably dead. */
+    struct timespec wait_50 = {0, 50 * 1000 * 1000};
+    nanosleep(&wait_50, NULL);
+    assert(!ath_is_alive(timer));
+
+    /* TIMER with bad input → born dead. */
+    ath_obj *bad_timer = ath_alloc_timer_ms(ath_NULL);
+    assert(!ath_is_alive(bad_timer));
+    ath_obj *zero_timer = ath_alloc_timer_ms(ath_alloc_number(0));
+    assert(!ath_is_alive(zero_timer));
+
+    /* RANDOM returns a value in [LO, HI). Multiple draws should land in
+     * range. */
+    ath_obj *r_lo = ath_alloc_number(10);
+    ath_obj *r_hi = ath_alloc_number(20);
+    for (int i = 0; i < 100; i++) {
+        ath_obj *r = ath_random_range(r_lo, r_hi);
+        assert(ath_is_alive(r));
+        assert(r->has_value);
+        assert(r->value >= 10 && r->value < 20);
+    }
+
+    /* RANDOM with LO >= HI → dead. */
+    ath_obj *bad_r1 = ath_random_range(ath_alloc_number(5), ath_alloc_number(5));
+    assert(!ath_is_alive(bad_r1));
+    ath_obj *bad_r2 = ath_random_range(ath_alloc_number(10), ath_alloc_number(3));
+    assert(!ath_is_alive(bad_r2));
+
+    /* RANDOM with dead operand → dead. */
+    ath_obj *dead_lo = ath_alloc_number(0);
+    ath_die(dead_lo);
+    assert(!ath_is_alive(ath_random_range(dead_lo, r_hi)));
+
+    /* RANDOM with no-payload → dead. */
+    assert(!ath_is_alive(ath_random_range(ath_alloc_alive(), r_hi)));
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

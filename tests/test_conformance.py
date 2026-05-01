@@ -27,6 +27,7 @@ def _compile_and_run(
     tmp_path: Path,
     stdin: str | None = None,
     compose: str = "fresh",
+    env: dict[str, str] | None = None,
 ) -> str:
     _ensure_runtime()
     out = tmp_path / "prog"
@@ -48,8 +49,17 @@ def _compile_and_run(
     assert compiled.returncode == 0, (
         f"compile failed for {source} (compose={compose}):\n{compiled.stderr}"
     )
+    run_env = None
+    if env is not None:
+        import os
+        run_env = {**os.environ, **env}
     run = subprocess.run(
-        [str(out)], input=stdin, capture_output=True, text=True, timeout=10.0
+        [str(out)],
+        input=stdin,
+        capture_output=True,
+        text=True,
+        timeout=10.0,
+        env=run_env,
     )
     assert run.returncode == 0, (
         f"binary exited {run.returncode} for {source} (compose={compose}):\n{run.stderr}"
@@ -220,6 +230,31 @@ CASES = [
         "not less\nverdict was dead\n",
         id="tier6_branch_equal_is_not_less",
     ),
+    pytest.param(
+        "timer/main.ath",
+        None,
+        "go\nstop\n",
+        id="tier5_timer_drives_loop",
+    ),
+]
+
+
+# Cases that need a controlled environment (e.g. ATH_SEED for random).
+ENV_CASES = [
+    pytest.param(
+        "random/main.ath",
+        None,
+        "1\n",
+        {"ATH_SEED": "42"},
+        id="tier5_random_seed_42",
+    ),
+    pytest.param(
+        "random/main.ath",
+        None,
+        "3\n",
+        {"ATH_SEED": "99"},
+        id="tier5_random_seed_99",
+    ),
 ]
 
 
@@ -238,4 +273,24 @@ def test_program(
     source = PROGRAMS / rel_path
     assert source.exists(), f"missing program file: {source}"
     output = _compile_and_run(source, tmp_path, stdin=stdin, compose=compose)
+    assert output == expected
+
+
+@pytest.mark.parametrize("compose", ["fresh", "intern"])
+@pytest.mark.parametrize("rel_path,stdin,expected,env", ENV_CASES)
+def test_program_with_env(
+    rel_path: str,
+    stdin: str | None,
+    expected: str,
+    env: dict[str, str],
+    compose: str,
+    tmp_path: Path,
+):
+    """Conformance programs whose output depends on environment variables
+    (notably ATH_SEED for deterministic randomness)."""
+    source = PROGRAMS / rel_path
+    assert source.exists(), f"missing program file: {source}"
+    output = _compile_and_run(
+        source, tmp_path, stdin=stdin, compose=compose, env=env
+    )
     assert output == expected

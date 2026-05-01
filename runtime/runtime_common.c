@@ -784,6 +784,63 @@ ath_obj *ath_clone(ath_obj *v) {
     return w;
 }
 
+/* --- Time, sleep, randomness (SPEC §4.4.19, §4.4.20, §4.8.5) ----------- */
+
+static int64_t ath_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + (int64_t)ts.tv_nsec / 1000000;
+}
+
+void ath_sleep_ms(ath_obj *n) {
+    if (n == NULL || !ath_is_alive(n) || !n->has_value) return;
+    if (n->value <= 0) return;
+    struct timespec ts;
+    ts.tv_sec = (time_t)(n->value / 1000);
+    ts.tv_nsec = (long)((n->value % 1000) * 1000000);
+    nanosleep(&ts, NULL);
+}
+
+ath_obj *ath_alloc_timer_ms(ath_obj *n) {
+    /* Bad duration → born dead. */
+    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value <= 0) {
+        ath_obj *dead = (ath_obj *)calloc(1, sizeof(ath_obj));
+        if (!dead) { fputs("ath: out of memory\n", stderr); exit(1); }
+        return dead;
+    }
+    ath_obj *o = ath_alloc_alive();
+    double deadline = ath_now_s() + (double)n->value / 1000.0;
+    if (!(deadline > 0.0) || deadline >= 1.0e308) deadline = 1.0e308;
+    o->deadline_s = deadline;
+    return o;
+}
+
+ath_obj *ath_now(ath_obj *a, ath_obj *b) {
+    (void)a; (void)b;
+    return ath_alloc_number(ath_now_ms());
+}
+
+ath_obj *ath_random_range(ath_obj *lo, ath_obj *hi) {
+    if (lo == NULL || !ath_is_alive(lo) || !lo->has_value) goto dead;
+    if (hi == NULL || !ath_is_alive(hi) || !hi->has_value) goto dead;
+    if (lo->value >= hi->value) goto dead;
+
+    /* Combine two rand() calls for ~62 bits of entropy, more than enough
+     * for any practical span. Modulo bias is negligible for spans well
+     * below 2^62. */
+    uint64_t r = ((uint64_t)(rand() & 0x7fffffff) << 31)
+               | (uint64_t)(rand() & 0x7fffffff);
+    uint64_t span = (uint64_t)(hi->value - lo->value);
+    int64_t result = lo->value + (int64_t)(r % span);
+    return ath_alloc_number(result);
+
+dead: {
+        ath_obj *d = (ath_obj *)calloc(1, sizeof(ath_obj));
+        if (!d) { fputs("ath: out of memory\n", stderr); exit(1); }
+        return d;
+    }
+}
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);

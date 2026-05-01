@@ -1,0 +1,12 @@
+// SPEC §4.8.5 — uniform-ish int64 in [LO, HI).
+//
+//   RANDOM [LO, HI] R;       // R.value in [LO.value, HI.value)
+//
+// Born dead if either operand is dead or lacks a payload, or if
+// LO.value >= HI.value. The random source is seeded by the ATH_SEED
+// environment variable if set, else by the wall clock.
+
+import builtin ath_random_range as ATH_RANDOM_RANGE;
+BIFURCATE ARGS [LO, HI];
+ATH_RANDOM_RANGE [LO, HI] R;
+THIS.DIE(R);
