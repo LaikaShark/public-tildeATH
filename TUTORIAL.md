@@ -1,9 +1,10 @@
 # A Tutorial for `~ATH`
 
 This tutorial walks you from "I just installed this" to "I can write
-recursive functions over encoded numbers" in the dialect of `~ATH`
-implemented by this compiler. It's not a reference — that's `SPEC.md`.
-It's a *path* through the language.
+arithmetic and string-manipulating programs with timers, comparisons,
+and file-driven control flow" in the dialect of `~ATH` implemented by
+this compiler. It's not a reference — that's `SPEC.md`. It's a *path*
+through the language.
 
 `~ATH` ("til death") originates as a fictional esolang in *Homestuck*.
 Programs in it consist of infinite loops bound to the lifespan of
@@ -16,10 +17,14 @@ combined. This compiler targets a custom hybrid of the two: the drocta
 core, with the Homestuck surface (`~ATH(!U) { ... } EXECUTE(NULL);`,
 multi-word `import dead grandmother G;`) layered on top.
 
-If you've programmed before, **forget most of it**. There are no numbers,
-no strings, no operators, no `if`, no `while`, and no return values in
-the conventional sense. There are objects, the `~ATH` loop, and `.DIE`.
-That's the whole computation model.
+If you've programmed before, **forget half of it**. The data model is
+nothing but objects that are alive or dead. The only control flow is
+the `~ATH` loop (which runs while a watched object is alive) and the
+`BRANCH` statement (one-shot dispatch). There are no infix operators
+and no expressions — every "computation" is a statement that binds a
+fresh object to a name. Everything else — numbers, strings, arithmetic,
+comparisons, time, randomness — sits on top of that model as builtin
+functions and stdlib shims, introduced one tier at a time over §10–§16.
 
 ---
 
@@ -43,11 +48,23 @@ Useful flags:
 - `--emit-ir` — print LLVM IR to stdout (don't link)
 - `--emit-obj PATH` — write the object file and stop
 - `-D NAME:MIN:MAX` — register a custom library entry for this build
-  (repeatable; see §10b.1)
+  (repeatable; see §11.1)
 - `--compose fresh|intern` — composition discipline (default `fresh`).
   Under `intern`, two `BIFURCATE [L,R] V;` calls with the same operands
   return *the same object* (hash-consing). Killing it kills every place
-  it's referenced.
+  it's referenced. See `SPEC.md` §4.4.3.
+- `--runtime PATH` — link against a specific `libath_*.a` instead of the
+  default in the `runtime/` directory.
+- `--cc COMPILER` — C compiler/linker to use (default `gcc`, or `$CC`).
+
+Useful environment variables:
+
+- `ATH_PATH` — colon-separated search path for the angle-bracket form of
+  `importf` (`importf <add> as ADD;`), tried before the compiler-adjacent
+  `stdlib/` directory. See §12 for how the search-path form works.
+- `ATH_SEED` — decimal unsigned integer that seeds the runtime RNG.
+  Setting it makes lifetime-library samples (§11.1) and `RANDOM` calls
+  (§16.4) deterministic across runs.
 
 Programs run forever or terminate via `THIS.DIE();`. If you fork-bomb the
 recursion, you'll need `Ctrl-C`.
@@ -81,7 +98,8 @@ whitespace, doesn't interpret `\n`, doesn't do anything clever.
 
 ## 3. Objects, life, and death
 
-The single data type is the **object**. Every object has three fields:
+The single data type is the **object**. The core of every object has
+three fields:
 
 ```
 { alive: bool, left: object*, right: object* }
@@ -91,8 +109,13 @@ The single data type is the **object**. Every object has three fields:
   exactly once, when something kills it. There is no resurrection.
 - `left` and `right` are pointers to other objects, initially unset.
 
-That's it. There are no integers, no strings, no booleans, no
-references-to-something-else. Just nested pairs of living-or-dead nodes.
+That's the core. Objects also carry optional **payload** and
+**lifetime** fields that later sections turn on: an int64 numeric
+payload (§12), a deadline timestamp (§11.1, §16.3), a watched
+filesystem path (§11.4), a watched signal number (§11.3), a one-shot
+flag (§11.2), and dependency pointers for inherited mortality (§12.2).
+A bare `import` (next paragraph) leaves all of these unset — you get
+the three-field core and nothing more.
 
 You make a new object with `import`:
 
@@ -121,6 +144,38 @@ compile-time error — but you can read it as much as you want.
 The other predefined name is **`THIS`**: a fresh alive object specific
 to this program's main activation. Killing `THIS` ends the program (see
 §7). Functions get their own `THIS` (see §8).
+
+A complete runnable program exercising all four pieces — `import`,
+`.DIE`, `NULL`, and `THIS`:
+
+```ath
+import thing B;
+print B is now alive;
+B.DIE();
+print B is now dead;
+B.DIE();             // no-op, no error — death is idempotent
+print so is NULL, but it was born dead;
+THIS.DIE();          // ends the program; the next line never runs
+print never reached;
+```
+
+Output:
+
+```
+B is now alive
+B is now dead
+so is NULL, but it was born dead
+```
+
+The metadata word `thing` is just cosmetic here — it's not a recognized
+library entry, so `B` becomes a plain alive object. Library-blessed
+metadata words like `banana`, `mayfly`, or `universe` give the object
+an intrinsic deadline; we'll get to that in §11.1.
+
+Notice that `B.DIE()` doesn't unbind the name `B` — the variable still
+points at the same object, just one whose `alive` field is now false.
+`THIS.DIE();` is special: when the name being killed is `THIS`, the
+current activation returns immediately rather than continuing.
 
 ---
 
@@ -173,11 +228,17 @@ now dead, exit.
 
 There is no `break`, no `continue`, no nested-loop labels. If you want
 to "break early," you arrange for the variable to be dead by the next
-check. There is no `if`, no `else`, no `switch`. Every conditional in the
-language is structured as `~ATH(V) { ...; V.DIE(); }` — a loop that runs
-once when `V` happens to be alive.
+check.
 
-This is the whole control-flow story.
+There is no `if`, no `?:`, no `switch` — but there is **`BRANCH`**, a
+one-shot conditional dispatch covered in §15. Until then, this tutorial
+uses the older `~ATH(V) { ...; V.DIE(); }` if-then idiom (a loop that
+runs once when `V` happens to be alive). The idiom still works
+everywhere; `BRANCH` is just cleaner syntax for the same shape and adds
+an `ELSE` clause.
+
+Between `~ATH` (looping conditional) and `BRANCH` (one-shot
+conditional), that's the whole control-flow story.
 
 ---
 
@@ -205,10 +266,15 @@ BIFURCATE [L, R] V;
 ```
 
 Allocates a new alive object whose left half is `L`'s current object and
-right half is `R`'s, then binds `V` to it. *Each call to compose
-produces a freshly-allocated object* — two `BIFURCATE [L, R] V;`
-statements with the same operands produce two distinct objects. (A
-hash-cons / interning mode is reserved in the spec but not built in v1.)
+right half is `R`'s, then binds `V` to it. Under the default `fresh`
+composition discipline, *each call produces a freshly-allocated object*
+— two `BIFURCATE [L, R] V;` statements with the same operands produce
+two distinct objects. Under the alternative `intern` discipline
+(selectable with `athc --compose intern ...`), `BIFURCATE [L, R] V;`
+hash-conses by the raw `(L, R)` pointer pair, so structurally identical
+composites share storage and die together. Programs in `examples/` are
+written to behave identically under both modes; the conformance suite
+checks this. See `SPEC.md` §4.4.3 for the full semantics.
 
 Composing and decomposing are the only ways to navigate object
 structure. Killing a composite doesn't kill its halves; killing a half
@@ -434,9 +500,15 @@ import flag F;
 }
 ```
 
-This is the basis of every conditional in the language. When the flag
-needs to *not* be killed (because something else relies on the
-underlying object), use the next idiom instead.
+This was the basis of every conditional in early `~ATH` programs and
+still works fine. For new code, **§15 introduces `BRANCH`**, which is
+shorter, adds an explicit `ELSE` clause, and removes the "where did the
+kill go?" mystery (it happens automatically at end-of-dispatch). The
+older idiom remains useful when you want the loop form — running the
+body repeatedly until something inside the body kills `V`.
+
+When the flag needs to *not* be killed (because something else relies on
+the underlying object), use the next idiom instead.
 
 ### 9.2 Rebind to NULL (terminate without killing)
 
@@ -501,9 +573,12 @@ PRINT2 single;
 
 ## 10. Encoding numbers
 
-`~ATH` has no integers, but you can encode positive integers as object
-structure. The convention this tutorial uses (drocta blog's convention,
-also used by `examples/countdown` and `examples/addition`):
+§12 introduces real int64 numbers via `import number N as V;`. Before
+that, programs encoded positive integers as object structure — the
+convention pioneered by drocta and used by `examples/countdown` and
+`examples/addition`. The technique remains worth understanding both for
+reading legacy code and because it shows how the core ~ATH primitives
+already give you computation without any payload types:
 
 - `1` is `compose(NULL, anything)` — base case: the **left half is
   dead**.
@@ -568,13 +643,13 @@ never killing sentinels or shared atoms.
 
 ---
 
-## 10b. Objects with real lifetimes
+## 11. Objects with real lifetimes
 
 Up to this point, every object in your program has been the same shape:
 born alive, dies only when you explicitly kill it. Two extensions break
 that pattern.
 
-### 10b.1 The lifetime library
+### 11.1 The lifetime library
 
 The metadata before the variable in `import` isn't *only* cosmetic
 anymore — it can match a name in the runtime's **lifetime library**
@@ -594,7 +669,7 @@ The library spans the range from "zero lifetime" up to 10^110 seconds
 - **Born dead**: `instant`. Always.
 - **Alive once, then dead**: `once`. Special non-time-based entry —
   `~ATH(V) { ... }` with V from `once` runs the body exactly one time.
-  See §10b.3 below.
+  See §11.3 below.
 - **Sub-millisecond**: `muzzle flash`, `tick`. The shortest non-zero
   lifetimes — useful for timing experiments.
 - **Low variance / exact**: `second`, `minute`, `hour`, `day`, `week`,
@@ -636,7 +711,7 @@ born-dead object for that build, useful for testing.
 The CLI flag can't register non-time-based entries (the `once`-style
 flag); for those, you'd have to extend the runtime.
 
-### 10b.2 The `once` entry — exactly-one execution
+### 11.2 The `once` entry — exactly-one execution
 
 `once` is the library's lone non-time-based entry. An object imported
 from `once` is alive for exactly one `ath_is_alive` observation; the
@@ -665,7 +740,7 @@ is already dead).
 
 See `examples/once_runner.ath`.
 
-### 10b.3 Watching signals
+### 11.3 Watching signals
 
 The `watch` statement has a second form that ties an object's life to a
 POSIX signal:
@@ -696,7 +771,7 @@ second token after `watch`. Programs can still bind variables named
 `examples/signal_handler/main.ath` is a runnable demo: start it in the
 background, send SIGUSR1 with `kill -USR1`, watch it exit cleanly.
 
-### 10b.4 Watching files
+### 11.4 Watching files
 
 The `watch` statement ties an object's life to the existence of a file
 on disk:
@@ -736,7 +811,7 @@ deleted, random 0-100 second timeout}.
 
 ---
 
-## 10c. Real numbers and the arithmetic stdlib
+## 12. Real numbers and the arithmetic stdlib
 
 §10's cons-cell encoding is still valid — useful for understanding
 the language structure, and for any place an object's *shape* should
@@ -793,7 +868,7 @@ PARSE [S, _] N;      // N gets the int64 parsed from S
 `TO_STRING` and `PARSE` are unary; the second argument is ignored.
 Convention is to pass `NULL` (or any in-scope name) as a placeholder.
 
-### 10c.1 Failure is death
+### 12.1 Failure is death
 
 If anything goes wrong, the result is **born dead** — alive=0, no
 payload. This includes:
@@ -811,7 +886,7 @@ Born-dead results propagate: an `ADD` whose result feeds another
 dies as a unit on any single failure, with no crash and no need for
 exception handling.
 
-### 10c.2 Derived values inherit operand death
+### 12.2 Derived values inherit operand death
 
 Results don't only die on overflow — they also die when their
 *operands* die later. Each op records both operands as dependencies
@@ -831,7 +906,7 @@ This propagates through chains: `(A+B)+C` dies if any of `A`, `B`,
 `C` dies. It's the runtime's way of saying that a computation has
 been invalidated by something outside the computation.
 
-### 10c.3 A complete example
+### 12.3 A complete example
 
 `examples/arithmetic/main.ath`:
 
@@ -857,7 +932,7 @@ On `17\n25\n`, it prints `42`. On `banana\n5\n`, the parse fails,
 the addition fails, the to_string fails, and the program prints an
 empty line — death has propagated end-to-end without crashing.
 
-### 10c.4 Adding your own builtin
+### 12.4 Adding your own builtin
 
 The seven ops above are C functions in the runtime, exposed to ~ATH
 via `import builtin`. If you want to wrap your own C function or add
@@ -877,11 +952,11 @@ and returns one. See `SPEC.md` §4.4.13 for details.
 
 ---
 
-## 10d. Comparisons and the verdict idiom
+## 13. Comparisons and the verdict idiom
 
-`~ATH` has no `if`. The way you condition on a number's *value*
-(rather than its liveness) is to compute a **verdict** — an object
-that is alive iff the comparison holds — and run it through `~ATH`:
+To condition on a number's *value* (rather than just its liveness)
+you compute a **verdict** — an object that is alive iff the
+comparison holds — and run it through `~ATH` or `BRANCH` (§15):
 
 ```ath
 importf <lt> as LT;
@@ -895,6 +970,15 @@ LT [X, Y] V;
 }
 ```
 
+Running that program prints:
+
+```
+X is less than Y
+```
+
+Swap `25` for `5` and the loop never enters — `V` is born dead
+because `17 < 5` is false — so the program prints nothing.
+
 Three primitives are shipped:
 
 ```ath
@@ -904,7 +988,7 @@ GT [X, Y] V;     // V alive iff X.value >  Y.value
 ```
 
 The other three — `<=`, `>=`, `!=` — are expressible without new
-primitives. `~ATH(!V)` inversion (§11.2) handles negation, and
+primitives. `~ATH(!V)` inversion (§17.2) handles negation, and
 swapping operands handles asymmetric flips:
 
 ```ath
@@ -934,13 +1018,13 @@ all three verdicts in sequence; on `3\n10\n` it prints `less`, on
 
 ---
 
-## 10e. Manipulating strings (and any cons-list)
+## 14. Manipulating strings (and any cons-list)
 
 Strings are right-nested cons-lists of character atoms (§6). Four
 operations work on them — two as function calls imported from
 `stdlib/`, and two as dedicated bracket syntax.
 
-### 10e.1 LENGTH and CONCAT
+### 14.1 LENGTH and CONCAT
 
 ```ath
 importf <length> as LENGTH;
@@ -963,7 +1047,7 @@ CONCAT [A, B]    AB;        // AB is a fresh cons-list
   rule. The result inherits both A and B as deps — killing either
   source kills the concatenation.
 
-### 10e.2 Subscript: `S[N] X;`
+### 14.2 Subscript: `S[N] X;`
 
 A real new statement form. `S[N] X;` reads the Nth right-spine head
 of `S` into `X`:
@@ -991,7 +1075,7 @@ The result is born dead if `N` lacks an int64 payload, `N` is
 negative, or the walk hits the end of `S` before reaching position
 `N`. Out-of-range silently dies; the program doesn't crash.
 
-### 10e.3 Range subscript: `S[I..J] X;`
+### 14.3 Range subscript: `S[I..J] X;`
 
 End-exclusive slice into a fresh cons-list:
 
@@ -1012,7 +1096,7 @@ PRINT2 MID;
 - The result inherits `S`, `I`, and `J` as deps. Killing any of
   them invalidates the slice on the next observation.
 
-### 10e.4 Dispatch between bracket forms
+### 14.4 Dispatch between bracket forms
 
 Three statement forms now share the `IDENT '[' ... ']' IDENT ';'`
 shape:
@@ -1020,14 +1104,14 @@ shape:
 | Inside the brackets | Statement                   |
 |---------------------|-----------------------------|
 | `L, R`              | function call (§8.2)        |
-| `N`                 | subscript (§10e.2)          |
-| `I..J`              | slice (§10e.3)              |
+| `N`                 | subscript (§14.2)          |
+| `I..J`              | slice (§14.3)              |
 
 The compiler dispatches on what follows the first inner identifier:
 `,` is a funcall, `..` is a slice, `]` is a subscript. None of them
 collide; you don't need to remember a precedence rule.
 
-### 10e.5 A complete example
+### 14.5 A complete example
 
 `examples/strings/main.ath` reads two lines from stdin and exercises
 all four ops:
@@ -1086,14 +1170,14 @@ runtime keeps observing aliveness all the way through.
 
 ---
 
-## 10f. BRANCH and CLONE
+## 15. BRANCH and CLONE
 
 The `~ATH(V) { ...; V.DIE(); }` idiom of §9.1 is the canonical
 if-then in ~ATH — but it's verbose, awkward (the kill is buried in
 the body), and gets weirder when you want an else clause. **BRANCH**
 is the dedicated sugar.
 
-### 10f.1 BRANCH
+### 15.1 BRANCH
 
 ```ath
 import x V;
@@ -1125,7 +1209,7 @@ BRANCH(!V) { print V was dead; } ELSE { print V was alive; }
 BRANCH is **one-shot**. Unlike `~ATH(V)`, the condition is checked
 exactly once. There's no re-check, no loop, no rebind idiom needed.
 
-### 10f.2 Why V is consumed
+### 15.2 Why V is consumed
 
 A common pattern in earlier sections was `~ATH(V) { body; V.DIE(); }`
 — the body explicitly kills V to exit the loop. BRANCH bakes that
@@ -1138,10 +1222,28 @@ kill in automatically because:
 - Forcing the kill removes the "did this code path kill V?" ambiguity.
   After a BRANCH, `V` is dead. No need to read the body to find out.
 
+```ath
+import flag F;
+BRANCH(F) {
+    print F was alive;
+}
+// At this point F is guaranteed dead, whether or not the body ran.
+~ATH(F) {
+    print this never runs;       // F is dead — loop exits at the check
+}
+THIS.DIE();
+```
+
+Output:
+
+```
+F was alive
+```
+
 This does mean BRANCH is destructive. If you want to *inspect* `V`
 without losing it, clone first.
 
-### 10f.3 CLONE: non-destructive checking
+### 15.3 CLONE: non-destructive checking
 
 ```ath
 CLONE V as VCHECK;
@@ -1181,7 +1283,7 @@ A.DIE();
 
 Killing `V` after the clone leaves the clone alone, and vice versa.
 
-### 10f.4 The canonical idiom
+### 15.4 The canonical idiom
 
 > When you need to test `V` without consuming it, clone first.
 
@@ -1211,7 +1313,7 @@ not less
 verdict was dead
 ```
 
-### 10f.5 Comparison to the §9.1 idiom
+### 15.5 Comparison to the §9.1 idiom
 
 The old `~ATH(V) { ...; V.DIE(); }` if-then still works — BRANCH is
 purely additive. But for new code, BRANCH is shorter, doesn't bury
@@ -1221,14 +1323,14 @@ of historical interest, though it remains useful when you want the
 
 ---
 
-## 10g. Time, sleep, randomness
+## 16. Time, sleep, randomness
 
 Real programs need a clock and a way to wait. ~ATH exposes four
 primitives — two new statements (`sleep`, `TIMER`) and two builtins
 (`NOW`, `RANDOM`). All durations are **int64 milliseconds**, so a
 two-second pause is `import number 2000 as TWO_SEC;`.
 
-### 10g.1 The clock: `NOW`
+### 16.1 The clock: `NOW`
 
 ```ath
 importf <now> as NOW;
@@ -1251,7 +1353,7 @@ NOW [NULL, NULL] T1;
 SUB [T1, T0] ELAPSED_MS;
 ```
 
-### 10g.2 Blocking: `sleep`
+### 16.2 Blocking: `sleep`
 
 ```ath
 import number 250 as QUARTER_SEC;
@@ -1266,7 +1368,7 @@ everything else.
 `sleep` is a statement, not a function. There's no return value to
 bind, and no possibility of failure (death just means "don't sleep").
 
-### 10g.3 Time-bounded loops: `TIMER`
+### 16.3 Time-bounded loops: `TIMER`
 
 ```ath
 import number 3000 as THREE_SEC;
@@ -1289,13 +1391,13 @@ The duration `N` is a **parameter**, not a dependency — killing
 `N` after the TIMER call has no effect on `T`. Once started, the
 timer's death is governed solely by the clock. This is the same
 "intrinsic mortality" model as the lifetime library entries from
-§10b — TIMER is just the user-controllable knob.
+§11 — TIMER is just the user-controllable knob.
 
 `TIMER` with bad input (dead, zero, negative, or no-payload N)
 allocates `T` born dead. So a typo'd duration produces a loop that
 never runs, not a crash.
 
-### 10g.4 Randomness: `RANDOM`
+### 16.4 Randomness: `RANDOM`
 
 ```ath
 importf <random> as RANDOM;
@@ -1328,7 +1430,7 @@ Failure modes follow the standard rule: `LO >= HI`, either operand
 dead, or either operand without a payload, and the result is born
 dead. Bad bounds don't crash — they just propagate death.
 
-### 10g.5 Putting it together
+### 16.5 Putting it together
 
 `examples/timer/main.ath` is the canonical "run for N ms" pattern:
 
@@ -1358,12 +1460,12 @@ progress.
 
 ---
 
-## 11. The Homestuck surface
+## 17. The Homestuck surface
 
 Three features of the dialect are syntactic concessions to the original
 *Homestuck* presentation of `~ATH`:
 
-### 11.1 Multi-word `import`
+### 17.1 Multi-word `import`
 
 The original comic has `import dead grandmother G;` — a "concept" with a
 multi-word name. The compiler accepts any number of identifiers after
@@ -1377,7 +1479,7 @@ import flavor A;                  // name = "flavor", var = A — also fine
 At least two identifiers are required (one for the name, one for the
 variable). `import G;` alone is rejected.
 
-### 11.2 `!V` inversion
+### 17.2 `!V` inversion
 
 You can invert an `~ATH` condition with `!`:
 
@@ -1391,7 +1493,7 @@ Since objects can't come back to life, `~ATH(!V) { ... }` either skips
 entirely (V alive at entry) or runs once-and-must-rebind-V-to-exit
 (V dead at entry). See `examples/inverted_loop.ath`.
 
-### 11.3 `EXECUTE(NULL);` postfix
+### 17.3 `EXECUTE(NULL);` postfix
 
 The original surface attached an `EXECUTE(...)` clause to every `~ATH`
 loop, naming what happens when the watched concept dies. The compiler
@@ -1418,21 +1520,21 @@ THIS.DIE();
 
 ---
 
-## 12. What's deliberately missing
+## 18. What's deliberately missing
 
 To save time hunting for features that aren't there:
 
-- **No floats or booleans.** Numbers exist (§10c) but only as int64.
-  Verdicts (§10d) carry no truth value — they are alive or dead, not
+- **No floats or booleans.** Numbers exist (§12) but only as int64.
+  Verdicts (§13) carry no truth value — they are alive or dead, not
   `true` or `false`.
 - **No `if`/`?:`/`switch` syntax.** Conditional dispatch is via
-  `BRANCH(V) { ... } ELSE { ... }` (§10f), which is one-shot and
+  `BRANCH(V) { ... } ELSE { ... }` (§15), which is one-shot and
   destructive (V is consumed). For non-destructive checking, clone
   first with `CLONE V as VCHECK;`. The looping conditional remains
   `~ATH(V) { ... }`, which re-checks every iteration.
 - **No infix operators.** No `+`, `*`, `==`, `&&`. Arithmetic and
   comparison are function calls — `ADD [X, Y] R;`, `LT [X, Y] V;` —
-  imported from `stdlib/` (§10c, §10d). There is `!` but it only
+  imported from `stdlib/` (§12, §13). There is `!` but it only
   prefixes a variable in an `~ATH` condition.
 - **No early return or `break`.** Exit a function by killing its
   `THIS`; exit a loop by making its variable dead.
@@ -1450,15 +1552,17 @@ Reasonable things you *might* expect but won't find:
 - Substring search (`FIND`), in-place rewriting (`REPLACE`), and
   list-of-string operations (`SPLIT`, `JOIN`). These are planned for
   a later string-ops tier; current support is length, concat,
-  subscript, slice (§10e).
+  subscript, slice (§14).
 - Re-running a dead object (it really is permanent).
 
 ---
 
-## 13. The full file-watch + lifetime combination
+## 19. The full file-watch + lifetime combination
 
 For a final motivating example: a program that does work until either
-its config file vanishes or 10 seconds elapse, whichever comes first.
+its config file vanishes or its time budget elapses, whichever comes
+first. The library-based version uses `import campaign T;` for a random
+0-100 second budget:
 
 ```ath
 watch "config.txt" as CFG;
@@ -1483,9 +1587,36 @@ Homestuck-original spirit: programs are infinite loops tied to the
 lifespans of *real things* — a real file, a real (probabilistic)
 duration — that the runtime observes from the outside.
 
+For an exact, non-random budget, swap the library entry for a `TIMER`
+(§16.3) — the same nested-loop pattern works either way:
+
+```ath
+watch "config.txt" as CFG;
+import number 30000 as BUDGET_MS;     // exactly 30 seconds
+import number 100   as POLL_MS;
+TIMER BUDGET_MS as T;
+
+~ATH(CFG) {
+    ~ATH(T) {
+        print serving requests;
+        sleep POLL_MS;
+    }
+    print budget exhausted;
+    CFG.DIE();
+}
+print shutting down;
+THIS.DIE();
+```
+
+Pick the lifetime mechanism that matches the policy you want: a library
+entry for stochastic decay, `watch` for "alive while something exists,"
+`TIMER` for a fixed deadline, `watch signal` for SIGTERM-style graceful
+shutdown. They all compose cleanly because they all reduce to the same
+"object becomes dead at the next observation" rule.
+
 ---
 
-## 14. Where to go from here
+## 20. Where to go from here
 
 - **`SPEC.md`** — precise grammar, semantics, runtime ABI. Read this when
   the tutorial says something that surprises you and you want to know if
