@@ -988,7 +988,7 @@ GT [X, Y] V;     // V alive iff X.value >  Y.value
 ```
 
 The other three — `<=`, `>=`, `!=` — are expressible without new
-primitives. `~ATH(!V)` inversion (§17.2) handles negation, and
+primitives. `~ATH(!V)` inversion (§18.2) handles negation, and
 swapping operands handles asymmetric flips:
 
 ```ath
@@ -1460,12 +1460,233 @@ progress.
 
 ---
 
-## 17. The Homestuck surface
+## 17. File I/O
+
+`~ATH` reads and writes files through four new statements: `read`,
+`write`, `append`, and `close`. Paths are quoted string literals at
+the source level (same as `watch "PATH" as F;` in §11.4). Failures
+propagate as death — bad paths, permission errors, or I/O failures
+yield born-dead results rather than crashes.
+
+> **⚠️ WARNING — read-results own their file.**
+> The object bound by `read "PATH" as VAR;` carries an *ownership*
+> flag on its watched path. Explicit `VAR.DIE();` *or* a
+> `BRANCH(VAR)` that consumes it (§15) **deletes the file from disk**
+> before the object's alive bit flips. To check or release the
+> object without deleting the file, see §17.5 (`close`) and §17.6
+> (the `CLONE`-first idiom).
+
+### 17.1 `read "PATH" as VAR;`
+
+Slurp the file at `PATH` into a string-cons-list (§14) and bind it
+to `VAR`. The result observes the file's continued existence the
+same way `watch` does — every `ath_is_alive(VAR)` runs `access` on
+the path, so an externally deleted file flips `VAR` to dead on the
+next observation.
+
+```ath
+read "/etc/hostname" as HOST;
+PRINT2 HOST;
+close HOST;            // graceful release — file persists
+THIS.DIE();
+```
+
+A missing file or permission-denied path produces a born-dead
+`VAR` — no exception, no crash:
+
+```ath
+read "/tmp/probably_missing" as MAYBE;
+~ATH(MAYBE) {
+    print I have content;
+    MAYBE.DIE();        // ← careful! this deletes the file
+}
+~ATH(!MAYBE) {
+    print no file;
+    BIFURCATE [NULL, NULL] MAYBE;
+}
+```
+
+### 17.2 `write S to "PATH" [as VERDICT];`
+
+Truncate-and-write `S`'s bytes to `PATH`. The optional `as VERDICT`
+clause binds an object alive iff the entire write succeeded:
+
+```ath
+INPUT MSG;
+write MSG to "/tmp/out.txt" as OK;
+BRANCH(OK) {
+    print wrote ok;
+} ELSE {
+    print write failed;
+}
+THIS.DIE();
+```
+
+Without `as VERDICT`, the write is fire-and-forget. The verdict
+object is allocated and immediately discarded:
+
+```ath
+write MSG to "/tmp/out.txt";    // no error signal at all
+```
+
+`write` writes exactly `S`'s bytes — no implicit newline, no
+encoding magic. `INPUT` strips the trailing `\n` from stdin lines,
+so if you read with `INPUT` and want to write the line back with
+its newline intact, you'd need to append the newline character
+explicitly via `BIFURCATE` (`INPUT` does not preserve the line
+terminator). For the common "echo input back" case, `INPUT` plus
+`PRINT2` is the right tool.
+
+The destination `"PATH"` is a quoted string literal at compile time
+(same as `watch`). Runtime-computed paths are not currently
+supported.
+
+### 17.3 `append S to "PATH" [as VERDICT];`
+
+Same as `write`, but the file is opened in append mode — the bytes
+are added after any existing content:
+
+```ath
+INPUT LINE;
+append LINE to "/var/log/myapp.log";
+```
+
+Useful for log files and event streams. Same fire-and-forget /
+verdict-clause options as `write`.
+
+### 17.4 The `to` contextual marker
+
+The preposition `to` in `write`/`append` is a **contextual keyword**
+— recognized only between the source ident and the destination
+string. Anywhere else, `to` is a perfectly legal variable name:
+
+```ath
+import x to;           // 'to' is just an identifier here
+to.DIE();
+```
+
+This keeps the global keyword count down. The same pattern is used
+for `signal` after `watch` (§11.3) and `builtin`/`number` after
+`import` (§12).
+
+### 17.5 `close VAR;` — graceful release
+
+`close VAR;` clears `VAR`'s ownership flag *and* kills `VAR`. The
+file persists; the object dies. This is the safe way to "be done
+with the file" without deleting it:
+
+```ath
+read "/tmp/important.txt" as S;
+PRINT2 S;
+close S;               // S dies; /tmp/important.txt stays
+```
+
+`close` on objects without the ownership flag (a number, a verdict,
+a generic composite) is equivalent to `VAR.DIE();` — it just kills
+the object.
+
+### 17.6 The `CLONE`-first idiom for files
+
+`BRANCH(V)` always consumes its subject (§15.2). If `V` is a
+read-result, the BRANCH *deletes the file* whether the alive or
+dead body ran. Almost always you want the file to survive checking
+its contents.
+
+**Always `CLONE` a read-result before passing it to `BRANCH`:**
+
+```ath
+read "/tmp/config.txt" as CFG;
+CLONE CFG as CFG_CHECK;
+BRANCH(CFG_CHECK) {
+    print config is readable;
+} ELSE {
+    print config missing or unreadable;
+}
+// CFG is still alive (or still dead) as it was. The file is intact.
+close CFG;
+THIS.DIE();
+```
+
+`CLONE` deliberately does not copy the `owns_path` flag (§15.3) —
+this is exactly what makes the CLONE-then-BRANCH pattern safe for
+file objects. The clone observes the file the same way (same
+`watch_path`), but killing it via BRANCH consumption doesn't trigger
+the unlink.
+
+### 17.7 What does *not* delete the file
+
+Five conditions can flip an object's alive bit (§4.7 in
+`SPEC.md`): explicit `.DIE`, deadline expiration (TIMER), watched
+path becoming inaccessible, awaited signal arriving, one-shot
+consumption. **Only explicit `.DIE` (and BRANCH, which calls it)
+deletes the file.** Passive death paths — including the watch-path
+observation that fires when someone *else* deletes the file —
+never trigger an unlink:
+
+```ath
+read "/tmp/foo" as S;
+// ... time passes ...
+// somebody else does: rm /tmp/foo
+~ATH(S) {
+    print S is alive;        // doesn't run; watch_path observed gone
+    S.DIE();
+}
+// The unlink in S.DIE() doesn't fire because the alive bit
+// was already cleared by the watch_path check. The file is gone
+// because the external 'rm' deleted it, not because of anything
+// the ~ATH program did.
+```
+
+This is by design: the file's external lifecycle is observable, but
+the runtime never unilaterally deletes a file behind the user's
+back. Only explicit kill semantics do.
+
+### 17.8 A complete example
+
+`examples/file_io/main.ath` reads stdin, writes it to a temp file,
+reads the temp file back, prints its length and contents, then
+`close`s the result so the file persists:
+
+```ath
+importf <length>    as LENGTH;
+importf <to_string> as TO_STRING;
+
+INPUT MSG;
+write MSG to "/tmp/ath_example_io.txt";
+
+read "/tmp/ath_example_io.txt" as CONTENT;
+
+LENGTH [CONTENT, NULL] N;
+TO_STRING [N, NULL] NS;
+PRINT2 NS;
+PRINT2 CONTENT;
+
+close CONTENT;
+THIS.DIE();
+```
+
+On input `ping pong\n` this prints:
+
+```
+9
+ping pong
+```
+
+After the program exits, `/tmp/ath_example_io.txt` still contains
+`ping pong` because of the `close`.
+
+For the destructive counterpart, see `examples/file_io_owned/main.ath`
+— same structure but with `S.DIE();` instead of `close S;`. After
+that run, `/tmp/ath_owned_scratch.txt` is gone.
+
+---
+
+## 18. The Homestuck surface
 
 Three features of the dialect are syntactic concessions to the original
 *Homestuck* presentation of `~ATH`:
 
-### 17.1 Multi-word `import`
+### 18.1 Multi-word `import`
 
 The original comic has `import dead grandmother G;` — a "concept" with a
 multi-word name. The compiler accepts any number of identifiers after
@@ -1479,7 +1700,7 @@ import flavor A;                  // name = "flavor", var = A — also fine
 At least two identifiers are required (one for the name, one for the
 variable). `import G;` alone is rejected.
 
-### 17.2 `!V` inversion
+### 18.2 `!V` inversion
 
 You can invert an `~ATH` condition with `!`:
 
@@ -1493,7 +1714,7 @@ Since objects can't come back to life, `~ATH(!V) { ... }` either skips
 entirely (V alive at entry) or runs once-and-must-rebind-V-to-exit
 (V dead at entry). See `examples/inverted_loop.ath`.
 
-### 17.3 `EXECUTE(NULL);` postfix
+### 18.3 `EXECUTE(NULL);` postfix
 
 The original surface attached an `EXECUTE(...)` clause to every `~ATH`
 loop, naming what happens when the watched concept dies. The compiler
@@ -1520,7 +1741,7 @@ THIS.DIE();
 
 ---
 
-## 18. What's deliberately missing
+## 19. What's deliberately missing
 
 To save time hunting for features that aren't there:
 
@@ -1553,11 +1774,16 @@ Reasonable things you *might* expect but won't find:
   list-of-string operations (`SPLIT`, `JOIN`). These are planned for
   a later string-ops tier; current support is length, concat,
   subscript, slice (§14).
+- Streaming file I/O. `read` (§17.1) slurps the entire file into
+  memory; there's no `open ... as F; read F into LINE; close F;`
+  loop. For very large files, this is the wrong tool.
+- Runtime-computed file paths. `read`, `write`, and `append` (§17)
+  take quoted string literals at compile time only.
 - Re-running a dead object (it really is permanent).
 
 ---
 
-## 19. The full file-watch + lifetime combination
+## 20. The full file-watch + lifetime combination
 
 For a final motivating example: a program that does work until either
 its config file vanishes or its time budget elapses, whichever comes
@@ -1616,7 +1842,7 @@ shutdown. They all compose cleanly because they all reduce to the same
 
 ---
 
-## 20. Where to go from here
+## 21. Where to go from here
 
 - **`SPEC.md`** — precise grammar, semantics, runtime ABI. Read this when
   the tutorial says something that surprises you and you want to know if
