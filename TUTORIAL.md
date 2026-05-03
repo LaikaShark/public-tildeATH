@@ -1168,6 +1168,166 @@ Death propagating quietly through a chain of operations is the
 normal mode — programs read input, build derived values, and the
 runtime keeps observing aliveness all the way through.
 
+### 14.6 Searching: `FIND`
+
+```ath
+importf <find>      as FIND;
+importf <to_string> as TO_STRING;
+
+INPUT HAY;
+INPUT NEEDLE;
+
+FIND [HAY, NEEDLE] IDX;
+BRANCH(IDX) {
+    print found it;
+    TO_STRING [IDX, NULL] S;
+    PRINT2 S;
+} ELSE {
+    print not found;
+}
+
+THIS.DIE();
+```
+
+`FIND [HAY, NEEDLE] IDX;` searches for the first occurrence of
+`NEEDLE` inside `HAY`. On success, `IDX` is a number-payload object
+holding the 0-indexed start of the match. On failure (NEEDLE not
+present, dead operand, malformed string), `IDX` is born dead.
+
+Special case: an **empty NEEDLE** returns `0` — the empty string
+trivially matches at the start of every string, including the empty
+one. This matches Python's `"".find("") == 0` convention.
+
+Failure-as-death has a useful consequence: you BRANCH on `IDX`
+itself to dispatch between "found" and "not found" without any
+extra check. The verdict idiom and the search idiom unify.
+
+`FIND` walks `HAY` once for the search, performing a byte-by-byte
+naive comparison (O(n·m) for n=len(HAY), m=len(NEEDLE)). For short
+needles or moderately-sized haystacks this is plenty fast; if you
+need streaming or very large inputs, you'll want a different tool.
+
+### 14.7 Replacing: `REPLACE` and `REPLACE_ALL`
+
+Replacing a substring is conceptually a three-argument operation:
+source, needle, replacement. But the builtin FFI we use for every
+stdlib function (§12.4) takes exactly two `ath_obj *` arguments.
+We resolve the mismatch the same way `SLICE` does: pack two of the
+arguments into a single composite.
+
+```ath
+importf <replace_all> as REPLACE_ALL;
+
+INPUT S;
+INPUT NEEDLE;
+INPUT REPL;
+
+BIFURCATE [NEEDLE, REPL] PAIR;     // pack into a single composite
+REPLACE_ALL [S, PAIR] R;            // R = S with every NEEDLE → REPL
+PRINT2 R;
+
+THIS.DIE();
+```
+
+The `BIFURCATE [NEEDLE, REPL] PAIR;` line is the "compose-pair"
+step. It builds a transient cons cell whose left half is `NEEDLE`
+and right half is `REPL`. Inside `ath_replace_all`, the runtime
+decomposes the pair to recover both pieces, then does its single
+left-to-right pass over `S`.
+
+Two variants are shipped:
+
+- `REPLACE [S, PAIR] R;` — replaces only the **first** occurrence.
+- `REPLACE_ALL [S, PAIR] R;` — replaces **every non-overlapping**
+  occurrence in a single pass. "Non-overlapping" means each match
+  consumes `NEEDLE.length` bytes of `S` before the next match is
+  searched for: `REPLACE_ALL` on `"aa"` with `("aa", "x")` gives
+  `"x"`, not `"xa"`.
+
+Both return a fresh cons-list — the source `S` is never mutated
+(no operation in `~ATH` ever is).
+
+**Failure modes** (born-dead result):
+
+- `S` or `PAIR` is dead at the call.
+- `NEEDLE` is empty. Unlike `FIND`, empty-needle is rejected for
+  `REPLACE`: "replace nothing with something" is ambiguous —
+  Python inserts the replacement at every boundary, sed rejects
+  the pattern entirely. The cleaner choice is to flag it as an
+  error.
+- `NEEDLE` is not present anywhere in `S`. Both `REPLACE` and
+  `REPLACE_ALL` die on no-match. To distinguish "successfully
+  replaced zero matches" from "the input wasn't what you thought,"
+  use `FIND` first.
+
+#### 14.7.1 Why the compose-pair pattern?
+
+This pattern shows up wherever a builtin needs more than two
+arguments. The shape of the language — every operation is a
+statement that consumes a few names and binds one result — meets
+the C ABI we use for stdlib functions in §12.4. That ABI is fixed
+at two `ath_obj *` operands per call, no exceptions. Two reasons
+to keep it that way:
+
+1. Every builtin reads identically at the call site: `NAME [X, Y]
+   R;`. There's no special "this one takes three" form to learn.
+2. Adding higher-arity builtins later doesn't bloat the codegen —
+   the same compose-decompose dance handles them.
+
+The cost is that "three-argument" operations push the packing onto
+the user. Same trade-off you saw with `SLICE`: a `S[I..J]` looks
+like one statement, but under the hood the codegen lowers it to
+`ath_compose(I, J)` followed by `ath_slice(S, pair)`. For `SLICE`
+we provided syntactic sugar (the `..` range subscript); for
+`REPLACE`/`REPLACE_ALL` we did not.
+
+If `REPLACE` ever feels like the dominant operation in your
+programs, the natural next step is a sugar layer:
+
+```
+REPLACE NEEDLE in S with REPL as R;     // hypothetical, not implemented
+```
+
+For now, the explicit `BIFURCATE` is the price of admission. Treat
+it as a paragraph break in your reading: "here comes the
+replacement pair," then the actual call.
+
+#### 14.7.2 The dep-tracking caveat
+
+Every stdlib op installs operand deps on its result via
+`ath_inherit_lifetime` (§12.2). For most ops this means killing
+any operand kills the result on the next observation. `REPLACE`
+is *almost* there:
+
+```ath
+import number 1 as ALIVE;
+importf <replace> as REPLACE;
+INPUT S;
+INPUT N;
+INPUT R;
+BIFURCATE [N, R] PAIR;
+REPLACE [S, PAIR] OUT;
+
+S.DIE();        // OUT is now dead — dep on S propagated. Good.
+N.DIE();        // OUT is STILL alive — dep on N was never installed.
+```
+
+The catch: `REPLACE` records its deps as `S` and `PAIR`. `PAIR` is
+the composite the user built via `BIFURCATE`, which itself does
+not install deps on `NEEDLE` and `REPLACEMENT`. So killing `N` or
+`R` after the call doesn't propagate to `OUT`.
+
+In practice this rarely bites — programs usually feed all three
+strings from the same source (stdin, a config file) and either
+keep them all alive or let them all die together with the
+program. But if your `NEEDLE` or `REPLACEMENT` originates from a
+short-lived source (a `read` result of a file you intend to
+delete), the `REPLACE` output won't notice the death.
+
+The standard workaround is to clone the source whose mortality
+matters and explicitly extend its lifetime — or simply structure
+your program so that the pair operands outlive the call.
+
 ---
 
 ## 15. BRANCH and CLONE
@@ -1770,10 +1930,10 @@ Reasonable things you *might* expect but won't find:
 
 - Cross-compilation-unit linking. Everything is one program plus its
   `importf`'d files (and the runtime), resolved at compile time.
-- Substring search (`FIND`), in-place rewriting (`REPLACE`), and
-  list-of-string operations (`SPLIT`, `JOIN`). These are planned for
-  a later string-ops tier; current support is length, concat,
-  subscript, slice (§14).
+- List-of-string operations (`SPLIT`, `JOIN`). These are planned
+  for a later string-ops tier. Current string support is length,
+  concat, subscript, slice (§14.1–§14.5), find, and replace /
+  replace_all (§14.6–§14.7).
 - Streaming file I/O. `read` (§17.1) slurps the entire file into
   memory; there's no `open ... as F; read F into LINE; close F;`
   loop. For very large files, this is the wrong tool.
