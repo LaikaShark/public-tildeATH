@@ -1,0 +1,29 @@
+// Demonstrates the ownership/deletion semantics of `read`.
+//
+// 1. Reads stdin into a message.
+// 2. Writes it to a scratch file.
+// 3. Reads the scratch file back.
+// 4. Prints the contents.
+// 5. EXPLICITLY KILLS the read result — this deletes the scratch file.
+//
+// Try:
+//   athc examples/file_io_owned/main.ath -o io_owned
+//   rm -f /tmp/ath_owned_scratch.txt
+//   echo 'self destruct' | ./io_owned
+//   ls /tmp/ath_owned_scratch.txt    # gone! S.DIE() unlinked it
+//
+// WARNING. This destructive behavior is exactly what the read-result's
+// `owns_path` flag is for. Use `close S;` when you want the file to
+// persist; use `.DIE()` (or BRANCH consumption) only when you mean
+// "I'm done with both the object and the file."
+
+INPUT MSG;
+write MSG to "/tmp/ath_owned_scratch.txt";
+
+read "/tmp/ath_owned_scratch.txt" as S;
+PRINT2 S;
+
+S.DIE();    // <-- this deletes /tmp/ath_owned_scratch.txt
+print scratch file is now gone;
+
+THIS.DIE();

@@ -566,6 +566,106 @@ int main(void) {
     assert(ath_is_alive(oneshot_copy));   /* clone still has its one observation */
     assert(!ath_is_alive(oneshot_copy));
 
+    /* --- File I/O (SPEC §4.4.21-24, §4.7 ext 5) --- */
+
+    /* Set up a fixture file. */
+    const char *rpath = "/tmp/ath_test_read";
+    unlink(rpath);
+    {
+        FILE *fp = fopen(rpath, "wb");
+        assert(fp != NULL);
+        fputs("hello\n", fp);
+        fclose(fp);
+    }
+
+    /* read on existing file returns an alive, owning string. */
+    ath_obj *fr = ath_alloc_read_file(rpath);
+    assert(ath_is_alive(fr));
+    assert(fr->owns_path);
+    assert(fr->watch_path != NULL);
+    assert(strcmp(fr->watch_path, rpath) == 0);
+
+    /* PRINT2 the content to confirm it reads "hello". */
+    fputs("expect hello: ", stdout);
+    ath_print_obj(fr);
+
+    /* read of nonexistent file is born dead. */
+    ath_obj *rmiss = ath_alloc_read_file("/tmp/ath_test_definitely_missing_xyz");
+    assert(!ath_is_alive(rmiss));
+
+    /* Clone clears ownership. */
+    ath_obj *rclone = ath_clone(fr);
+    assert(ath_is_alive(rclone));
+    assert(rclone->watch_path != NULL);
+    assert(rclone->owns_path == 0);     /* clone never owns */
+
+    /* Killing the clone does not delete the file. */
+    ath_die(rclone);
+    assert(access(rpath, F_OK) == 0);   /* file still there */
+
+    /* close disowns + kills without deleting the file. */
+    ath_close(fr);
+    assert(!ath_is_alive(fr));
+    assert(access(rpath, F_OK) == 0);   /* file persists after close */
+
+    /* Read again, then explicit kill deletes the file. */
+    ath_obj *fr2 = ath_alloc_read_file(rpath);
+    assert(ath_is_alive(fr2));
+    ath_die(fr2);
+    assert(access(rpath, F_OK) != 0);   /* file is gone */
+
+    /* write: create a file from a known string. */
+    const char *wpath = "/tmp/ath_test_write";
+    unlink(wpath);
+    ath_obj *fsrc = ath_compose(ath_char_atom('h'),
+                   ath_compose(ath_char_atom('i'),
+                   ath_compose(ath_char_atom('\n'), ath_NULL)));
+    ath_obj *wv = ath_write_file(fsrc, wpath);
+    assert(ath_is_alive(wv));            /* verdict alive on success */
+    {
+        FILE *fp = fopen(wpath, "rb");
+        assert(fp != NULL);
+        char buf[16] = {0};
+        size_t n = fread(buf, 1, sizeof(buf) - 1, fp);
+        fclose(fp);
+        assert(n == 3);
+        assert(memcmp(buf, "hi\n", 3) == 0);
+    }
+
+    /* write does NOT make verdict an owner: killing verdict does not
+     * delete the file. */
+    ath_die(wv);
+    assert(access(wpath, F_OK) == 0);
+
+    /* append adds more bytes. */
+    ath_obj *more = ath_compose(ath_char_atom('!'),
+                    ath_compose(ath_char_atom('\n'), ath_NULL));
+    ath_obj *av = ath_append_file(more, wpath);
+    assert(ath_is_alive(av));
+    {
+        FILE *fp = fopen(wpath, "rb");
+        assert(fp != NULL);
+        char buf[16] = {0};
+        size_t n = fread(buf, 1, sizeof(buf) - 1, fp);
+        fclose(fp);
+        assert(n == 5);
+        assert(memcmp(buf, "hi\n!\n", 5) == 0);
+    }
+
+    /* write to a path in a nonexistent directory → dead verdict. */
+    ath_obj *fail = ath_write_file(fsrc, "/tmp/no_such_dir_xyz/x");
+    assert(!ath_is_alive(fail));
+
+    /* read-after-delete: the watch_path observation flips alive to 0
+     * but DOES NOT trigger another unlink (file is gone). */
+    ath_obj *fr3 = ath_alloc_read_file(wpath);
+    assert(ath_is_alive(fr3));
+    unlink(wpath);
+    assert(!ath_is_alive(fr3));            /* watch_path observed gone */
+    /* And killing r3 now is a no-op (alive=0 prevents the unlink check). */
+    ath_die(fr3);
+    /* Nothing to assert — would have crashed if it tried to unlink a NULL. */
+
     /* Clone of a derived value does NOT inherit its deps. */
     ath_obj *a_num = ath_alloc_number(3);
     ath_obj *b_num = ath_alloc_number(4);

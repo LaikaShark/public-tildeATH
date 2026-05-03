@@ -23,6 +23,12 @@ typedef struct ath_obj {
     const char *watch_path;
     int is_oneshot;
     int awaiting_signal;
+    /* SPEC §4.7 ext 5. Set only by ath_alloc_read_file. When set and
+     * watch_path is non-NULL, an explicit ath_die call on a still-alive
+     * object unlinks watch_path before flipping alive to 0. Passive
+     * deaths via the other extensions do NOT trigger unlink. Not copied
+     * by ath_clone; cleared by ath_close. */
+    int owns_path;
     /* SPEC §4.8 numeric payload. has_value is nonzero iff value is set. */
     int has_value;
     int64_t value;
@@ -101,9 +107,21 @@ ath_obj *ath_index(ath_obj *s, ath_obj *n);
 ath_obj *ath_slice(ath_obj *s, ath_obj *range);
 
 /* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
- * dep1/dep2, which are zeroed. Independent identity — killing one of
- * (v, result) does not kill the other. */
+ * dep1/dep2 and owns_path, which are zeroed. Independent identity —
+ * killing one of (v, result) does not kill the other, and the clone
+ * never owns the file even if v did. */
 ath_obj *ath_clone(ath_obj *v);
+
+/* File I/O (SPEC §4.4.21-24, §4.7 ext 5). ath_alloc_read_file slurps
+ * the file into a cons-list whose head is a non-interned wrapper
+ * carrying watch_path and owns_path=1. ath_write_file and
+ * ath_append_file return a fresh verdict object (alive on success).
+ * ath_close disowns + kills v without unlinking. ath_die unlinks
+ * watch_path when called on a still-alive owner. */
+ath_obj *ath_alloc_read_file(const char *path);
+ath_obj *ath_write_file(ath_obj *s, const char *path);
+ath_obj *ath_append_file(ath_obj *s, const char *path);
+void     ath_close(ath_obj *v);
 
 /* Time and randomness (SPEC §4.4.19, §4.4.20, §4.8.5). All durations
  * are int64 milliseconds. ath_sleep_ms is a no-op on dead/no-payload

@@ -236,6 +236,18 @@ CASES = [
         "go\nstop\n",
         id="tier5_timer_drives_loop",
     ),
+    pytest.param(
+        "file_io/main.ath",
+        "ping pong\n",
+        "9\nping pong\n",
+        id="tier4_file_io_read_close",
+    ),
+    pytest.param(
+        "file_io_owned/main.ath",
+        "self destruct\n",
+        "self destruct\nscratch file is now gone\n",
+        id="tier4_file_io_owned_die",
+    ),
 ]
 
 

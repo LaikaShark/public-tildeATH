@@ -1,9 +1,11 @@
 from llvmlite import binding, ir
 
 from athc.ast import (
+    AppendStmt,
     AthLoop,
     BranchStmt,
     CloneStmt,
+    CloseStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -17,11 +19,13 @@ from athc.ast import (
     Print2Stmt,
     PrintStmt,
     Program,
+    ReadStmt,
     SleepStmt,
     SliceStmt,
     SubscriptStmt,
     TimerStmt,
     WatchStmt,
+    WriteStmt,
 )
 
 binding.initialize_native_target()
@@ -86,6 +90,14 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.duration)
         elif isinstance(s, TimerStmt):
             names.add(s.duration)
+            names.add(s.target)
+        elif isinstance(s, ReadStmt):
+            names.add(s.target)
+        elif isinstance(s, (WriteStmt, AppendStmt)):
+            names.add(s.source)
+            if s.verdict is not None:
+                names.add(s.verdict)
+        elif isinstance(s, CloseStmt):
             names.add(s.target)
         # ImportFuncStmt and PrintStmt contribute no variable names.
 
@@ -219,6 +231,26 @@ class Codegen:
             self.module,
             ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
             name="ath_alloc_timer_ms",
+        )
+        self.f_alloc_read_file = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
+            name="ath_alloc_read_file",
+        )
+        self.f_write_file = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.i8.as_pointer()]),
+            name="ath_write_file",
+        )
+        self.f_append_file = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.i8.as_pointer()]),
+            name="ath_append_file",
+        )
+        self.f_close = ir.Function(
+            self.module,
+            ir.FunctionType(ir.VoidType(), [self.obj_ptr]),
+            name="ath_close",
         )
 
         # Builtin C functions declared via `import builtin SYM as NAME;`.
@@ -452,6 +484,14 @@ class FunctionEmitter:
             self._emit_sleep(builder, stmt)
         elif isinstance(stmt, TimerStmt):
             self._emit_timer(builder, stmt)
+        elif isinstance(stmt, ReadStmt):
+            self._emit_read(builder, stmt)
+        elif isinstance(stmt, WriteStmt):
+            self._emit_write_or_append(builder, stmt, append=False)
+        elif isinstance(stmt, AppendStmt):
+            self._emit_write_or_append(builder, stmt, append=True)
+        elif isinstance(stmt, CloseStmt):
+            self._emit_close(builder, stmt)
         else:
             raise CodegenError(f"no codegen for {type(stmt).__name__}")
 
@@ -681,6 +721,30 @@ class FunctionEmitter:
         n = self._read_var(builder, stmt.duration)
         result = builder.call(self.cg.f_alloc_timer_ms, [n])
         self._write_var(builder, stmt.target, result)
+
+    def _emit_read(self, builder: ir.IRBuilder, stmt: ReadStmt) -> None:
+        path_g = self.cg.make_cstring_global(stmt.path)
+        zero = ir.Constant(self.cg.i32, 0)
+        path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
+        result = builder.call(self.cg.f_alloc_read_file, [path_ptr])
+        self._write_var(builder, stmt.target, result)
+
+    def _emit_write_or_append(
+        self, builder: ir.IRBuilder, stmt, append: bool
+    ) -> None:
+        src = self._read_var(builder, stmt.source)
+        path_g = self.cg.make_cstring_global(stmt.path)
+        zero = ir.Constant(self.cg.i32, 0)
+        path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
+        fn = self.cg.f_append_file if append else self.cg.f_write_file
+        verdict = builder.call(fn, [src, path_ptr])
+        if stmt.verdict is not None:
+            self._write_var(builder, stmt.verdict, verdict)
+        # Otherwise the verdict object is allocated and discarded.
+
+    def _emit_close(self, builder: ir.IRBuilder, stmt: CloseStmt) -> None:
+        v = self._read_var(builder, stmt.target)
+        builder.call(self.cg.f_close, [v])
 
 
 def generate_ir(

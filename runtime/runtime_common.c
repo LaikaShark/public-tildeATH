@@ -66,6 +66,12 @@ void ath_die(ath_obj *v) {
     if (v == NULL || v == ath_NULL) {
         return;
     }
+    /* §4.7 ext 5 / §4.7.1: if v owns its watched path and is still
+     * alive, unlink the file before clearing the alive bit. Errors are
+     * silently ignored — an externally-deleted file is fine. */
+    if (v->alive && v->owns_path && v->watch_path) {
+        unlink(v->watch_path);
+    }
     v->alive = 0;
 }
 
@@ -780,7 +786,8 @@ ath_obj *ath_clone(ath_obj *v) {
     w->awaiting_signal = v->awaiting_signal;
     w->has_value = v->has_value;
     w->value = v->value;
-    /* dep1 and dep2 stay zeroed by calloc. */
+    /* dep1, dep2, owns_path stay zeroed by calloc. The clone is never
+     * an owner — §4.7 ext 5. */
     return w;
 }
 
@@ -839,6 +846,111 @@ dead: {
         if (!d) { fputs("ath: out of memory\n", stderr); exit(1); }
         return d;
     }
+}
+
+/* --- File I/O (SPEC §4.4.21-24, §4.7 ext 5) ----------------------------- */
+
+/* Born-dead generic object — used as the "failed read/write/etc." return. */
+static ath_obj *ath_alloc_dead_obj(void) {
+    ath_obj *o = (ath_obj *)calloc(1, sizeof(ath_obj));
+    if (!o) {
+        fputs("ath: out of memory\n", stderr);
+        exit(1);
+    }
+    return o;
+}
+
+ath_obj *ath_alloc_read_file(const char *path) {
+    if (path == NULL) return ath_alloc_dead_obj();
+    FILE *fp = fopen(path, "rb");
+    if (fp == NULL) return ath_alloc_dead_obj();
+
+    /* Slurp the whole file. */
+    if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return ath_alloc_dead_obj(); }
+    long sz = ftell(fp);
+    if (sz < 0) { fclose(fp); return ath_alloc_dead_obj(); }
+    rewind(fp);
+    char *buf = NULL;
+    if (sz > 0) {
+        buf = (char *)malloc((size_t)sz);
+        if (!buf) { fclose(fp); fputs("ath: out of memory\n", stderr); exit(1); }
+        size_t got = fread(buf, 1, (size_t)sz, fp);
+        if (got != (size_t)sz) { free(buf); fclose(fp); return ath_alloc_dead_obj(); }
+    }
+    fclose(fp);
+
+    /* Build the cons-list right-to-left. The tail uses the regular
+     * compose path (which is intern-mode-aware). */
+    ath_obj *tail = ath_NULL;
+    for (long i = sz; i > 1; i--) {
+        ath_obj *c = ath_char_atom((unsigned char)buf[i - 1]);
+        tail = ath_compose(c, tail);
+    }
+
+    /* Allocate the head as a fresh non-interned wrapper carrying the
+     * file ownership. Using ath_alloc_alive and setting left/right
+     * explicitly bypasses ath_compose's hash-cons in intern mode, so
+     * the head pointer is unique per call. */
+    ath_obj *head = ath_alloc_alive();
+    if (sz > 0) {
+        head->left = ath_char_atom((unsigned char)buf[0]);
+        head->right = tail;
+    } else {
+        /* Empty file: head represents an empty string but still owns
+         * the path. left=right=NULL keeps existing lazy-half semantics. */
+    }
+
+    /* Strdup the path so the caller can free its argument if it likes. */
+    size_t plen = strlen(path);
+    char *pcopy = (char *)malloc(plen + 1);
+    if (!pcopy) { free(buf); fputs("ath: out of memory\n", stderr); exit(1); }
+    memcpy(pcopy, path, plen + 1);
+    head->watch_path = pcopy;
+    head->owns_path = 1;
+
+    free(buf);
+    return head;
+}
+
+/* Internal: walk s as a string per §4.6, writing each char atom byte
+ * via fputc into fp. Returns 0 on success, -1 on write failure or
+ * malformed string termination. */
+static int ath_emit_string(ath_obj *s, FILE *fp) {
+    while (s != NULL && s != ath_NULL && ath_is_alive(s)) {
+        ath_obj *l, *r;
+        ath_decompose(s, &l, &r);
+        int ch = ath_atom_to_char(l);
+        if (ch < 0) return -1;
+        if (fputc(ch, fp) == EOF) return -1;
+        s = r;
+    }
+    return 0;
+}
+
+static ath_obj *ath_write_file_mode(ath_obj *s, const char *path,
+                                     const char *mode) {
+    if (path == NULL) return ath_alloc_dead_obj();
+    FILE *fp = fopen(path, mode);
+    if (fp == NULL) return ath_alloc_dead_obj();
+    int rc = ath_emit_string(s, fp);
+    if (fclose(fp) != 0) return ath_alloc_dead_obj();
+    if (rc != 0) return ath_alloc_dead_obj();
+    return ath_alloc_alive();
+}
+
+ath_obj *ath_write_file(ath_obj *s, const char *path) {
+    return ath_write_file_mode(s, path, "wb");
+}
+
+ath_obj *ath_append_file(ath_obj *s, const char *path) {
+    return ath_write_file_mode(s, path, "ab");
+}
+
+void ath_close(ath_obj *v) {
+    if (v == NULL || v == ath_NULL) return;
+    /* §4.4.24: disown the file (so ath_die won't unlink) before killing. */
+    v->owns_path = 0;
+    v->alive = 0;
 }
 
 _Noreturn void ath_halt(void) {

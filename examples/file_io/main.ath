@@ -1,0 +1,34 @@
+// Self-contained file I/O demo. Reads a message from stdin, writes it
+// to a temp file, reads the file back, prints its length and contents,
+// then `close`s the read-result so the file persists.
+//
+// Try:
+//   athc examples/file_io/main.ath -o io_demo
+//   echo 'ping pong' | ./io_demo
+//   # 9
+//   # ping pong
+//   #
+//   ls /tmp/ath_example_io.txt    # still there — close preserved it
+//
+// WARNING. The result of `read` *owns* the file. Explicit `.DIE()` or
+// BRANCH consumption of the read object deletes the file from disk.
+// To inspect the read result destructively while keeping the file, use
+// `CLONE ... as ...;` and BRANCH on the clone (see §17 in TUTORIAL.md).
+
+importf <length>    as LENGTH;
+importf <to_string> as TO_STRING;
+
+INPUT MSG;
+write MSG to "/tmp/ath_example_io.txt";
+
+read "/tmp/ath_example_io.txt" as CONTENT;
+
+LENGTH [CONTENT, NULL] N;
+TO_STRING [N, NULL] NS;
+PRINT2 NS;
+PRINT2 CONTENT;
+
+// Release the file without deleting it.
+close CONTENT;
+
+THIS.DIE();
