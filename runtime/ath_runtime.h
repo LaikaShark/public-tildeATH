@@ -105,6 +105,13 @@ ath_obj *ath_length(ath_obj *s, ath_obj *unused);
 ath_obj *ath_concat(ath_obj *a, ath_obj *b);
 ath_obj *ath_index(ath_obj *s, ath_obj *n);
 ath_obj *ath_slice(ath_obj *s, ath_obj *range);
+/* Search and replace (SPEC §4.8.4). ath_replace and ath_replace_all
+ * decompose pair into (needle, replacement). All three install operand
+ * deps on results via ath_inherit_lifetime — within the compose-pair
+ * dep-tracking caveat documented in §4.8.4. */
+ath_obj *ath_find(ath_obj *hay, ath_obj *needle);
+ath_obj *ath_replace(ath_obj *s, ath_obj *pair);
+ath_obj *ath_replace_all(ath_obj *s, ath_obj *pair);
 
 /* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
  * dep1/dep2 and owns_path, which are zeroed. Independent identity —

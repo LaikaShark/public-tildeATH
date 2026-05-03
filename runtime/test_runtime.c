@@ -656,6 +656,97 @@ int main(void) {
     ath_obj *fail = ath_write_file(fsrc, "/tmp/no_such_dir_xyz/x");
     assert(!ath_is_alive(fail));
 
+    /* --- Search and replace (SPEC §4.8.4) --- */
+
+    /* Build a haystack "hello world". */
+    {
+        const char *hay_str = "hello world";
+        ath_obj *hay = ath_NULL;
+        for (size_t i = strlen(hay_str); i > 0; i--) {
+            hay = ath_compose(ath_char_atom((unsigned char)hay_str[i - 1]), hay);
+        }
+        ath_obj *needle = ath_compose(ath_char_atom('w'),
+                          ath_compose(ath_char_atom('o'),
+                          ath_compose(ath_char_atom('r'), ath_NULL)));
+
+        /* FIND match → number at position 6. */
+        ath_obj *idx = ath_find(hay, needle);
+        assert(ath_is_alive(idx));
+        assert(idx->has_value && idx->value == 6);
+
+        /* FIND no-match → dead. */
+        ath_obj *miss = ath_compose(ath_char_atom('z'), ath_NULL);
+        ath_obj *idx_miss = ath_find(hay, miss);
+        assert(!ath_is_alive(idx_miss));
+
+        /* FIND with empty needle → 0 (empty is a prefix of everything). */
+        ath_obj *idx_empty = ath_find(hay, ath_NULL);
+        assert(ath_is_alive(idx_empty));
+        assert(idx_empty->value == 0);
+
+        /* FIND with empty haystack and non-empty needle → dead. */
+        ath_obj *idx_e = ath_find(ath_NULL, needle);
+        assert(!ath_is_alive(idx_e));
+
+        /* FIND with dead operand → dead. */
+        ath_obj *dead_hay = ath_compose(ath_char_atom('x'), ath_NULL);
+        ath_die(dead_hay);
+        assert(!ath_is_alive(ath_find(dead_hay, needle)));
+
+        /* REPLACE first occurrence: "hello world" with "wor"→"WOR" gives
+         * "hello WORld". */
+        ath_obj *repl_str = ath_compose(ath_char_atom('W'),
+                            ath_compose(ath_char_atom('O'),
+                            ath_compose(ath_char_atom('R'), ath_NULL)));
+        ath_obj *pair = ath_compose(needle, repl_str);
+        ath_obj *rep = ath_replace(hay, pair);
+        assert(ath_is_alive(rep));
+        fputs("expect hello WORld: ", stdout);
+        ath_print_obj(rep);
+
+        /* REPLACE no-match → dead. */
+        ath_obj *miss_pair = ath_compose(miss, repl_str);
+        assert(!ath_is_alive(ath_replace(hay, miss_pair)));
+
+        /* REPLACE empty needle → dead (per §4.8.4). */
+        ath_obj *empty_pair = ath_compose(ath_NULL, repl_str);
+        assert(!ath_is_alive(ath_replace(hay, empty_pair)));
+
+        /* REPLACE_ALL: "abracadabra" with "a"→"A" gives "AbrAcAdAbrA". */
+        const char *abra = "abracadabra";
+        ath_obj *abr = ath_NULL;
+        for (size_t i = strlen(abra); i > 0; i--) {
+            abr = ath_compose(ath_char_atom((unsigned char)abra[i - 1]), abr);
+        }
+        ath_obj *aN = ath_compose(ath_char_atom('a'), ath_NULL);
+        ath_obj *AR = ath_compose(ath_char_atom('A'), ath_NULL);
+        ath_obj *all_pair = ath_compose(aN, AR);
+        ath_obj *all_rep = ath_replace_all(abr, all_pair);
+        assert(ath_is_alive(all_rep));
+        fputs("expect AbrAcAdAbrA: ", stdout);
+        ath_print_obj(all_rep);
+
+        /* REPLACE_ALL no-match → dead. */
+        assert(!ath_is_alive(ath_replace_all(abr, miss_pair)));
+
+        /* REPLACE_ALL with empty replacement: deletes all 'a's. */
+        ath_obj *empty_repl_pair = ath_compose(aN, ath_NULL);
+        ath_obj *deleted = ath_replace_all(abr, empty_repl_pair);
+        assert(ath_is_alive(deleted));
+        fputs("expect brcdbr: ", stdout);
+        ath_print_obj(deleted);
+
+        /* REPLACE_ALL where replacement is longer than needle. */
+        ath_obj *xy = ath_compose(ath_char_atom('X'),
+                       ath_compose(ath_char_atom('Y'),
+                       ath_compose(ath_char_atom('Z'), ath_NULL)));
+        ath_obj *grow_pair = ath_compose(aN, xy);
+        ath_obj *grown = ath_replace_all(abr, grow_pair);
+        assert(ath_is_alive(grown));
+        fputs("expect XYZbrXYZcXYZdXYZbrXYZ: ", stdout);
+        ath_print_obj(grown);
+    }
+
     /* read-after-delete: the watch_path observation flips alive to 0
      * but DOES NOT trigger another unlink (file is gone). */
     ath_obj *fr3 = ath_alloc_read_file(wpath);

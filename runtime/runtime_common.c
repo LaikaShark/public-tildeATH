@@ -953,6 +953,160 @@ void ath_close(ath_obj *v) {
     v->alive = 0;
 }
 
+/* --- Search and replace (SPEC §4.8.4) ----------------------------------- */
+
+/* Slurp a string cons-list into a heap-allocated NUL-terminated buffer.
+ * Returns 0 on success and fills *out_buf and *out_len. The caller must
+ * free *out_buf. Returns -1 on malformed string (non-character atom) or
+ * an allocation failure; *out_buf is unset in that case. NULL or dead s
+ * yields a successful empty buffer. */
+static int ath_string_slurp(ath_obj *s, char **out_buf, size_t *out_len) {
+    int64_t len = ath_spine_length(s);
+    if (len < 0) return -1;
+    size_t cap = (size_t)len + 1;
+    char *buf = (char *)malloc(cap);
+    if (!buf) return -1;
+    int n = ath_string_to_buf(s, buf, cap);
+    if (n < 0) {
+        free(buf);
+        return -1;
+    }
+    *out_buf = buf;
+    *out_len = (size_t)n;
+    return 0;
+}
+
+/* Build a fresh right-nested cons-list from a byte buffer. NULL on empty. */
+static ath_obj *ath_buf_to_string(const char *buf, size_t n) {
+    ath_obj *acc = ath_NULL;
+    for (size_t i = n; i > 0; i--) {
+        ath_obj *c = ath_char_atom((unsigned char)buf[i - 1]);
+        acc = ath_compose(c, acc);
+    }
+    return acc;
+}
+
+ath_obj *ath_find(ath_obj *hay, ath_obj *needle) {
+    /* NULL hay/needle are treated as empty strings (alive); non-NULL
+     * dead operands are real failures. */
+    int hay_empty = (hay == NULL || hay == ath_NULL);
+    int needle_empty = (needle == NULL || needle == ath_NULL);
+    if (!hay_empty && !ath_is_alive(hay)) return ath_alloc_dead_number();
+    if (!needle_empty && !ath_is_alive(needle)) return ath_alloc_dead_number();
+
+    char *hbuf = NULL, *nbuf = NULL;
+    size_t hlen = 0, nlen = 0;
+    if (ath_string_slurp(hay, &hbuf, &hlen) != 0) return ath_alloc_dead_number();
+    if (ath_string_slurp(needle, &nbuf, &nlen) != 0) {
+        free(hbuf);
+        return ath_alloc_dead_number();
+    }
+
+    /* Empty needle matches at position 0 — empty is a prefix of every
+     * string (§4.8.4 "Empty needle"). */
+    if (nlen == 0) {
+        free(hbuf); free(nbuf);
+        ath_obj *idx = ath_alloc_number(0);
+        ath_inherit_lifetime(idx, hay, needle);
+        return idx;
+    }
+
+    /* Naive substring search. */
+    for (size_t i = 0; i + nlen <= hlen; i++) {
+        if (memcmp(hbuf + i, nbuf, nlen) == 0) {
+            free(hbuf); free(nbuf);
+            ath_obj *idx = ath_alloc_number((int64_t)i);
+            ath_inherit_lifetime(idx, hay, needle);
+            return idx;
+        }
+    }
+    free(hbuf); free(nbuf);
+    return ath_alloc_dead_number();
+}
+
+/* Common path for replace and replace_all. all_occurrences selects mode. */
+static ath_obj *ath_replace_impl(ath_obj *s, ath_obj *pair, int all_occurrences) {
+    if (s == NULL || (s != ath_NULL && !ath_is_alive(s))) return ath_alloc_dead();
+    if (pair == NULL || pair == ath_NULL || !ath_is_alive(pair)) return ath_alloc_dead();
+
+    /* Decompose pair → needle, replacement. */
+    ath_obj *needle, *repl;
+    ath_decompose(pair, &needle, &repl);
+
+    char *sbuf = NULL, *nbuf = NULL, *rbuf = NULL;
+    size_t slen = 0, nlen = 0, rlen = 0;
+    if (ath_string_slurp(s, &sbuf, &slen) != 0) return ath_alloc_dead();
+    if (ath_string_slurp(needle, &nbuf, &nlen) != 0) {
+        free(sbuf);
+        return ath_alloc_dead();
+    }
+    if (ath_string_slurp(repl, &rbuf, &rlen) != 0) {
+        free(sbuf); free(nbuf);
+        return ath_alloc_dead();
+    }
+
+    /* §4.8.4: empty needle is dead for replace/replace_all. */
+    if (nlen == 0) {
+        free(sbuf); free(nbuf); free(rbuf);
+        return ath_alloc_dead();
+    }
+
+    /* Worst-case output length: every byte becomes a replacement match. */
+    size_t max_out = slen;
+    if (rlen > nlen) {
+        /* Each match grows output by (rlen - nlen). At most slen/nlen
+         * matches in REPLACE_ALL; cap is then slen + (slen/nlen)*(rlen-nlen).
+         * For single REPLACE the worst case is slen - nlen + rlen. */
+        size_t max_matches = all_occurrences ? (slen / nlen) : 1;
+        max_out = slen + max_matches * (rlen - nlen);
+    }
+    char *out = (char *)malloc(max_out > 0 ? max_out : 1);
+    if (!out) {
+        free(sbuf); free(nbuf); free(rbuf);
+        return ath_alloc_dead();
+    }
+
+    size_t i = 0, oi = 0;
+    int found_any = 0;
+    while (i <= slen) {
+        /* Try to match at position i. */
+        if (i + nlen <= slen && memcmp(sbuf + i, nbuf, nlen) == 0) {
+            memcpy(out + oi, rbuf, rlen);
+            oi += rlen;
+            i += nlen;
+            found_any = 1;
+            if (!all_occurrences) {
+                /* Copy the remainder verbatim. */
+                if (i < slen) memcpy(out + oi, sbuf + i, slen - i);
+                oi += slen - i;
+                i = slen + 1;  /* exit loop */
+            }
+        } else if (i < slen) {
+            out[oi++] = sbuf[i++];
+        } else {
+            i++;  /* loop ends */
+        }
+    }
+
+    if (!found_any) {
+        free(sbuf); free(nbuf); free(rbuf); free(out);
+        return ath_alloc_dead();
+    }
+
+    ath_obj *result = ath_buf_to_string(out, oi);
+    free(sbuf); free(nbuf); free(rbuf); free(out);
+    ath_inherit_lifetime(result, s, pair);
+    return result;
+}
+
+ath_obj *ath_replace(ath_obj *s, ath_obj *pair) {
+    return ath_replace_impl(s, pair, /* all_occurrences = */ 0);
+}
+
+ath_obj *ath_replace_all(ath_obj *s, ath_obj *pair) {
+    return ath_replace_impl(s, pair, /* all_occurrences = */ 1);
+}
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);

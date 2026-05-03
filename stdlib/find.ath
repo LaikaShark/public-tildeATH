@@ -1,0 +1,12 @@
+// SPEC §4.8.4 — first index of NEEDLE in HAY.
+//
+//   FIND [HAY, NEEDLE] IDX;
+//
+// IDX is a number-payload object holding the 0-indexed position of
+// the first occurrence of NEEDLE in HAY. Born dead if NEEDLE is not
+// present, or if either operand is dead. Empty NEEDLE matches at 0.
+
+import builtin ath_find as ATH_FIND;
+BIFURCATE ARGS [HAY, NEEDLE];
+ATH_FIND [HAY, NEEDLE] R;
+THIS.DIE(R);

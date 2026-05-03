@@ -248,6 +248,18 @@ CASES = [
         "self destruct\nscratch file is now gone\n",
         id="tier4_file_io_owned_die",
     ),
+    pytest.param(
+        "search_replace/main.ath",
+        "hello world hello\nhello\nhi\n",
+        "0\nhi world hi\n",
+        id="tier3c_search_replace_match",
+    ),
+    pytest.param(
+        "search_replace/main.ath",
+        "no matches here\nxyz\nXYZ\n",
+        "not found\n\n",
+        id="tier3c_search_replace_no_match",
+    ),
 ]
 
 

@@ -1179,9 +1179,11 @@ at the surface; explicit AND requires a runtime helper).
 #### 4.8.4 String operations
 
 Strings are right-nested cons-lists of character atoms (§4.6). The
-runtime exports four operations over them; two are surfaced as
-function calls via `stdlib/`, two as dedicated statement syntax
-(§4.4.15, §4.4.16).
+runtime exports seven operations over them. Four are surfaced as
+function calls via `stdlib/`; two as dedicated statement syntax
+(§4.4.15, §4.4.16); one (`find`) as a function call and two
+(`replace`, `replace_all`) using the compose-pair pattern described
+below.
 
 | Name | Surface form | Result | Born dead when |
 |---|---|---|---|
@@ -1189,25 +1191,69 @@ function calls via `stdlib/`, two as dedicated statement syntax
 | `concat` | `CONCAT [A, B] R;` | fresh cons-list: elements of `A` followed by elements of `B`, terminated with `NULL` | `A` or `B` is dead at the call |
 | index | `S[N] X;` (§4.4.15) | the Nth right-spine head of `S` | `S`/`N` dead or unbound; `N` has no payload or is negative; walk hits `NULL`/dead before position `N` |
 | slice | `S[I..J] X;` (§4.4.16) | fresh cons-list of elements `I..J-1`, terminated with `NULL` | `S`/`I`/`J` dead; `I` or `J` has no payload or is negative; `I > J`; walk hits `NULL`/dead before `J` |
+| `find` | `FIND [HAY, NEEDLE] IDX;` | int64 payload = 0-indexed position of the first occurrence of `NEEDLE` in `HAY` | NEEDLE not present in HAY; HAY or NEEDLE dead; non-character atom encountered during slurp |
+| `replace` | `REPLACE [S, PAIR] R;` (see compose-pair below) | fresh cons-list with the first occurrence of `NEEDLE` in `S` replaced by `REPLACEMENT` | NEEDLE not present in S; NEEDLE is empty; S/PAIR dead; non-character atom during slurp |
+| `replace_all` | `REPLACE_ALL [S, PAIR] R;` | fresh cons-list with every non-overlapping occurrence of `NEEDLE` replaced by `REPLACEMENT` | same failure modes as `replace` |
+
+##### Compose-pair pattern
+
+`REPLACE` and `REPLACE_ALL` conceptually take three arguments
+(source, needle, replacement) but the builtin FFI signature
+(§4.4.13) is fixed at two `ath_obj *` inputs. The convention,
+identical to how the range-subscript form `S[I..J]` lowers in
+§4.4.16, is to pack `NEEDLE` and `REPLACEMENT` into a single
+composite using `BIFURCATE` and pass that composite as the second
+argument:
+
+```
+BIFURCATE [NEEDLE, REPLACEMENT] PAIR;
+REPLACE [S, PAIR] R;
+```
+
+Inside the runtime, `ath_replace` (and `ath_replace_all`)
+decompose the pair to recover `NEEDLE` and `REPLACEMENT`, then
+perform the search-and-substitute pass.
+
+**Dep-tracking caveat.** The user composes `PAIR` with plain
+`BIFURCATE`, which does *not* call `ath_inherit_lifetime` (§4.8.1).
+So `PAIR` has no internal deps on `NEEDLE` or `REPLACEMENT`.
+`REPLACE`'s result inherits `S` and `PAIR` as deps; killing
+`NEEDLE` or `REPLACEMENT` *after* the call does not propagate
+death to `R`. If you need that propagation, explicitly install
+deps via a dedicated runtime helper (not currently exposed at the
+surface) or arrange your composition order so that the
+needle/replacement strings have their own dep chains anchored to
+shared sources.
+
+##### Other behavior shared across the family
 
 `LENGTH` on `NULL` returns the eternal payload object `0` (not a
 dead result) — the empty string is a real cons-list with a known
 length. This is the one place "absent" is distinguished from
 "failed."
 
-All four operations install operand dependencies on their results
-via `ath_inherit_lifetime` (§4.8.1). Slicing a string and then
-killing the source kills the slice on the next observation.
+All seven operations install operand dependencies on their results
+via `ath_inherit_lifetime` (§4.8.1) — within the limits noted for
+the compose-pair pattern above. Slicing a string and then killing
+the source kills the slice on the next observation.
 
-In `intern` composition mode (§4.4.3), concatenated and sliced
-results allocate fresh cons cells; sharing only happens at the
-char-atom level (which is canonical regardless of mode). Equal
-substrings produced by separate operations remain distinct objects.
+In `intern` composition mode (§4.4.3), concatenated, sliced, and
+replaced results allocate fresh cons cells; sharing only happens at
+the char-atom level (which is canonical regardless of mode). Equal
+results produced by separate operations remain distinct objects.
 
 `LENGTH`'s second operand and `INDEX`/`SLICE`'s output type follow
 the same conventions as the arithmetic ops (§4.8.2): unary calls
 pass `NULL` (or any name) as the ignored second argument, and the
 chain dies on the first failure.
+
+**Empty needle.** `FIND` with an empty `NEEDLE` returns `0`
+(the empty string is a prefix of any string at position 0).
+`REPLACE` and `REPLACE_ALL` with an empty `NEEDLE` return a
+born-dead `R` — "replace nothing with something" is deliberately
+under-defined (Python's behavior of inserting at every position
+boundary is surprising and rarely what users want; sed rejects
+it). Use `CONCAT` if you want to prepend or append text.
 
 #### 4.8.5 Time and randomness built-ins
 
@@ -1327,6 +1373,9 @@ ath_obj *ath_length(ath_obj *s, ath_obj *unused);
 ath_obj *ath_concat(ath_obj *a, ath_obj *b);
 ath_obj *ath_index(ath_obj *s, ath_obj *n);
 ath_obj *ath_slice(ath_obj *s, ath_obj *range);
+ath_obj *ath_find(ath_obj *hay, ath_obj *needle);
+ath_obj *ath_replace(ath_obj *s, ath_obj *pair);
+ath_obj *ath_replace_all(ath_obj *s, ath_obj *pair);
 
 /* Shallow clone for non-destructive checking (SPEC §4.4.18). Copies all
  * fields of v except dep1/dep2, which are zeroed. */

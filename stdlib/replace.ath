@@ -1,0 +1,14 @@
+// SPEC §4.8.4 — replace first occurrence of NEEDLE in S with REPLACEMENT.
+//
+//   BIFURCATE [NEEDLE, REPLACEMENT] PAIR;
+//   REPLACE [S, PAIR] R;
+//
+// The compose-pair pattern packs (NEEDLE, REPLACEMENT) into a single
+// composite so this fits the two-argument builtin ABI (SPEC §4.4.13).
+// R is born dead if NEEDLE is empty, not present in S, or if any
+// operand is dead. See TUTORIAL.md §14.7 for the rationale.
+
+import builtin ath_replace as ATH_REPLACE;
+BIFURCATE ARGS [S, PAIR];
+ATH_REPLACE [S, PAIR] R;
+THIS.DIE(R);

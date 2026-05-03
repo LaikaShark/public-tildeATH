@@ -1,0 +1,40 @@
+// Tier 3c demo: FIND + REPLACE_ALL.
+//
+// Reads three lines from stdin:
+//   1. a haystack string
+//   2. a needle to search for
+//   3. a replacement string
+//
+// Prints the index of the first match (or "not found"), then the
+// string with every occurrence of the needle replaced.
+//
+// Try:
+//   athc examples/search_replace/main.ath -o sr
+//   printf 'hello world hello\nhello\nhi\n' | ./sr
+//   # 0
+//   # hi world hi
+
+importf <find>        as FIND;
+importf <replace_all> as REPLACE_ALL;
+importf <to_string>   as TO_STRING;
+
+INPUT HAY;
+INPUT NEEDLE;
+INPUT REPL;
+
+// Search: report the position of the first match (or "not found").
+FIND [HAY, NEEDLE] IDX;
+CLONE IDX as IDX_CHECK;
+BRANCH(IDX_CHECK) {
+    TO_STRING [IDX, NULL] S;
+    PRINT2 S;
+} ELSE {
+    print not found;
+}
+
+// Replace: pack (NEEDLE, REPL) into a single pair, then call.
+BIFURCATE [NEEDLE, REPL] PAIR;
+REPLACE_ALL [HAY, PAIR] R;
+PRINT2 R;
+
+THIS.DIE();
