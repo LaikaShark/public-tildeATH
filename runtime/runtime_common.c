@@ -101,16 +101,34 @@ int ath_is_alive(ath_obj *v) {
         v->alive = 0;
         return 0;
     }
-    /* Dependency-inherited lifetime (§4.8.1): if any installed dep is dead,
-     * this object is dead too. Recursive — dep chains propagate. The walk
+    /* Dependency-inherited lifetime (§4.8.1, §4.8.3). Default AND mode:
+     * any dead dep kills the result permanently. OR mode (set by ath_or):
+     * the result stays alive as long as at least one dep is alive, and
+     * only flips its own alive=0 once both deps are dead. The walk
      * terminates because deps point to earlier-allocated objects. */
-    if (v->dep1 != NULL && !ath_is_alive(v->dep1)) {
-        v->alive = 0;
-        return 0;
-    }
-    if (v->dep2 != NULL && !ath_is_alive(v->dep2)) {
-        v->alive = 0;
-        return 0;
+    if (v->dep_mode == ATH_DEP_OR) {
+        int d1_present = (v->dep1 != NULL);
+        int d2_present = (v->dep2 != NULL);
+        if (d1_present || d2_present) {
+            int d1_alive = d1_present && ath_is_alive(v->dep1);
+            int d2_alive = d2_present && ath_is_alive(v->dep2);
+            if (!d1_alive && !d2_alive) {
+                v->alive = 0;
+                return 0;
+            }
+            /* At least one dep is alive — stay alive without flipping. */
+            return 1;
+        }
+        /* OR mode without deps: degenerate; fall through. */
+    } else {
+        if (v->dep1 != NULL && !ath_is_alive(v->dep1)) {
+            v->alive = 0;
+            return 0;
+        }
+        if (v->dep2 != NULL && !ath_is_alive(v->dep2)) {
+            v->alive = 0;
+            return 0;
+        }
     }
     /* One-shot: alive for this single observation, dead thereafter. */
     if (v->is_oneshot) {
@@ -582,6 +600,55 @@ ath_obj *ath_eq(ath_obj *x, ath_obj *y) {
 ath_obj *ath_gt(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_verdict_false();
     return x->value > y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+}
+
+ath_obj *ath_le(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_verdict_false();
+    return x->value <= y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+}
+
+ath_obj *ath_ge(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_verdict_false();
+    return x->value >= y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+}
+
+ath_obj *ath_ne(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_verdict_false();
+    return x->value != y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+}
+
+/* --- Logical combinators over verdicts (SPEC §4.8.3) ------------------- */
+
+/* AND: alive iff both operands alive at every observation. Uses the
+ * default conjunctive dep machinery. Born dead if either operand is
+ * already dead at call (the first ath_is_alive walk catches this, but
+ * we shortcut to keep the born-dead invariant uniform with the
+ * comparison primitives). */
+ath_obj *ath_and(ath_obj *x, ath_obj *y) {
+    int x_alive = (x != NULL) && ath_is_alive(x);
+    int y_alive = (y != NULL) && ath_is_alive(y);
+    if (!x_alive || !y_alive) return ath_verdict_false();
+    ath_obj *v = ath_alloc_alive();
+    ath_inherit_lifetime(v, x, y);
+    return v;
+}
+
+/* OR: alive iff at least one operand alive at every observation. Sets
+ * dep_mode=ATH_DEP_OR so ath_is_alive walks both deps disjunctively.
+ * Born dead only if both operands are already dead at call. */
+ath_obj *ath_or(ath_obj *x, ath_obj *y) {
+    int x_alive = (x != NULL) && ath_is_alive(x);
+    int y_alive = (y != NULL) && ath_is_alive(y);
+    if (!x_alive && !y_alive) return ath_verdict_false();
+    ath_obj *v = ath_alloc_alive();
+    /* Install both deps unconditionally so the OR walk sees every input,
+     * even one that's already dead at call time (so a dynamic revival of
+     * "the other is alive" still works). Skip self and NULL per the
+     * ath_inherit_lifetime convention. */
+    if (x != NULL && x != ath_NULL && x != v) v->dep1 = x;
+    if (y != NULL && y != ath_NULL && y != v) v->dep2 = y;
+    v->dep_mode = ATH_DEP_OR;
+    return v;
 }
 
 ath_obj *ath_parse(ath_obj *s, ath_obj *unused) {

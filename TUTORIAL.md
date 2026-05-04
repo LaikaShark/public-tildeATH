@@ -664,24 +664,33 @@ comparison: alive iff the comparison is true. Verdicts carry no
 payload and are observed only through `ath_is_alive`, typically in a
 loop header.
 
-Three primitive comparisons are shipped (§4.8.3):
+Six primitive comparisons are shipped (§4.8.3):
 
 | Surface call    | Alive when            |
 |-----------------|-----------------------|
 | `LT [X, Y] V;`  | `X.value < Y.value`   |
+| `LE [X, Y] V;`  | `X.value <= Y.value`  |
 | `EQ [X, Y] V;`  | `X.value == Y.value`  |
+| `NE [X, Y] V;`  | `X.value != Y.value`  |
+| `GE [X, Y] V;`  | `X.value >= Y.value`  |
 | `GT [X, Y] V;`  | `X.value > Y.value`   |
 
 A verdict is born dead if the comparison is false, if either operand
 is dead, or if either operand lacks a payload.
 
-The three derived comparisons are expressed by inverting or swapping:
+All six are primitives rather than derived forms. This is so that a
+negated comparison can be combined with `AND` and `OR` (§12.3)
+without needing a NOT-of-verdict construct (which would conflict with
+the one-way-death rule — see §12.3).
 
-| Want         | Write                            |
-|--------------|----------------------------------|
-| `X <= Y`     | `GT [X, Y] V;` then `~ATH(!V)`   |
-| `X >= Y`     | `LT [X, Y] V;` then `~ATH(!V)`   |
-| `X != Y`     | `EQ [X, Y] V;` then `~ATH(!V)`   |
+`~ATH(!V)` (§7.1) provides the same inversion at a single observation
+site, and is the right choice when the negated verdict is consumed
+immediately:
+
+```
+GT [X, Y] V;
+~ATH(!V) { ... }    // body runs while X <= Y (i.e. NOT X > Y)
+```
 
 ### 12.1 Lifetime inheritance
 
@@ -724,6 +733,65 @@ This prints `iteration` five times. The comparison is re-evaluated
 explicitly inside the loop; the runtime does not re-run builtins. The
 verdict object bound to `COND` is replaced each iteration; the prior
 verdicts become unreachable and are reclaimed at program exit.
+
+### 12.3 Combining verdicts: AND, OR
+
+Two logical combinators take verdicts (or any objects) and produce a
+new verdict. Both are stdlib shims over runtime builtins
+(§4.8.3).
+
+| Surface call    | Alive when                                                | Born dead when                |
+|-----------------|-----------------------------------------------------------|-------------------------------|
+| `AND [X, Y] V;` | both `X` and `Y` are alive at every observation           | either operand dead at call   |
+| `OR  [X, Y] V;` | at least one of `X`, `Y` is alive at every observation    | both operands dead at call    |
+
+`AND` uses the conjunctive dependency machinery from §12.1: the
+result inherits both operands as deps, so it becomes dead at the
+next observation as soon as either operand dies, and stays dead.
+
+`OR` installs both operands as deps but evaluates them
+**disjunctively**: the runtime walks both on every observation and
+returns alive as long as at least one is alive. Only once both are
+dead does the OR-result flip to dead permanently (consistent with
+the one-way-death rule, §6).
+
+```ath
+importf <gt>  as GT;
+importf <and> as AND;
+importf <or>  as OR;
+
+import number 0 as ZERO;
+
+GT [X, ZERO] X_POS;          // X > 0
+GT [Y, ZERO] Y_POS;          // Y > 0
+AND [X_POS, Y_POS] BOTH;     // X > 0 AND Y > 0
+~ATH(BOTH) { print both positive; BOTH.DIE(); }
+```
+
+The OR-result's runtime check evaluates its two deps on every
+`ath_is_alive` call; this is unavoidable since "at least one alive"
+cannot be cached. AND-results, by contrast, cache the first dead
+observation and become a constant-time check thereafter.
+
+### 12.4 Why there is no `NOT`
+
+A NOT-of-verdict is not provided. The reason is structural: such a
+verdict would have to be born dead when its operand is alive, then
+become alive the moment the operand died. Dead→alive transitions
+violate the one-way-death rule that the entire object model rests on
+(§3, §6).
+
+Negation is expressed in two places instead:
+
+- At an observation site, use `~ATH(!V)` or `BRANCH(!V)`. Both
+  re-check the condition at each observation and produce the inverse
+  truth value without materializing a NOT-object.
+- When the negated verdict must be combined with `AND` or `OR`, use
+  the contrapositive comparison primitive. For "X < Y is false AND
+  Z != 0," write `GE [X, Y] V1; NE [Z, ZERO] V2; AND [V1, V2] V;`
+  rather than trying to negate `LT`. This is why `LE`, `GE`, `NE`
+  are primitive — they fill the gap that `NOT` would otherwise need
+  to bridge.
 
 ---
 

@@ -36,7 +36,15 @@ typedef struct ath_obj {
      * dep is dead. Installed by ath_inherit_lifetime; never written elsewhere. */
     struct ath_obj *dep1;
     struct ath_obj *dep2;
+    /* SPEC §4.8.3 dep evaluation mode. 0 (DEP_AND) is the default: result is
+     * dead if any non-null dep is dead. 1 (DEP_OR) flips dep1/dep2 to
+     * disjunctive: result stays alive until both deps are dead. Set only by
+     * ath_or; everything else leaves it at 0. */
+    int dep_mode;
 } ath_obj;
+
+#define ATH_DEP_AND 0
+#define ATH_DEP_OR  1
 
 extern ath_obj *ath_NULL;
 
@@ -96,6 +104,18 @@ ath_obj *ath_parse(ath_obj *s, ath_obj *unused);
 ath_obj *ath_lt(ath_obj *x, ath_obj *y);
 ath_obj *ath_eq(ath_obj *x, ath_obj *y);
 ath_obj *ath_gt(ath_obj *x, ath_obj *y);
+ath_obj *ath_le(ath_obj *x, ath_obj *y);
+ath_obj *ath_ge(ath_obj *x, ath_obj *y);
+ath_obj *ath_ne(ath_obj *x, ath_obj *y);
+
+/* Logical combinators over verdicts (SPEC §4.8.3). Born dead if both
+ * (AND: either) operands are dead at call. AND uses ath_inherit_lifetime
+ * (conjunctive deps). OR sets dep_mode=ATH_DEP_OR so the result stays
+ * alive until both deps are dead. NOT is intentionally absent: it would
+ * require a dead->alive transition (forbidden by §4.1); express negation
+ * at the observation site via `~ATH(!V)` or `BRANCH(!V)`. */
+ath_obj *ath_and(ath_obj *x, ath_obj *y);
+ath_obj *ath_or(ath_obj *x, ath_obj *y);
 
 /* String operations on cons-list-structured objects (SPEC §4.8.4).
  * ath_index and ath_slice are also invoked by the subscript and

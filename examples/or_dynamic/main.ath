@@ -1,0 +1,37 @@
+// Exercises OR's born-alive vs born-dead semantics across three states:
+// both operands alive, exactly one alive, both dead.
+//
+//   athc examples/or_dynamic/main.ath -o ord
+//   ./ord
+//   # expected:
+//   # both alive
+//   # one alive
+//   # both dead
+//
+// Each iteration re-derives the OR with a fresh call so the allocator
+// observes the current state of V1 and V2. (The disjunctive dep-walk
+// in ath_is_alive is also live, but is harder to observe without a
+// non-mutating observation primitive — see the CLONE/refresh
+// follow-up.)
+
+importf <gt> as GT;
+importf <or> as OR;
+
+import number 1 as ONE;
+import number 0 as ZERO;
+
+GT [ONE, ZERO] V1;
+GT [ONE, ZERO] V2;
+
+OR [V1, V2] R1;
+BRANCH(R1) { print both alive; } ELSE { print both fail; }
+
+V1.DIE();
+OR [V1, V2] R2;
+BRANCH(R2) { print one alive; } ELSE { print one fail; }
+
+V2.DIE();
+OR [V1, V2] R3;
+BRANCH(R3) { print both fail; } ELSE { print both dead; }
+
+THIS.DIE();

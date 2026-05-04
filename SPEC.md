@@ -1139,7 +1139,7 @@ LT [X, Y] V;
 }
 ```
 
-The runtime exports three comparison primitives, brought in via the
+The runtime exports six comparison primitives, brought in via the
 search-path importf form:
 
 | Name | Surface call | Alive when | Born dead when |
@@ -1147,16 +1147,13 @@ search-path importf form:
 | `lt` | `LT [X, Y] V;` | `X.value < Y.value`  | comparison false; either operand dead; either operand has no payload |
 | `eq` | `EQ [X, Y] V;` | `X.value == Y.value` | comparison false; either operand dead; either operand has no payload |
 | `gt` | `GT [X, Y] V;` | `X.value > Y.value`  | comparison false; either operand dead; either operand has no payload |
+| `le` | `LE [X, Y] V;` | `X.value <= Y.value` | comparison false; either operand dead; either operand has no payload |
+| `ge` | `GE [X, Y] V;` | `X.value >= Y.value` | comparison false; either operand dead; either operand has no payload |
+| `ne` | `NE [X, Y] V;` | `X.value != Y.value` | comparison false; either operand dead; either operand has no payload |
 
-The three derived comparisons (`<=`, `>=`, `!=`) are expressible
-without new primitives. `~ATH(!V)` inversion (§4.4.4) handles
-negation, and swapping operands handles asymmetric flips:
-
-```
-GT [X, Y] V;   ~ATH(!V) { ... }    // X <= Y (i.e. "not X > Y")
-LT [X, Y] V;   ~ATH(!V) { ... }    // X >= Y
-EQ [X, Y] V;   ~ATH(!V) { ... }    // X != Y
-```
+`le`, `ge`, `ne` are primitive rather than derived; this lets a
+negated comparison be combined with `AND`/`OR` (below) without
+needing a `NOT`-of-verdict construct.
 
 A true verdict's lifetime inherits from both operands via
 `ath_inherit_lifetime(V, X, Y)` (§4.8.1): if either operand dies after
@@ -1170,11 +1167,34 @@ comparison ("is X the same object as Y") is a deliberately separate
 question and is not in scope for v2; the verdict primitives compare
 int64 payloads only.
 
-Logical combinators (AND, OR, NOT) over verdicts are deferred to a
-control-flow extension. For now, AND of two verdicts can be expressed
-by composition under the existing dep-tracking rule (`BIFURCATE
-[V1, V2] AND;` followed by `ath_inherit_lifetime` is not yet exposed
-at the surface; explicit AND requires a runtime helper).
+##### Logical combinators
+
+Two logical combinators over verdicts are exposed as builtins through
+the same shim pattern as the comparisons:
+
+| Name | Surface call | Alive when | Born dead when |
+|---|---|---|---|
+| `and` | `AND [X, Y] V;` | both `X` and `Y` alive at every observation | either operand dead at call |
+| `or`  | `OR  [X, Y] V;` | at least one of `X`, `Y` alive at every observation | both operands dead at call |
+
+`AND` uses the existing conjunctive dep machinery — it allocates an
+alive verdict and calls `ath_inherit_lifetime(V, X, Y)`, so the
+result becomes dead at the next observation as soon as either operand
+dies, and stays dead.
+
+`OR` allocates an alive verdict, installs both operands in `dep1`
+and `dep2`, and sets `dep_mode = ATH_DEP_OR` (§5.1) so `ath_is_alive`
+treats them disjunctively: the result stays alive as long as at least
+one dep is alive, and only flips its own `alive` to `0` once both are
+observed dead. After that flip the result is permanently dead (§4.1).
+
+There is **no `NOT` combinator.** A materialized `NOT(V)` would
+require a dead→alive transition when `V` later dies, which §4.1
+forbids. Negation is expressed at the observation site instead, via
+`~ATH(!V)` (§4.4.4) or `BRANCH(!V)` (§4.4.17). Where the negated
+verdict needs to be combined with another, use the primitive
+contrapositive (`X >= Y` instead of `NOT (X < Y)`) and feed that
+verdict into `AND`/`OR` directly.
 
 #### 4.8.4 String operations
 
@@ -1318,6 +1338,14 @@ typedef struct ath_obj {
     /* §4.8.1 dependency tracking */
     struct ath_obj *dep1;       /* NULL = no dep */
     struct ath_obj *dep2;       /* NULL = no dep */
+
+    /* §4.8.3 dep evaluation mode.
+     *   ATH_DEP_AND (0, default) — result dead if any non-null dep dead.
+     *   ATH_DEP_OR  (1)          — result stays alive while at least one
+     *                              non-null dep alive; flips dead only
+     *                              once both observed dead.
+     * Set exclusively by ath_or; everything else leaves it at 0. */
+    int dep_mode;
 } ath_obj;
 ```
 
@@ -1365,6 +1393,14 @@ ath_obj *ath_parse(ath_obj *s, ath_obj *unused);
 ath_obj *ath_lt(ath_obj *x, ath_obj *y);
 ath_obj *ath_eq(ath_obj *x, ath_obj *y);
 ath_obj *ath_gt(ath_obj *x, ath_obj *y);
+ath_obj *ath_le(ath_obj *x, ath_obj *y);
+ath_obj *ath_ge(ath_obj *x, ath_obj *y);
+ath_obj *ath_ne(ath_obj *x, ath_obj *y);
+
+/* Logical combinators over verdicts (§4.8.3). NOT is not provided —
+ * see the §4.8.3 commentary. */
+ath_obj *ath_and(ath_obj *x, ath_obj *y);
+ath_obj *ath_or(ath_obj *x, ath_obj *y);
 
 /* String operations (SPEC §4.8.4). All install operand deps on results
  * via ath_inherit_lifetime. ath_index and ath_slice are also invoked

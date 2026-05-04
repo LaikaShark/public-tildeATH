@@ -1,0 +1,63 @@
+// Reads two decimal integers X and Y from stdin (one per line) and
+// prints which static verdicts hold among LE, GE, NE, plus the
+// AND/OR of "X > 0" and "Y > 0".
+//
+//   athc examples/verdicts/main.ath -o v
+//   printf '3\n7\n'  | ./v
+//   printf '4\n4\n'  | ./v
+//   printf '0\n5\n'  | ./v
+//
+// Each line is printed iff the corresponding verdict is alive at the
+// observation site.
+
+importf <parse> as PARSE;
+importf <le>    as LE;
+importf <ge>    as GE;
+importf <ne>    as NE;
+importf <gt>    as GT;
+importf <and>   as AND;
+importf <or>    as OR;
+importf <eq>    as EQ;
+
+INPUT LINE_X;
+INPUT LINE_Y;
+PARSE [LINE_X, NULL] X;
+PARSE [LINE_Y, NULL] Y;
+
+import number 0 as ZERO;
+
+LE [X, Y] V_LE;
+~ATH(V_LE) {
+    print x le y;
+    V_LE.DIE();
+}
+
+GE [X, Y] V_GE;
+~ATH(V_GE) {
+    print x ge y;
+    V_GE.DIE();
+}
+
+NE [X, Y] V_NE;
+~ATH(V_NE) {
+    print x ne y;
+    V_NE.DIE();
+}
+
+GT [X, ZERO] X_POS;
+GT [Y, ZERO] Y_POS;
+AND [X_POS, Y_POS] BOTH_POS;
+~ATH(BOTH_POS) {
+    print both positive;
+    BOTH_POS.DIE();
+}
+
+EQ [X, ZERO] X_ZERO;
+EQ [Y, ZERO] Y_ZERO;
+OR [X_ZERO, Y_ZERO] EITHER_ZERO;
+~ATH(EITHER_ZERO) {
+    print some zero;
+    EITHER_ZERO.DIE();
+}
+
+THIS.DIE();

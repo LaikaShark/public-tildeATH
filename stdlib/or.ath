@@ -1,0 +1,12 @@
+// SPEC §4.8.3 — logical OR over verdicts.
+//
+//   OR [X, Y] V;
+//
+// V is alive iff at least one of X and Y is alive at every observation.
+// Born dead only if both operands are dead at the call. Uses
+// disjunctive dep evaluation (dep_mode = ATH_DEP_OR).
+
+import builtin ath_or as ATH_OR;
+BIFURCATE ARGS [X, Y];
+ATH_OR [X, Y] R;
+THIS.DIE(R);

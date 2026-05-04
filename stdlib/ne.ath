@@ -1,0 +1,10 @@
+// SPEC §4.8.3 — not-equal verdict.
+//
+//   NE [X, Y] V;
+//
+// V is alive iff X.value != Y.value, else born dead.
+
+import builtin ath_ne as ATH_NE;
+BIFURCATE ARGS [X, Y];
+ATH_NE [X, Y] R;
+THIS.DIE(R);

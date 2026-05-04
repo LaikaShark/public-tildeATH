@@ -260,6 +260,30 @@ CASES = [
         "not found\n\n",
         id="tier3c_search_replace_no_match",
     ),
+    pytest.param(
+        "verdicts/main.ath",
+        "3\n7\n",
+        "x le y\nx ne y\nboth positive\n",
+        id="tier2b_verdicts_le_ne_and",
+    ),
+    pytest.param(
+        "verdicts/main.ath",
+        "4\n4\n",
+        "x le y\nx ge y\nboth positive\n",
+        id="tier2b_verdicts_le_ge_eq",
+    ),
+    pytest.param(
+        "verdicts/main.ath",
+        "0\n5\n",
+        "x le y\nx ne y\nsome zero\n",
+        id="tier2b_verdicts_or_picks_up_zero",
+    ),
+    pytest.param(
+        "or_dynamic/main.ath",
+        None,
+        "both alive\none alive\nboth dead\n",
+        id="tier2b_or_born_states",
+    ),
 ]
 
 
