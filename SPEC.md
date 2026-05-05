@@ -780,21 +780,34 @@ has no effect on the other.
 
 `W` copies, field by field, from `V`:
 
-- `alive` — if `V` is dead at clone time, `W` is born dead.
+- `alive` — set to `V`'s **currently observable** liveness, computed
+  via the runtime's pure `ath_observe` (the same predicate
+  `ath_is_alive` uses, but without flipping any bits or consuming
+  one-shots). This means a clone of a verdict whose upstream operands
+  have since died is born dead, even if `V`'s raw `alive` bit has not
+  yet been refreshed by a direct observation. The clone of a one-shot
+  is *not* born dead by the cloning itself — `ath_observe` does not
+  trip `is_oneshot`, so a one-shot that has not been directly
+  observed yet clones to a fresh, unfired one-shot.
 - `left`, `right` — pointer-copied (shared with `V`'s halves; the
   cons-list structure beneath is not deep-copied).
 - `has_value`, `value` — full int64 payload copy.
-- `deadline_s`, `watch_path`, `is_oneshot`, `awaiting_signal` — all
-  lifetime extensions are copied, so the clone has the same
-  intrinsic mortality as the original. A clone of a `mayfly` dies
-  at the same deadline; a clone of a file-watcher watches the same
-  path; a clone of a `once` object is itself a one-shot.
+- `deadline_s`, `watch_path`, `is_oneshot`, `awaiting_signal`,
+  `dep_mode` — all lifetime extensions and the dep-evaluation mode
+  are copied, so the clone has the same intrinsic mortality as the
+  original. A clone of a `mayfly` dies at the same deadline; a clone
+  of a file-watcher watches the same path; a clone of a `once`
+  object is itself a one-shot.
 
 `W` does **not** copy `V`'s `dep1`/`dep2`. Inherited mortality
 (`ath_inherit_lifetime` from upstream operands) is *not* preserved
 across the clone — `W` is a snapshot at the moment of cloning,
 independent of what `V` was tracking. Killing one of `V`'s dep
-sources will kill `V` but not `W`.
+sources after the clone kills `V` but not `W`. The clone's `alive`
+bit captured the dep-walk result at clone time; further dep-source
+deaths are not observed by `W`. Because `dep_mode` is copied but
+deps are not, an OR-mode clone with no deps degenerates to a plain
+alive/dead object that trusts its captured bit.
 
 `CLONE` is the canonical primitive for **non-destructive checking**:
 
@@ -989,11 +1002,15 @@ its explicit `.DIE`-driven mortality:
    a process-wide handler; if the signal has been received, the object
    becomes dead. The flag is process-global, so all watchers of the
    same signal die together.
-4. **One-shot flag.** When set, the first `ath_is_alive` observation
-   returns alive and atomically flips the underlying `alive` field to
-   false; every subsequent observation returns dead. Combined with the
-   `~ATH` loop's "re-check before every iteration" rule, this causes
-   the body to execute exactly once.
+4. **One-shot flag.** When set, the first **direct** `ath_is_alive`
+   observation returns alive and atomically flips the underlying
+   `alive` field to false; every subsequent observation returns dead.
+   Combined with the `~ATH` loop's "re-check before every iteration"
+   rule, this causes the body to execute exactly once. "Direct"
+   excludes transitive observation through another object's
+   dependency walk (§4.8.1) — dep walks use the runtime's pure
+   `ath_observe` path, which never consumes one-shots. Only an
+   explicit `ath_is_alive(V)` call on the one-shot itself fires it.
 5. **Path-ownership flag (`owns_path`).** When set in combination with
    `watch_path`, the object is the **owner** of the underlying file.
    An explicit `ath_die` call on a still-alive owner triggers

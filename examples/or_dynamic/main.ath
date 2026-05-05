@@ -1,5 +1,6 @@
-// Exercises OR's born-alive vs born-dead semantics across three states:
-// both operands alive, exactly one alive, both dead.
+// Exercises OR's disjunctive dep walk in ath_is_alive: the result R
+// stays alive as long as at least one of its operands is alive, even
+// after one operand has been killed independently.
 //
 //   athc examples/or_dynamic/main.ath -o ord
 //   ./ord
@@ -8,11 +9,10 @@
 //   # one alive
 //   # both dead
 //
-// Each iteration re-derives the OR with a fresh call so the allocator
-// observes the current state of V1 and V2. (The disjunctive dep-walk
-// in ath_is_alive is also live, but is harder to observe without a
-// non-mutating observation primitive — see the CLONE/refresh
-// follow-up.)
+// CLONE is used to inspect R without consuming the original. The clone
+// captures R's currently observable liveness at clone time (refreshed
+// via ath_observe), so the snapshot reflects the dep walk's result
+// rather than R's possibly-stale raw alive bit.
 
 importf <gt> as GT;
 importf <or> as OR;
@@ -22,16 +22,17 @@ import number 0 as ZERO;
 
 GT [ONE, ZERO] V1;
 GT [ONE, ZERO] V2;
+OR [V1, V2] R;
 
-OR [V1, V2] R1;
+CLONE R as R1;
 BRANCH(R1) { print both alive; } ELSE { print both fail; }
 
 V1.DIE();
-OR [V1, V2] R2;
+CLONE R as R2;
 BRANCH(R2) { print one alive; } ELSE { print one fail; }
 
 V2.DIE();
-OR [V1, V2] R3;
+CLONE R as R3;
 BRANCH(R3) { print both fail; } ELSE { print both dead; }
 
 THIS.DIE();

@@ -986,18 +986,32 @@ CLONE V as W;
 `CLONE` allocates a fresh object `W` that copies, field by field,
 from `V`'s current binding at clone time (§4.4.18):
 
-- `alive` — `W` is dead if `V` is dead.
+- `alive` — `W` reflects `V`'s **currently observable** liveness, not
+  the raw alive bit. The runtime evaluates `V` through a pure
+  non-mutating check (the same predicate `ath_is_alive` uses, minus
+  the side effects) and stores the result. This matters when `V`'s
+  upstream operands have died since `V` was last directly observed —
+  the clone captures the dep-walk result rather than `V`'s stale bit.
 - `left`, `right` — pointer-copied; the deeper structure is shared.
 - `has_value`, `value` — full payload copy.
-- `deadline_s`, `watch_path`, `is_oneshot`, `awaiting_signal` —
-  every intrinsic lifetime extension is copied. A clone of a
-  one-shot is itself a one-shot; a clone of a file watcher watches
-  the same path; a clone of a deadlined object dies at the same
-  deadline.
+- `deadline_s`, `watch_path`, `is_oneshot`, `awaiting_signal`,
+  `dep_mode` — every intrinsic lifetime extension and the
+  dep-evaluation mode are copied. A clone of a one-shot is itself a
+  one-shot; a clone of a file watcher watches the same path; a clone
+  of a deadlined object dies at the same deadline.
+
+The clone of a one-shot is **not** consumed by the act of cloning.
+The non-mutating refresh used for the alive bit does not trip
+`is_oneshot`. So `CLONE V as W;` on a fresh one-shot leaves `V`
+unfired and produces `W` as an independent fresh one-shot.
 
 `W` does **not** copy `V`'s `dep1`/`dep2`, and does not copy the
 `owns_path` flag (see §16). `W` is independent: killing one of `V`
-or `W` does not affect the other.
+or `W` does not affect the other. Because `dep_mode` is copied but
+the deps are not, an OR-mode clone with no deps degenerates to a
+plain alive/dead object that trusts its captured bit — the snapshot
+is frozen at clone time and won't re-evaluate as upstream operands
+change later.
 
 Cloning `NULL` yields a fresh born-dead object.
 

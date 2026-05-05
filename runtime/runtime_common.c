@@ -78,62 +78,53 @@ void ath_die(ath_obj *v) {
 #define ATH_MAX_SIGNAL 64
 static volatile sig_atomic_t ath_signal_received[ATH_MAX_SIGNAL];
 
-int ath_is_alive(ath_obj *v) {
-    if (v == NULL) {
-        return 0;
-    }
-    if (!v->alive) {
-        return 0;
-    }
-    /* Deadline-based lifetime: object dies once now >= deadline. */
-    if (v->deadline_s > 0.0 && ath_now_s() >= v->deadline_s) {
-        v->alive = 0;
-        return 0;
-    }
-    /* File-watch lifetime: object dies once access() fails. */
-    if (v->watch_path != NULL && access(v->watch_path, F_OK) != 0) {
-        v->alive = 0;
-        return 0;
-    }
-    /* Signal-watch lifetime: object dies once the awaited signal arrives. */
+/* Pure, non-mutating observation. Returns 1 iff `v` would be observed
+ * alive *right now* — by checking the same conditions ath_is_alive
+ * checks, but without flipping any alive bits and without consuming
+ * one-shots. Recursive walks through deps use ath_observe themselves,
+ * so a dep walk never has side effects.
+ *
+ * Used by ath_clone to snapshot observable liveness instead of the
+ * possibly-stale raw alive bit, and by ath_is_alive to decompose the
+ * decision-making half of liveness from the bit-flipping half. */
+static int ath_observe(ath_obj *v) {
+    if (v == NULL) return 0;
+    if (!v->alive) return 0;
+    if (v->deadline_s > 0.0 && ath_now_s() >= v->deadline_s) return 0;
+    if (v->watch_path != NULL && access(v->watch_path, F_OK) != 0) return 0;
     if (v->awaiting_signal > 0 && v->awaiting_signal < ATH_MAX_SIGNAL
-        && ath_signal_received[v->awaiting_signal]) {
-        v->alive = 0;
-        return 0;
-    }
-    /* Dependency-inherited lifetime (§4.8.1, §4.8.3). Default AND mode:
-     * any dead dep kills the result permanently. OR mode (set by ath_or):
-     * the result stays alive as long as at least one dep is alive, and
-     * only flips its own alive=0 once both deps are dead. The walk
-     * terminates because deps point to earlier-allocated objects. */
+        && ath_signal_received[v->awaiting_signal]) return 0;
     if (v->dep_mode == ATH_DEP_OR) {
         int d1_present = (v->dep1 != NULL);
         int d2_present = (v->dep2 != NULL);
         if (d1_present || d2_present) {
-            int d1_alive = d1_present && ath_is_alive(v->dep1);
-            int d2_alive = d2_present && ath_is_alive(v->dep2);
-            if (!d1_alive && !d2_alive) {
-                v->alive = 0;
-                return 0;
-            }
-            /* At least one dep is alive — stay alive without flipping. */
+            int d1_alive = d1_present && ath_observe(v->dep1);
+            int d2_alive = d2_present && ath_observe(v->dep2);
+            if (!d1_alive && !d2_alive) return 0;
             return 1;
         }
-        /* OR mode without deps: degenerate; fall through. */
     } else {
-        if (v->dep1 != NULL && !ath_is_alive(v->dep1)) {
-            v->alive = 0;
-            return 0;
-        }
-        if (v->dep2 != NULL && !ath_is_alive(v->dep2)) {
-            v->alive = 0;
-            return 0;
-        }
+        if (v->dep1 != NULL && !ath_observe(v->dep1)) return 0;
+        if (v->dep2 != NULL && !ath_observe(v->dep2)) return 0;
     }
-    /* One-shot: alive for this single observation, dead thereafter. */
-    if (v->is_oneshot) {
-        v->alive = 0;
+    return 1;
+}
+
+int ath_is_alive(ath_obj *v) {
+    if (v == NULL) return 0;
+    int alive = ath_observe(v);
+    if (!alive) {
+        /* Cache the dead-finding so future observations early-return. */
+        if (v->alive) v->alive = 0;
+        return 0;
     }
+    /* One-shot: this single direct observation honors the alive verdict
+     * and then flips the bit. Subsequent direct observations see alive=0
+     * and short-circuit at the top of ath_observe. Dep walks recurse
+     * through ath_observe (not ath_is_alive), so one-shots are *not*
+     * consumed transitively — only the direct observation site fires
+     * them. */
+    if (v->is_oneshot) v->alive = 0;
     return 1;
 }
 
@@ -842,9 +833,14 @@ ath_obj *ath_clone(ath_obj *v) {
          * alive=0 and no payload; just return it. */
         return w;
     }
-    /* Snapshot: copy alive bit and every observable field. Skip dep1/dep2
-     * — the clone is independent of v's upstream operand chain. */
-    w->alive = v->alive;
+    /* Snapshot: copy every observable field. The alive bit is set from
+     * ath_observe(v) — a non-mutating refresh — so the clone reflects v's
+     * *currently observable* liveness rather than the possibly-stale raw
+     * bit. This matters for objects whose upstream operands have changed
+     * since v was last directly observed (notably OR-mode verdicts, whose
+     * dep1/dep2 are deliberately not copied below). One-shots are *not*
+     * consumed by this refresh — ath_observe never trips is_oneshot. */
+    w->alive = ath_observe(v);
     w->left = v->left;
     w->right = v->right;
     w->deadline_s = v->deadline_s;
@@ -853,8 +849,11 @@ ath_obj *ath_clone(ath_obj *v) {
     w->awaiting_signal = v->awaiting_signal;
     w->has_value = v->has_value;
     w->value = v->value;
+    w->dep_mode = v->dep_mode;
     /* dep1, dep2, owns_path stay zeroed by calloc. The clone is never
-     * an owner — §4.7 ext 5. */
+     * an owner — §4.7 ext 5. With dep_mode copied but no deps installed,
+     * an OR-mode clone degenerates to trusting its captured alive bit;
+     * see SPEC §4.4.18. */
     return w;
 }
 
