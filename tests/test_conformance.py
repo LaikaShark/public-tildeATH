@@ -290,6 +290,12 @@ CASES = [
         "bifurcate alive\nentangle hold\nbifurcate still alive\nentangle dead\n",
         id="tier3d_entangle_propagates_dep",
     ),
+    pytest.param(
+        "text_demo/main.ath",
+        None,
+        "hello world\nvalue: 42\nx=7\ny=8\nsum=15\n",
+        id="tier3e_text_primitive_and_interpolation",
+    ),
 ]
 
 

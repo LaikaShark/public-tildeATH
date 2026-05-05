@@ -23,6 +23,7 @@ from athc.ast import (
     SleepStmt,
     SliceStmt,
     SubscriptStmt,
+    TextStmt,
     TimerStmt,
     WatchStmt,
     WriteStmt,
@@ -260,6 +261,25 @@ class Codegen:
         # Populated in generate() before any FunctionEmitter runs.
         self.local_builtins: dict[int, dict[str, ir.Function]] = {}
 
+        self.f_concat = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.obj_ptr]),
+            name="ath_concat",
+        )
+        # Pre-seed the c-builtin table so user `import builtin ath_concat`
+        # reuses this declaration instead of trying to create a duplicate.
+        self.c_builtin_fns["ath_concat"] = self.f_concat
+        self.f_string_from_bytes = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer(), self.size_t]),
+            name="ath_string_from_bytes",
+        )
+        self.f_coerce_string = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
+            name="ath_coerce_string",
+        )
+
         self.g_null = ir.GlobalVariable(self.module, self.obj_ptr, name="ath_NULL")
         self.g_null.linkage = "external"
 
@@ -492,6 +512,8 @@ class FunctionEmitter:
             self._emit_write_or_append(builder, stmt, append=True)
         elif isinstance(stmt, CloseStmt):
             self._emit_close(builder, stmt)
+        elif isinstance(stmt, TextStmt):
+            self._emit_text(builder, stmt)
         else:
             raise CodegenError(f"no codegen for {type(stmt).__name__}")
 
@@ -745,6 +767,40 @@ class FunctionEmitter:
     def _emit_close(self, builder: ir.IRBuilder, stmt: CloseStmt) -> None:
         v = self._read_var(builder, stmt.target)
         builder.call(self.cg.f_close, [v])
+
+    def _emit_text(self, builder: ir.IRBuilder, stmt: TextStmt) -> None:
+        """Emit ENTANGLE-less concatenation chain for `text` (§4.4.25).
+
+        Each STRING part becomes ath_string_from_bytes(<global>, len).
+        Each IDENT part is read and coerced via ath_coerce_string. All
+        parts are folded left to right with ath_concat. The final value
+        is written to the target slot.
+        """
+        acc: ir.Value | None = None
+        for part in stmt.parts:
+            if part.kind == "str":
+                part_val = self._emit_string_literal(builder, part.value)
+            else:
+                v = self._read_var(builder, part.value)
+                part_val = builder.call(self.cg.f_coerce_string, [v])
+            if acc is None:
+                acc = part_val
+            else:
+                acc = builder.call(self.cg.f_concat, [acc, part_val])
+        assert acc is not None  # parser guarantees ≥1 part
+        self._write_var(builder, stmt.target, acc)
+
+    def _emit_string_literal(self, builder: ir.IRBuilder, s: str) -> ir.Value:
+        b = s.encode("utf-8")
+        if not b:
+            return builder.load(self.cg.g_null)
+        g, n = self.cg.make_string_global(s)
+        zero = ir.Constant(self.cg.i32, 0)
+        ptr = builder.gep(g, [zero, zero], inbounds=True)
+        return builder.call(
+            self.cg.f_string_from_bytes,
+            [ptr, ir.Constant(self.cg.size_t, n)],
+        )
 
 
 def generate_ir(

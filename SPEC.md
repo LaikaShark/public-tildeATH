@@ -117,11 +117,28 @@ keyword `print` followed by `er`.
 ### 2.3 String literals
 
 A double-quoted string literal `"..."` is a `STRING` token. The body is a
-sequence of bytes terminated by the next `"`. There are no escape
-sequences in v1: `\n`, `\"`, etc. are not interpreted. Newlines inside the
-body are part of the string. The body may be empty.
+sequence of bytes terminated by the next `"`. Newlines inside the body
+are part of the string. The body may be empty.
 
-Used by `importf` (§4.4.9) to name a file path.
+The body recognizes five escape sequences:
+
+| Source | Decoded |
+|--------|---------|
+| `\"`   | `"` (U+0022) |
+| `\\`   | `\` (U+005C) |
+| `\n`   | line feed (U+000A) |
+| `\t`   | tab (U+0009) |
+| `\r`   | carriage return (U+000D) |
+
+A backslash followed by any other character (including end-of-input)
+is a compile-time lexical error. The diagnostic reports the position
+of the backslash and the recognized set.
+
+Used by `importf` (§4.4.9), `watch` (§4.4.12), `read` (§4.4.21),
+`write` and `append` (§4.4.22, §4.4.23) to name file paths, and by
+`text` (§4.4.25) as a string-literal value source. The decoded
+byte sequence is what every consumer sees; the original `\X` source
+form is not retained.
 
 ### 2.4 `print` payload
 
@@ -130,11 +147,27 @@ After the keyword `print`, the lexer enters a one-shot raw mode:
 1. Consume exactly one ASCII space (`U+0020`). It is an error if the next
    character is not a space.
 2. Capture every subsequent character (including newlines, brackets, anything)
-   verbatim into a `RAWTEXT` token, stopping immediately before the next `;`.
+   into a `RAWTEXT` token, stopping immediately before an unescaped `;`.
 3. The captured text may be empty.
 4. The `;` is then consumed as a normal token.
 
-`RAWTEXT` cannot contain `;`. There is no escape mechanism in v0.
+The capture decodes the following escape sequences:
+
+| Source | Decoded |
+|--------|---------|
+| `\;`   | `;` (U+003B) |
+| `\\`   | `\` (U+005C) |
+| `\n`   | line feed (U+000A) |
+| `\t`   | tab (U+0009) |
+| `\r`   | carriage return (U+000D) |
+
+A backslash followed by any other character (including end-of-input)
+is a compile-time lexical error. The diagnostic reports the position
+of the backslash and the recognized set.
+
+A literal semicolon in the payload requires the `\;` escape; otherwise
+the unescaped `;` terminates the `RAWTEXT`. A literal backslash
+requires `\\`.
 
 ---
 
@@ -164,7 +197,8 @@ statement     = import-stmt
               | read-stmt
               | write-stmt
               | append-stmt
-              | close-stmt ;
+              | close-stmt
+              | text-stmt ;
 
 import-stmt   = import-concept
               | import-builtin
@@ -272,6 +306,16 @@ append-stmt   = 'append' IDENT 'to' STRING [ 'as' IDENT ] ';' ;
 close-stmt    = 'close' IDENT ';' ;
                 (* Disown the file (clear owns_path) and kill IDENT. The
                    file persists; the object is dead. See §4.4.24. *)
+
+text-stmt     = 'text' text-part+ 'as' IDENT ';' ;
+text-part     = STRING | IDENT ;
+                (* Build a string-cons-list (§4.6) from a sequence of
+                   parts and bind it to the trailing IDENT. STRING parts
+                   contribute their decoded bytes verbatim; IDENT parts
+                   are read and coerced (payload-bearing operands route
+                   through TO_STRING; existing cons-lists pass through).
+                   Parts are folded left to right with CONCAT.
+                   See §4.4.25. *)
 
 Notes:
 
@@ -947,6 +991,51 @@ Release a file-owning object without deleting the file.
 but want it to stay." On objects without `owns_path` set, `close` is
 indistinguishable from `VAR.DIE();` — it just kills the object.
 
+#### 4.4.25 `text PART+ as VAR;`
+
+Build a string-cons-list (§4.6) from a sequence of literal-string
+parts and identifier parts, and bind it to `VAR`.
+
+A **part** is either a STRING literal or an IDENT. The grammar
+requires at least one part; the trailing `as IDENT` is the binding
+target. The two part-kinds may appear in any order and combination,
+e.g. `text "value: " N as MSG;` or `text PREFIX " — " SUFFIX as
+MSG;`.
+
+Each part is reduced to a string-shaped object, then all parts are
+folded left to right with `ath_concat` (§4.8.4):
+
+1. **STRING part** — the decoded byte sequence (after the §2.3
+   escape rules) is turned into a cons-list of character atoms via
+   `ath_string_from_bytes`. An empty STRING (`""`) contributes
+   `NULL` (the empty string).
+2. **IDENT part** — the variable is read from the current scope and
+   passed through `ath_coerce_string`. Operands with `has_value`
+   set (numbers) are routed through `ath_to_string` to their decimal
+   representation. Operands without a payload (existing cons-lists,
+   generic composites, `NULL`, character atoms) pass through
+   unchanged. The coerced value is then concatenated.
+
+The intermediate `ath_concat` results install operand dependencies
+via `ath_inherit_lifetime` (§4.8.1), so the final string inherits
+deps from every part transitively. Killing any IDENT part operand
+after the call invalidates the resulting string at the next
+observation. STRING parts have no upstream operand and contribute
+no dep.
+
+`VAR` is a write target; binding `NULL` is a compile-time error
+(§4.2). Unlike `import` and similar idempotent forms, `text` is
+**not** idempotent: it always overwrites `VAR`. This matches the
+implicit "always-fresh" behavior of the underlying `ath_concat`
+chain.
+
+The empty case `text "" as V;` binds `V` to `NULL`. The
+single-STRING-part case `text "hello" as V;` binds `V` to a fresh
+literal cons-list. The single-IDENT case `text N as V;` binds `V`
+to `ath_coerce_string(N)`: a fresh TO_STRING result for a
+payload-bearing `N` (with `N` installed as a dep), or `N` itself
+(pointer-aliased) for any non-payload operand.
+
 ### 4.5 Program termination
 
 A program terminates when its main activation returns. This happens when:
@@ -1402,6 +1491,10 @@ void     ath_print(const char *text, size_t len);
 ath_obj *ath_input_line(void);
 void     ath_print_obj(ath_obj *s);
 ath_obj *ath_char_atom(int c);
+
+/* Literal-string + coercion helpers used by the `text` statement (§4.4.25). */
+ath_obj *ath_string_from_bytes(const char *bytes, size_t len);
+ath_obj *ath_coerce_string(ath_obj *v);
 
 /* Lifetime extensions (§4.7) */
 ath_obj *ath_alloc_with_lifetime(double min_s, double max_s);

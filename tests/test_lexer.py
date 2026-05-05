@@ -195,6 +195,27 @@ def test_string_literal_unterminated_errors():
         tokenize('"never closed')
 
 
+def test_string_literal_escape_quote_and_backslash():
+    toks = tokenize(r'"he said \"hi\" \\done"')
+    assert toks[0].kind is TokenKind.STRING
+    assert toks[0].value == 'he said "hi" \\done'
+
+
+def test_string_literal_escape_newline_tab_cr():
+    toks = tokenize(r'"line\nrow\tcol\rend"')
+    assert toks[0].value == "line\nrow\tcol\rend"
+
+
+def test_string_literal_unknown_escape_errors():
+    with pytest.raises(LexError, match=r"unknown escape sequence '\\x'"):
+        tokenize(r'"hello\xworld"')
+
+
+def test_string_literal_trailing_backslash_errors():
+    with pytest.raises(LexError, match="trailing backslash"):
+        tokenize('"oops\\')
+
+
 @pytest.mark.parametrize("spelling", ["EXECUTE", "execute", "Execute"])
 def test_keyword_execute_is_case_insensitive(spelling):
     toks = tokenize(spelling)
@@ -250,6 +271,27 @@ def test_print_payload_can_span_newlines():
 def test_print_without_space_after_keyword_errors():
     with pytest.raises(LexError):
         tokenize("print;")
+
+
+def test_print_payload_escapes_semi_and_backslash():
+    toks = tokenize(r"print a\;b\\c;")
+    assert toks[1].kind is TokenKind.RAWTEXT
+    assert toks[1].value == "a;b\\c"
+
+
+def test_print_payload_escapes_newline_tab_cr():
+    toks = tokenize(r"print line\nrow\tcol\rend;")
+    assert toks[1].value == "line\nrow\tcol\rend"
+
+
+def test_print_payload_unknown_escape_errors():
+    with pytest.raises(LexError, match=r"unknown escape sequence '\\x'"):
+        tokenize(r"print bad\xthing;")
+
+
+def test_print_payload_trailing_backslash_errors():
+    with pytest.raises(LexError, match="trailing backslash"):
+        tokenize("print oops\\")
 
 
 def test_print_without_semicolon_errors():

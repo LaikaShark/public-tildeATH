@@ -23,6 +23,7 @@ from athc.ast import (
     SleepStmt,
     SliceStmt,
     SubscriptStmt,
+    TextStmt,
     TimerStmt,
     WatchStmt,
     WriteStmt,
@@ -172,6 +173,12 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
                 defined.add(s.verdict)
         elif isinstance(s, CloseStmt):
             _check_read(s.target, defined, s)
+        elif isinstance(s, TextStmt):
+            for part in s.parts:
+                if part.kind == "ident":
+                    _check_read(part.value, defined, s)
+            _check_write(s.target, s)
+            defined.add(s.target)
         else:
             raise SemaError(
                 f"unknown statement {type(s).__name__}",

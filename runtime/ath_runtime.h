@@ -69,6 +69,19 @@ ath_obj *ath_input_line(void);
 void     ath_print_obj(ath_obj *s);
 ath_obj *ath_char_atom(int c);
 
+/* Build a fresh string cons-list from `len` bytes at `bytes`. The
+ * resulting cons-list is right-nested and terminated with ath_NULL.
+ * Used by the codegen for the `text` statement's literal parts
+ * (SPEC §4.4.25). An empty input returns ath_NULL. */
+ath_obj *ath_string_from_bytes(const char *bytes, size_t len);
+
+/* Coerce an arbitrary value to a string-like object for `text`
+ * interpolation (SPEC §4.4.25): payload-bearing operands run through
+ * ath_to_string; everything else (existing cons-lists, NULL, generic
+ * composites) is returned unchanged. The returned object is suitable
+ * for handing directly to ath_concat. */
+ath_obj *ath_coerce_string(ath_obj *v);
+
 /* Lifetime allocators (SPEC §4.7). */
 ath_obj *ath_alloc_with_lifetime(double min_s, double max_s);
 ath_obj *ath_alloc_watching_file(const char *path);

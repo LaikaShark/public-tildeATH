@@ -21,6 +21,8 @@ from athc.ast import (
     SleepStmt,
     SliceStmt,
     SubscriptStmt,
+    TextPart,
+    TextStmt,
     TimerStmt,
     WatchStmt,
     WriteStmt,
@@ -99,6 +101,8 @@ class Parser:
             return self._parse_write_or_append(append=True)
         if tok.kind is TokenKind.KW_CLOSE:
             return self._parse_close()
+        if tok.kind is TokenKind.KW_TEXT:
+            return self._parse_text()
         if tok.kind is TokenKind.IDENT:
             return self._parse_die_or_funcall()
         if tok.kind is TokenKind.RESERVED:
@@ -380,6 +384,34 @@ class Parser:
         tgt = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
         return CloseStmt(
+            target=tgt.value,
+            line=kw.line,
+            col=kw.col,
+        )
+
+    def _parse_text(self) -> TextStmt:
+        kw = self._expect(TokenKind.KW_TEXT)
+        parts: list[TextPart] = []
+        while True:
+            tok = self._peek()
+            if tok.kind is TokenKind.STRING:
+                parts.append(TextPart(kind="str", value=self._advance().value))
+            elif tok.kind is TokenKind.IDENT:
+                parts.append(TextPart(kind="ident", value=self._advance().value))
+            else:
+                break
+        if not parts:
+            raise ParseError(
+                "'text' requires at least one part (a string literal or an "
+                "identifier) before 'as'",
+                kw.line,
+                kw.col,
+            )
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return TextStmt(
+            parts=parts,
             target=tgt.value,
             line=kw.line,
             col=kw.col,

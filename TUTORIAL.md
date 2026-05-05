@@ -76,9 +76,30 @@ The program contains two statements.
 
 `print` writes its payload to standard output followed by a single
 newline. The payload begins immediately after the one required space
-following the keyword `print` and ends at the next `;`. Every byte
-between is copied verbatim, including newlines. No escape sequences
-are interpreted, and the payload cannot contain a `;` (§4.4.6).
+following the keyword `print` and ends at the next unescaped `;`.
+Bytes are copied through verbatim, including literal newlines in
+source.
+
+Five escape sequences are recognized in the payload (§2.4):
+
+| Source | Output      |
+|--------|-------------|
+| `\;`   | `;`         |
+| `\\`   | `\`         |
+| `\n`   | line feed   |
+| `\t`   | tab         |
+| `\r`   | carriage return |
+
+A backslash followed by any other character is a compile-time
+lexical error. To emit a literal semicolon (which would otherwise
+terminate the payload), write `\;`. To emit a literal backslash,
+write `\\`.
+
+String literals `"..."` recognize `\"`, `\\`, `\n`, `\t`, `\r`
+(§2.3) — the same set as `print` minus `\;` (which is unnecessary
+inside a quoted literal). Unknown escapes are likewise a
+compile-time error. String literals are consumed by file-path
+statements (§4.4.9 and related) and by the `text` statement (§13.x).
 
 `THIS.DIE();` terminates the program. Every activation — the top-level
 program and every function call — owns a predefined object named
@@ -808,9 +829,9 @@ A character atom is an alive object allocated by the runtime, exactly
 one per distinct byte value (0..255). Two strings sharing a character
 share the same atom by pointer identity.
 
-Strings are not constructed in source code directly. They enter a
-program through `INPUT`, `read`, or `TO_STRING`, and are written out
-through `PRINT2`, `write`, or `append`.
+Strings enter a program through `INPUT`, `read`, `TO_STRING`, or the
+`text` statement (§13.3), and are written out through `PRINT2`,
+`write`, or `append`.
 
 ### 13.1 `INPUT` and `PRINT2`
 
@@ -949,6 +970,80 @@ notionally a prefix at position 0). `REPLACE` and `REPLACE_ALL` with
 an empty `NEEDLE` return a born-dead result: "replace nothing with
 something" is deliberately undefined. Use `CONCAT` to prepend or
 append.
+
+### 13.3 Building strings: the `text` statement
+
+The `text` statement is the surface form for constructing strings in
+source code (§4.4.25). It has two forms — a single string literal
+(primitive) and an interpolation (sugar) — distinguished only by the
+number and kinds of parts before `as`.
+
+#### 13.3.1 Primitive form
+
+```ath
+text "hello world" as GREETING;
+PRINT2 GREETING;
+```
+
+`text "..." as VAR;` decodes the string literal (with the §2.3
+escapes applied) and binds `VAR` to the resulting cons-list of
+character atoms. An empty literal `text "" as VAR;` binds `VAR` to
+`NULL` (which is the empty string per §13).
+
+Source-level newlines inside the literal are taken literally too —
+either embed them directly or use the `\n` escape:
+
+```ath
+text "first line\nsecond line" as TWO;
+PRINT2 TWO;
+```
+
+#### 13.3.2 Interpolation form
+
+```ath
+import number 42 as N;
+text "value: " N " (end)" as MSG;
+PRINT2 MSG;
+```
+
+A `text` statement may contain any sequence of STRING literals and
+identifiers before `as`. Each part is reduced to a string and the
+parts are concatenated left to right.
+
+- A **STRING part** contributes its decoded byte sequence (per §2.3).
+- An **IDENT part** is read and coerced: if it carries an int64
+  payload (a number), the runtime calls `TO_STRING` to produce its
+  decimal representation; otherwise the value is treated as already
+  a string (or an existing cons-list) and passed through.
+
+The final value installs operand dependencies via `ath_concat`'s dep
+machinery (§12.1): killing any of the source identifiers after the
+`text` statement runs invalidates `MSG` at the next observation.
+
+#### 13.3.3 Single-IDENT case
+
+```ath
+text N as M;
+```
+
+Equivalent to `TO_STRING [N, NULL] M;` when `N` carries a payload.
+When `N` is already a string, `M` becomes a pointer-alias of `N` (no
+copy). Rarely useful on its own, but consistent with the
+interpolation rule.
+
+#### 13.3.4 What `text` is and is not
+
+`text` is the only source-level way to introduce a string value.
+It is **not** the same as `print`:
+
+| Form        | Source contains              | Result                       |
+|-------------|------------------------------|------------------------------|
+| `print TEXT;` | raw bytes up to `;`        | written to stdout immediately, no value bound |
+| `text "..." as V;` | a string literal      | a string-cons-list bound to V |
+
+To print a constructed string, use `text` + `PRINT2`. To emit a
+fixed literal that needs no value, use `print` directly. Use
+`PRINT2` over `print` whenever the content is dynamic.
 
 ---
 

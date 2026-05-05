@@ -155,6 +155,27 @@ static int ath_atom_to_char(ath_obj *o) {
     return -1;
 }
 
+ath_obj *ath_string_from_bytes(const char *bytes, size_t len) {
+    if (bytes == NULL || len == 0) return ath_NULL;
+    ath_obj *acc = ath_NULL;
+    for (size_t i = len; i > 0; i--) {
+        ath_obj *c = ath_char_atom((unsigned char)bytes[i - 1]);
+        acc = ath_compose(c, acc);
+    }
+    return acc;
+}
+
+ath_obj *ath_coerce_string(ath_obj *v) {
+    if (v == NULL || v == ath_NULL) return ath_NULL;
+    /* Payload-bearing operands become their decimal representation. The
+     * resulting string inherits v as a dep via ath_to_string. */
+    if (v->has_value) return ath_to_string(v, NULL);
+    /* Anything else — existing cons-lists, generic composites, char
+     * atoms — is passed through unchanged. The text-statement codegen
+     * will feed it to ath_concat alongside literal parts. */
+    return v;
+}
+
 ath_obj *ath_input_line(void) {
     char buf[4096];
     if (fgets(buf, sizeof(buf), stdin) == NULL) {

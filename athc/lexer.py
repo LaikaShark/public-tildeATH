@@ -21,6 +21,7 @@ class TokenKind(Enum):
     KW_WRITE = auto()
     KW_APPEND = auto()
     KW_CLOSE = auto()
+    KW_TEXT = auto()
     ATH = auto()
     DIE = auto()
     IDENT = auto()
@@ -78,6 +79,7 @@ KEYWORDS = {
     "write": TokenKind.KW_WRITE,
     "append": TokenKind.KW_APPEND,
     "close": TokenKind.KW_CLOSE,
+    "text": TokenKind.KW_TEXT,
 }
 
 RESERVED_V1: set[str] = set()
@@ -184,21 +186,57 @@ class Lexer:
             )
         self._emit(TokenKind.INT, text, line, col)
 
+    # Escape tables (SPEC §2.3, §2.4). Mapping: input-char -> decoded byte(s).
+    _PRINT_ESCAPES = {
+        ";": ";",
+        "\\": "\\",
+        "n": "\n",
+        "t": "\t",
+        "r": "\r",
+    }
+    _STRING_ESCAPES = {
+        '"': '"',
+        "\\": "\\",
+        "n": "\n",
+        "t": "\t",
+        "r": "\r",
+    }
+
     def _read_print_payload(self) -> None:
         if self._peek() != " ":
             raise LexError(
                 "'print' must be followed by a single ASCII space", self.line, self.col
             )
         self._advance()
-        start = self.pos
         start_line, start_col = self.line, self.col
+        buf: list[str] = []
         while self.pos < len(self.src) and self._peek() != ";":
-            self._advance()
+            c = self._peek()
+            if c == "\\":
+                bs_line, bs_col = self.line, self.col
+                self._advance()
+                nxt = self._peek()
+                if nxt == "":
+                    raise LexError(
+                        "trailing backslash in 'print' payload",
+                        bs_line, bs_col,
+                    )
+                if nxt not in self._PRINT_ESCAPES:
+                    raise LexError(
+                        f"unknown escape sequence '\\{nxt}' in 'print' payload "
+                        f"(recognized: \\; \\\\ \\n \\t \\r)",
+                        bs_line, bs_col,
+                    )
+                buf.append(self._PRINT_ESCAPES[nxt])
+                self._advance()
+            else:
+                buf.append(c)
+                self._advance()
         if self.pos >= len(self.src):
             raise LexError(
                 "unterminated 'print' statement (missing ';')", start_line, start_col
             )
-        self._emit(TokenKind.RAWTEXT, self.src[start:self.pos], start_line, start_col)
+        self._emit(TokenKind.RAWTEXT, "".join(buf), start_line, start_col)
 
     def tokenize(self) -> list[Token]:
         while True:
@@ -236,14 +274,33 @@ class Lexer:
 
             if c == '"':
                 self._advance()
-                start = self.pos
+                buf: list[str] = []
                 while self.pos < len(self.src) and self._peek() != '"':
-                    self._advance()
+                    ch = self._peek()
+                    if ch == "\\":
+                        bs_line, bs_col = self.line, self.col
+                        self._advance()
+                        nxt = self._peek()
+                        if nxt == "":
+                            raise LexError(
+                                "trailing backslash in string literal",
+                                bs_line, bs_col,
+                            )
+                        if nxt not in self._STRING_ESCAPES:
+                            raise LexError(
+                                f"unknown escape sequence '\\{nxt}' in string "
+                                f"literal (recognized: \\\" \\\\ \\n \\t \\r)",
+                                bs_line, bs_col,
+                            )
+                        buf.append(self._STRING_ESCAPES[nxt])
+                        self._advance()
+                    else:
+                        buf.append(ch)
+                        self._advance()
                 if self.pos >= len(self.src):
                     raise LexError("unterminated string literal", line, col)
-                text = self.src[start:self.pos]
                 self._advance()
-                self._emit(TokenKind.STRING, text, line, col)
+                self._emit(TokenKind.STRING, "".join(buf), line, col)
                 continue
 
             if c in PUNCT:

@@ -224,6 +224,27 @@ class CloseStmt:
     col: int
 
 
+@dataclass
+class TextPart:
+    """A single part inside a `text` statement (§4.4.25). `kind` is
+    'str' (a STRING literal, with escapes already decoded) or 'ident'
+    (a name to be read and coerced to string via ath_coerce_string)."""
+    kind: str
+    value: str
+
+
+@dataclass
+class TextStmt:
+    """text PART+ as VAR;  — bind VAR to the cons-list formed by
+    concatenating each part left to right. STRING parts are built as
+    literal cons-lists; IDENT parts are coerced via ath_coerce_string
+    (payload-bearing values are routed through ath_to_string) (§4.4.25)."""
+    parts: list  # list[TextPart]
+    target: str
+    line: int
+    col: int
+
+
 Stmt = Union[
     ImportStmt,
     DecomposeStmt,
@@ -249,6 +270,7 @@ Stmt = Union[
     WriteStmt,
     AppendStmt,
     CloseStmt,
+    TextStmt,
 ]
 
 

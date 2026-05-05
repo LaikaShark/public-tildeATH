@@ -620,3 +620,38 @@ def test_close_statement():
 def test_close_case_insensitive():
     p = parse("import x S; CLOSE S;")
     assert isinstance(p.statements[1], CloseStmt)
+
+
+def test_text_statement_primitive():
+    from athc.ast import TextStmt
+    p = parse('text "hello" as S;')
+    s = p.statements[0]
+    assert isinstance(s, TextStmt)
+    assert s.target == "S"
+    assert len(s.parts) == 1
+    assert s.parts[0].kind == "str"
+    assert s.parts[0].value == "hello"
+
+
+def test_text_statement_interpolation():
+    from athc.ast import TextStmt
+    p = parse('import x N; text "value: " N " end" as MSG;')
+    s = p.statements[1]
+    assert isinstance(s, TextStmt)
+    assert s.target == "MSG"
+    assert [(p.kind, p.value) for p in s.parts] == [
+        ("str", "value: "),
+        ("ident", "N"),
+        ("str", " end"),
+    ]
+
+
+def test_text_statement_no_parts_errors():
+    with pytest.raises(Exception, match="requires at least one part"):
+        parse("text as M;")
+
+
+def test_text_statement_case_insensitive():
+    from athc.ast import TextStmt
+    p = parse('TEXT "hi" as M;')
+    assert isinstance(p.statements[0], TextStmt)

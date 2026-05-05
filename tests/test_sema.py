@@ -405,3 +405,17 @@ def test_append_source_must_be_in_scope():
 def test_close_target_must_be_in_scope():
     with pytest.raises(SemaError, match="S.*not in scope"):
         check("close S;")
+
+
+def test_text_target_cannot_be_NULL():
+    with pytest.raises(SemaError, match="NULL.*read-only"):
+        check('text "hi" as NULL;')
+
+
+def test_text_ident_part_must_be_in_scope():
+    with pytest.raises(SemaError, match="N.*not in scope"):
+        check('text "value: " N as M;')
+
+
+def test_text_introduces_target():
+    check('text "hi" as M; print done;')
