@@ -117,6 +117,14 @@ ath_obj *ath_ne(ath_obj *x, ath_obj *y);
 ath_obj *ath_and(ath_obj *x, ath_obj *y);
 ath_obj *ath_or(ath_obj *x, ath_obj *y);
 
+/* Compose with dep propagation (SPEC §4.8.4). Equivalent to
+ *   ath_compose(x, y) followed by ath_inherit_lifetime(result, x, y).
+ * Used to build composite carriers (notably the (needle, replacement)
+ * pair consumed by ath_replace) whose lifetimes must track their
+ * constituent operands. BIFURCATE compose remains available for the
+ * no-dep case. */
+ath_obj *ath_entangle(ath_obj *x, ath_obj *y);
+
 /* String operations on cons-list-structured objects (SPEC §4.8.4).
  * ath_index and ath_slice are also invoked by the subscript and
  * range-subscript statement codegen (§4.4.15, §4.4.16). All install

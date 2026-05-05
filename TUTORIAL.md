@@ -908,24 +908,39 @@ PRINT2 STR;
 `REPLACE` and `REPLACE_ALL` conceptually take three arguments —
 source, needle, replacement — but the builtin ABI accepts only two.
 The needle and replacement are packed into a single composite, which
-the builtin decomposes internally:
+the builtin decomposes internally. The recommended packer is
+`ENTANGLE`:
+
+```ath
+importf <entangle> as ENTANGLE;
+
+ENTANGLE [NEEDLE, REPLACEMENT] PAIR;
+REPLACE [S, PAIR] R;
+```
+
+`ENTANGLE` does the same composition as `BIFURCATE [L, R] V;` and
+additionally installs both operands as dependencies of the result
+(§12.1). Killing `NEEDLE` or `REPLACEMENT` after the `REPLACE` call
+then invalidates `PAIR` on the next observation, which in turn
+invalidates `R` through the standard dep chain.
+
+The same packing convention is used by `ath_slice` internally for
+its range endpoints (§13.2.1), but the user never writes that
+composition — the slice statement emits it.
+
+##### Plain `BIFURCATE` as the no-deps alternative
 
 ```ath
 BIFURCATE [NEEDLE, REPLACEMENT] PAIR;
 REPLACE [S, PAIR] R;
 ```
 
-The same convention is used by `ath_slice` internally for its range
-endpoints (§13.2.1) but the user never writes that composition — the
-slice statement does it.
-
-Because the user composes `PAIR` with plain `BIFURCATE`, the pair has
-**no internal dependency** on `NEEDLE` or `REPLACEMENT`. Killing
-either after the call does not propagate death to `R`. If the
-needle and replacement must remain alive for `R` to be alive, anchor
-them to a shared source through a builtin that *does* install
-dependencies — or arrange the lifetimes through `import` lifetime
-extensions (§11).
+`BIFURCATE` composition does **not** install deps. `PAIR` has no
+internal dependency on `NEEDLE` or `REPLACEMENT`; killing either
+after the call does not propagate death to `R`. This form is
+correct when the carrier composite must outlive its operands. For
+the typical search-and-replace use case, `ENTANGLE` is the right
+choice; `BIFURCATE` is the advanced alternative.
 
 #### 13.2.4 Empty needles
 

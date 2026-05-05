@@ -17,6 +17,7 @@
 importf <find>        as FIND;
 importf <replace_all> as REPLACE_ALL;
 importf <to_string>   as TO_STRING;
+importf <entangle>    as ENTANGLE;
 
 INPUT HAY;
 INPUT NEEDLE;
@@ -32,8 +33,10 @@ BRANCH(IDX_CHECK) {
     print not found;
 }
 
-// Replace: pack (NEEDLE, REPL) into a single pair, then call.
-BIFURCATE [NEEDLE, REPL] PAIR;
+// Replace: pack (NEEDLE, REPL) with dep propagation, then call. ENTANGLE
+// ensures that if NEEDLE or REPL dies after the call, the REPLACE_ALL
+// result observes the death and becomes dead at the next observation.
+ENTANGLE [NEEDLE, REPL] PAIR;
 REPLACE_ALL [HAY, PAIR] R;
 PRINT2 R;
 

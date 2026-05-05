@@ -284,6 +284,12 @@ CASES = [
         "both alive\none alive\nboth dead\n",
         id="tier2b_or_born_states",
     ),
+    pytest.param(
+        "entangle_vs_bifurcate/main.ath",
+        None,
+        "bifurcate alive\nentangle hold\nbifurcate still alive\nentangle dead\n",
+        id="tier3d_entangle_propagates_dep",
+    ),
 ]
 
 

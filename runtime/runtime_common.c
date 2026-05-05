@@ -624,6 +624,19 @@ ath_obj *ath_and(ath_obj *x, ath_obj *y) {
     return v;
 }
 
+/* ENTANGLE: compose two objects into a fresh composite, then install
+ * both as deps on the result (§4.8.4). Equivalent to BIFURCATE
+ * composition followed by ath_inherit_lifetime, in one call. Used by
+ * the compose-pair pattern (notably (needle, replacement) for REPLACE)
+ * to propagate operand death into the carrier. The composite's halves
+ * are L and R, matching plain compose; the only added effect is the
+ * dep installation. */
+ath_obj *ath_entangle(ath_obj *x, ath_obj *y) {
+    ath_obj *p = ath_compose(x, y);
+    ath_inherit_lifetime(p, x, y);
+    return p;
+}
+
 /* OR: alive iff at least one operand alive at every observation. Sets
  * dep_mode=ATH_DEP_OR so ath_is_alive walks both deps disjunctively.
  * Born dead only if both operands are already dead at call. */

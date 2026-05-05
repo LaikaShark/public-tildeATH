@@ -1239,28 +1239,43 @@ below.
 (§4.4.13) is fixed at two `ath_obj *` inputs. The convention,
 identical to how the range-subscript form `S[I..J]` lowers in
 §4.4.16, is to pack `NEEDLE` and `REPLACEMENT` into a single
-composite using `BIFURCATE` and pass that composite as the second
-argument:
+composite and pass that composite as the second argument. Two
+forms of composition are available, distinguished by whether the
+resulting `PAIR` inherits its operands as deps.
+
+**Recommended form — `ENTANGLE`** (the `ath_entangle` builtin
+shipped as `stdlib/entangle.ath`):
+
+```
+ENTANGLE [NEEDLE, REPLACEMENT] PAIR;
+REPLACE [S, PAIR] R;
+```
+
+`ENTANGLE` performs the same composition as `BIFURCATE [L, R] V;`
+and additionally calls `ath_inherit_lifetime(PAIR, NEEDLE,
+REPLACEMENT)` (§4.8.1). Killing `NEEDLE` or `REPLACEMENT` after the
+`REPLACE` call invalidates `PAIR` on the next observation, which in
+turn invalidates `R` through the standard dep chain.
+
+**Alternative — plain `BIFURCATE`:**
 
 ```
 BIFURCATE [NEEDLE, REPLACEMENT] PAIR;
 REPLACE [S, PAIR] R;
 ```
 
-Inside the runtime, `ath_replace` (and `ath_replace_all`)
-decompose the pair to recover `NEEDLE` and `REPLACEMENT`, then
-perform the search-and-substitute pass.
+`BIFURCATE` composition does *not* install deps. `PAIR` carries no
+internal dependency on `NEEDLE` or `REPLACEMENT`; killing either
+after the call does not propagate death to `R`. Use this form when
+the carrier composite must outlive its operands — an uncommon
+requirement for the search-and-replace use case but available for
+advanced use.
 
-**Dep-tracking caveat.** The user composes `PAIR` with plain
-`BIFURCATE`, which does *not* call `ath_inherit_lifetime` (§4.8.1).
-So `PAIR` has no internal deps on `NEEDLE` or `REPLACEMENT`.
-`REPLACE`'s result inherits `S` and `PAIR` as deps; killing
-`NEEDLE` or `REPLACEMENT` *after* the call does not propagate
-death to `R`. If you need that propagation, explicitly install
-deps via a dedicated runtime helper (not currently exposed at the
-surface) or arrange your composition order so that the
-needle/replacement strings have their own dep chains anchored to
-shared sources.
+Inside the runtime, `ath_replace` and `ath_replace_all` decompose
+the pair to recover `NEEDLE` and `REPLACEMENT`, then perform the
+search-and-substitute pass. Both work identically with either form
+of composition; the only difference is the resulting dep chain on
+`R`.
 
 ##### Other behavior shared across the family
 
@@ -1418,6 +1433,12 @@ ath_obj *ath_ne(ath_obj *x, ath_obj *y);
  * see the §4.8.3 commentary. */
 ath_obj *ath_and(ath_obj *x, ath_obj *y);
 ath_obj *ath_or(ath_obj *x, ath_obj *y);
+
+/* Compose with dep propagation (§4.8.4). Equivalent to ath_compose
+ * followed by ath_inherit_lifetime, in one call. Use for the
+ * compose-pair pattern (notably (needle, replacement) for REPLACE)
+ * when the carrier composite must die if either operand dies. */
+ath_obj *ath_entangle(ath_obj *x, ath_obj *y);
 
 /* String operations (SPEC §4.8.4). All install operand deps on results
  * via ath_inherit_lifetime. ath_index and ath_slice are also invoked
