@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — suffix-match verdict.
+//
+//   ENDSWITH [HAY, SUFFIX] V;
+//
+// V is alive iff HAY ends with SUFFIX. The empty suffix matches
+// every string. Born dead on malformed input.
+
+import builtin ath_endswith as ATH_ENDSWITH;
+BIFURCATE ARGS [X, Y];
+ATH_ENDSWITH [X, Y] R;
+THIS.DIE(R);

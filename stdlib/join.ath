@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — join a cons-list of strings with a separator.
+//
+//   JOIN [LIST, SEP] R;
+//
+// R is a fresh cons-list. An empty LIST returns NULL. An empty SEP
+// produces a pure concatenation with no delimiter between elements.
+
+import builtin ath_join as ATH_JOIN;
+BIFURCATE ARGS [X, Y];
+ATH_JOIN [X, Y] R;
+THIS.DIE(R);

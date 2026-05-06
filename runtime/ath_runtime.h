@@ -154,6 +154,33 @@ ath_obj *ath_find(ath_obj *hay, ath_obj *needle);
 ath_obj *ath_replace(ath_obj *s, ath_obj *pair);
 ath_obj *ath_replace_all(ath_obj *s, ath_obj *pair);
 
+/* String predicates (verdicts) and transforms (SPEC §4.8.4 extensions).
+ * Verdicts (streq/startswith/endswith/strlt/strgt): alive iff the
+ *   relation holds, with operand deps installed. Born dead on
+ *   malformed string (a non-character left half partway through the
+ *   walk). Empty-prefix/empty-suffix are alive — every string starts
+ *   and ends with the empty string.
+ * Transforms (lower/upper/trim/lstrip/rstrip): return a fresh
+ *   cons-list with the operand installed as a dep. Whitespace for
+ *   stripping is space, tab, LF, CR.
+ * SPLIT: produce a cons-list of cons-list strings, split by sep.
+ *   Empty sep is born dead. Trailing sep yields a trailing empty
+ *   element.
+ * JOIN: walk LIST's right-spine, concat each element interleaved with
+ *   sep. Empty LIST returns NULL. */
+ath_obj *ath_streq(ath_obj *a, ath_obj *b);
+ath_obj *ath_startswith(ath_obj *hay, ath_obj *prefix);
+ath_obj *ath_endswith(ath_obj *hay, ath_obj *suffix);
+ath_obj *ath_strlt(ath_obj *a, ath_obj *b);
+ath_obj *ath_strgt(ath_obj *a, ath_obj *b);
+ath_obj *ath_lower(ath_obj *s, ath_obj *unused);
+ath_obj *ath_upper(ath_obj *s, ath_obj *unused);
+ath_obj *ath_trim(ath_obj *s, ath_obj *unused);
+ath_obj *ath_lstrip(ath_obj *s, ath_obj *unused);
+ath_obj *ath_rstrip(ath_obj *s, ath_obj *unused);
+ath_obj *ath_split(ath_obj *s, ath_obj *sep);
+ath_obj *ath_join(ath_obj *list, ath_obj *sep);
+
 /* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
  * dep1/dep2 and owns_path, which are zeroed. Independent identity —
  * killing one of (v, result) does not kill the other, and the clone

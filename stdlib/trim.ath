@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — strip leading and trailing whitespace.
+//
+//   TRIM [S, _] R;
+//
+// Whitespace is space, tab, LF, CR. R is a fresh cons-list. NULL
+// in, NULL out.
+
+import builtin ath_trim as ATH_TRIM;
+BIFURCATE ARGS [X, Y];
+ATH_TRIM [X, Y] R;
+THIS.DIE(R);

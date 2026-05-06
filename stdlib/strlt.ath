@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — string less-than (lexicographic).
+//
+//   STRLT [A, B] V;
+//
+// V is alive iff A precedes B in byte-by-byte lexicographic order
+// (with shorter strings ordering before equal-prefix longer strings).
+
+import builtin ath_strlt as ATH_STRLT;
+BIFURCATE ARGS [X, Y];
+ATH_STRLT [X, Y] R;
+THIS.DIE(R);

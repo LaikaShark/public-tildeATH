@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — string equality verdict.
+//
+//   STREQ [A, B] V;
+//
+// V is alive iff A and B are byte-identical strings. Empty strings
+// (NULL) are equal to each other. Born dead on malformed input.
+
+import builtin ath_streq as ATH_STREQ;
+BIFURCATE ARGS [X, Y];
+ATH_STREQ [X, Y] R;
+THIS.DIE(R);

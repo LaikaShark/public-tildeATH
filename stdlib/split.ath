@@ -1,0 +1,12 @@
+// SPEC §4.8.4 — split a string into a cons-list of substrings.
+//
+//   SPLIT [S, SEP] LIST;
+//
+// LIST is a right-nested cons-list whose left halves are themselves
+// cons-list strings. The empty separator is born dead. A trailing
+// SEP yields a trailing empty-string element.
+
+import builtin ath_split as ATH_SPLIT;
+BIFURCATE ARGS [X, Y];
+ATH_SPLIT [X, Y] R;
+THIS.DIE(R);

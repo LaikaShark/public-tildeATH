@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — ASCII lowercase conversion.
+//
+//   LOWER [S, _] R;
+//
+// R is a fresh cons-list with every ASCII A-Z byte mapped to a-z.
+// Non-letter bytes pass through unchanged. Inherits S as a dep.
+
+import builtin ath_lower as ATH_LOWER;
+BIFURCATE ARGS [X, Y];
+ATH_LOWER [X, Y] R;
+THIS.DIE(R);

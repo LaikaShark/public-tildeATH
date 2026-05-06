@@ -742,12 +742,29 @@ static int64_t ath_collect_spine(ath_obj *s, ath_obj **heads, int64_t cap) {
     return n;
 }
 
+/* Allocate a fresh, non-interned cons cell. Unlike ath_compose, which
+ * hash-conses in intern mode, this always yields a unique object. A
+ * string *result* built from these cells is owned solely by the op
+ * that produced it, so installing its operands as deps
+ * (ath_inherit_lifetime) can never overwrite an interned input's deps
+ * or form a dep cycle with one. This is what SPEC §4.8.4 means by
+ * "concatenated, sliced, and replaced results allocate fresh cons
+ * cells" — the property must hold for split/join and the transforms
+ * too, else `join(split(s))` would alias `s` under interning and
+ * back-edge the dependency graph. Char atoms stay canonical. */
+static ath_obj *ath_cons_fresh(ath_obj *head, ath_obj *tail) {
+    ath_obj *cell = ath_alloc_alive();
+    cell->left = head;
+    cell->right = tail;
+    return cell;
+}
+
 /* Build a fresh right-nested cons-list terminated with ath_NULL from an
  * array of element heads. Returns ath_NULL on empty input. */
 static ath_obj *ath_build_spine(ath_obj **heads, int64_t n) {
     ath_obj *acc = ath_NULL;
     for (int64_t i = n; i > 0; i--) {
-        acc = ath_compose(heads[i - 1], acc);
+        acc = ath_cons_fresh(heads[i - 1], acc);
     }
     return acc;
 }
@@ -1081,7 +1098,7 @@ static ath_obj *ath_buf_to_string(const char *buf, size_t n) {
     ath_obj *acc = ath_NULL;
     for (size_t i = n; i > 0; i--) {
         ath_obj *c = ath_char_atom((unsigned char)buf[i - 1]);
-        acc = ath_compose(c, acc);
+        acc = ath_cons_fresh(c, acc);
     }
     return acc;
 }
@@ -1205,6 +1222,356 @@ ath_obj *ath_replace(ath_obj *s, ath_obj *pair) {
 
 ath_obj *ath_replace_all(ath_obj *s, ath_obj *pair) {
     return ath_replace_impl(s, pair, /* all_occurrences = */ 1);
+}
+
+/* --- String predicates and transforms (SPEC §4.8.4 extensions) -------- */
+
+/* Walk-by-atom-pointer comparison: returns 1 if both strings yield the
+ * same atom pointers in lockstep until both terminate. Returns 0 on
+ * mismatch or length mismatch. Returns -1 on malformed string (a left
+ * half that is not a recognized character atom). NULL and dead cells
+ * end the walk on that side. */
+static int ath_string_atoms_eq(ath_obj *a, ath_obj *b) {
+    while (1) {
+        int a_end = (a == NULL || a == ath_NULL || !ath_is_alive(a));
+        int b_end = (b == NULL || b == ath_NULL || !ath_is_alive(b));
+        if (a_end && b_end) return 1;
+        if (a_end || b_end) return 0;
+        ath_obj *al, *ar, *bl, *br;
+        ath_decompose(a, &al, &ar);
+        ath_decompose(b, &bl, &br);
+        if (ath_atom_to_char(al) < 0) return -1;
+        if (ath_atom_to_char(bl) < 0) return -1;
+        if (al != bl) return 0;
+        a = ar;
+        b = br;
+    }
+}
+
+ath_obj *ath_streq(ath_obj *a, ath_obj *b) {
+    int r = ath_string_atoms_eq(a, b);
+    if (r != 1) return ath_verdict_false();
+    return ath_verdict_true(a, b);
+}
+
+/* Returns 1 if `hay` begins with `prefix` (atom-equal byte-by-byte),
+ * 0 if not, -1 if either is malformed. Empty `prefix` is always a
+ * prefix. */
+static int ath_string_starts_with(ath_obj *hay, ath_obj *prefix) {
+    while (1) {
+        int p_end = (prefix == NULL || prefix == ath_NULL || !ath_is_alive(prefix));
+        if (p_end) return 1;
+        int h_end = (hay == NULL || hay == ath_NULL || !ath_is_alive(hay));
+        if (h_end) return 0;
+        ath_obj *hl, *hr, *pl, *pr;
+        ath_decompose(hay, &hl, &hr);
+        ath_decompose(prefix, &pl, &pr);
+        if (ath_atom_to_char(hl) < 0) return -1;
+        if (ath_atom_to_char(pl) < 0) return -1;
+        if (hl != pl) return 0;
+        hay = hr;
+        prefix = pr;
+    }
+}
+
+ath_obj *ath_startswith(ath_obj *hay, ath_obj *prefix) {
+    int r = ath_string_starts_with(hay, prefix);
+    if (r != 1) return ath_verdict_false();
+    return ath_verdict_true(hay, prefix);
+}
+
+ath_obj *ath_endswith(ath_obj *hay, ath_obj *suffix) {
+    /* Empty suffix: always alive. */
+    if (suffix == NULL || suffix == ath_NULL) return ath_verdict_true(hay, suffix);
+    if (hay != NULL && hay != ath_NULL && !ath_is_alive(hay)) return ath_verdict_false();
+    if (!ath_is_alive(suffix)) return ath_verdict_false();
+
+    char *hbuf = NULL, *sbuf = NULL;
+    size_t hlen = 0, slen = 0;
+    if (ath_string_slurp(hay, &hbuf, &hlen) != 0) return ath_verdict_false();
+    if (ath_string_slurp(suffix, &sbuf, &slen) != 0) {
+        free(hbuf);
+        return ath_verdict_false();
+    }
+    int ok = (slen <= hlen) && (memcmp(hbuf + hlen - slen, sbuf, slen) == 0);
+    free(hbuf); free(sbuf);
+    if (!ok) return ath_verdict_false();
+    return ath_verdict_true(hay, suffix);
+}
+
+/* Buffer-based lex comparison. Returns -1, 0, +1 in usual sense.
+ * Returns -2 on malformed string. */
+static int ath_string_lexcmp(ath_obj *a, ath_obj *b, int *err) {
+    *err = 0;
+    char *abuf = NULL, *bbuf = NULL;
+    size_t alen = 0, blen = 0;
+    if (ath_string_slurp(a, &abuf, &alen) != 0) { *err = 1; return 0; }
+    if (ath_string_slurp(b, &bbuf, &blen) != 0) { free(abuf); *err = 1; return 0; }
+    size_t n = alen < blen ? alen : blen;
+    int c = (n == 0) ? 0 : memcmp(abuf, bbuf, n);
+    if (c == 0) {
+        if (alen < blen) c = -1;
+        else if (alen > blen) c = 1;
+    }
+    free(abuf); free(bbuf);
+    return c < 0 ? -1 : (c > 0 ? 1 : 0);
+}
+
+ath_obj *ath_strlt(ath_obj *a, ath_obj *b) {
+    if (a != NULL && a != ath_NULL && !ath_is_alive(a)) return ath_verdict_false();
+    if (b != NULL && b != ath_NULL && !ath_is_alive(b)) return ath_verdict_false();
+    int err = 0;
+    int c = ath_string_lexcmp(a, b, &err);
+    if (err) return ath_verdict_false();
+    if (c >= 0) return ath_verdict_false();
+    return ath_verdict_true(a, b);
+}
+
+ath_obj *ath_strgt(ath_obj *a, ath_obj *b) {
+    if (a != NULL && a != ath_NULL && !ath_is_alive(a)) return ath_verdict_false();
+    if (b != NULL && b != ath_NULL && !ath_is_alive(b)) return ath_verdict_false();
+    int err = 0;
+    int c = ath_string_lexcmp(a, b, &err);
+    if (err) return ath_verdict_false();
+    if (c <= 0) return ath_verdict_false();
+    return ath_verdict_true(a, b);
+}
+
+/* Apply a per-byte transform to `s`. The transform returns the
+ * replacement byte. A NULL/dead/empty source returns NULL; a malformed
+ * source returns ath_NULL too (transform stops at the bad atom and we
+ * fall back to "empty"). The result inherits `s` as a dep. */
+static ath_obj *ath_map_bytes(ath_obj *s, ath_obj *unused, int (*xform)(int)) {
+    (void)unused;
+    if (s == NULL || s == ath_NULL) return ath_NULL;
+    if (!ath_is_alive(s)) return ath_NULL;
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(s, &buf, &len) != 0) return ath_NULL;
+    if (len == 0) { free(buf); return ath_NULL; }
+    for (size_t i = 0; i < len; i++) buf[i] = (char)xform((unsigned char)buf[i]);
+    ath_obj *result = ath_buf_to_string(buf, len);
+    free(buf);
+    ath_inherit_lifetime(result, s, NULL);
+    return result;
+}
+
+static int ath_xform_lower(int c) {
+    return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
+}
+
+static int ath_xform_upper(int c) {
+    return (c >= 'a' && c <= 'z') ? c - ('a' - 'A') : c;
+}
+
+ath_obj *ath_lower(ath_obj *s, ath_obj *unused) {
+    return ath_map_bytes(s, unused, ath_xform_lower);
+}
+
+ath_obj *ath_upper(ath_obj *s, ath_obj *unused) {
+    return ath_map_bytes(s, unused, ath_xform_upper);
+}
+
+static int ath_is_strip_space(unsigned char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+/* Generic strip: side==0 trim both, side==-1 lstrip, side==+1 rstrip. */
+static ath_obj *ath_strip_impl(ath_obj *s, ath_obj *unused, int side) {
+    (void)unused;
+    if (s == NULL || s == ath_NULL) return ath_NULL;
+    if (!ath_is_alive(s)) return ath_NULL;
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(s, &buf, &len) != 0) return ath_NULL;
+    size_t lo = 0, hi = len;
+    if (side <= 0) {
+        while (lo < hi && ath_is_strip_space((unsigned char)buf[lo])) lo++;
+    }
+    if (side >= 0) {
+        while (hi > lo && ath_is_strip_space((unsigned char)buf[hi - 1])) hi--;
+    }
+    ath_obj *result = ath_buf_to_string(buf + lo, hi - lo);
+    free(buf);
+    ath_inherit_lifetime(result, s, NULL);
+    return result;
+}
+
+ath_obj *ath_trim(ath_obj *s, ath_obj *unused)   { return ath_strip_impl(s, unused,  0); }
+ath_obj *ath_lstrip(ath_obj *s, ath_obj *unused) { return ath_strip_impl(s, unused, -1); }
+ath_obj *ath_rstrip(ath_obj *s, ath_obj *unused) { return ath_strip_impl(s, unused, +1); }
+
+/* SPLIT: walk `s` byte-by-byte, accumulate the current run until `sep`
+ * is matched, emit the accumulated run as a fresh string into the
+ * output list, continue past `sep`. A trailing `sep` yields a trailing
+ * empty-string element. An empty `sep` is born dead — "split nothing"
+ * is undefined, matching REPLACE's empty-needle rule.
+ *
+ * Result is a right-nested cons-list whose left halves are themselves
+ * cons-list strings. Terminated by ath_NULL. */
+ath_obj *ath_split(ath_obj *s, ath_obj *sep) {
+    int s_empty = (s == NULL || s == ath_NULL);
+    if (sep == NULL || sep == ath_NULL) return ath_alloc_dead();
+    if (!ath_is_alive(sep)) return ath_alloc_dead();
+    if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
+
+    char *sbuf = NULL, *pbuf = NULL;
+    size_t slen = 0, plen = 0;
+    if (ath_string_slurp(s, &sbuf, &slen) != 0) return ath_alloc_dead();
+    if (ath_string_slurp(sep, &pbuf, &plen) != 0) {
+        free(sbuf);
+        return ath_alloc_dead();
+    }
+    if (plen == 0) {
+        free(sbuf); free(pbuf);
+        return ath_alloc_dead();
+    }
+
+    /* Two-pass: first scan finds split positions, second builds the
+     * cons-list right-to-left. */
+    size_t cap = 8;
+    size_t *starts = (size_t *)malloc(sizeof(size_t) * cap);
+    size_t *ends = (size_t *)malloc(sizeof(size_t) * cap);
+    if (!starts || !ends) {
+        free(sbuf); free(pbuf); free(starts); free(ends);
+        return ath_alloc_dead();
+    }
+    size_t parts = 0;
+    size_t i = 0, run_start = 0;
+    while (i <= slen) {
+        if (i + plen <= slen && memcmp(sbuf + i, pbuf, plen) == 0) {
+            if (parts >= cap) {
+                cap *= 2;
+                size_t *ns = (size_t *)realloc(starts, sizeof(size_t) * cap);
+                size_t *ne = (size_t *)realloc(ends, sizeof(size_t) * cap);
+                if (!ns || !ne) {
+                    free(sbuf); free(pbuf); free(ns ? ns : starts);
+                    free(ne ? ne : ends);
+                    return ath_alloc_dead();
+                }
+                starts = ns; ends = ne;
+            }
+            starts[parts] = run_start;
+            ends[parts] = i;
+            parts++;
+            i += plen;
+            run_start = i;
+        } else if (i < slen) {
+            i++;
+        } else {
+            /* Final run from run_start..slen */
+            if (parts >= cap) {
+                cap *= 2;
+                size_t *ns = (size_t *)realloc(starts, sizeof(size_t) * cap);
+                size_t *ne = (size_t *)realloc(ends, sizeof(size_t) * cap);
+                if (!ns || !ne) {
+                    free(sbuf); free(pbuf); free(ns ? ns : starts);
+                    free(ne ? ne : ends);
+                    return ath_alloc_dead();
+                }
+                starts = ns; ends = ne;
+            }
+            starts[parts] = run_start;
+            ends[parts] = slen;
+            parts++;
+            i++;
+        }
+    }
+
+    ath_obj *list = ath_NULL;
+    for (size_t k = parts; k > 0; k--) {
+        size_t a = starts[k - 1], b = ends[k - 1];
+        ath_obj *elem = ath_buf_to_string(sbuf + a, b - a);
+        list = ath_cons_fresh(elem, list);
+    }
+    free(sbuf); free(pbuf); free(starts); free(ends);
+    ath_inherit_lifetime(list, s, sep);
+    return list;
+}
+
+/* JOIN: walk LIST's right-spine; for each cell, walk the left half as
+ * a string into the output, then append SEP if not the last cell. An
+ * empty LIST returns NULL. An empty SEP is permitted and yields a
+ * concatenation with no separators. */
+ath_obj *ath_join(ath_obj *list, ath_obj *sep) {
+    int list_empty = (list == NULL || list == ath_NULL);
+    if (!list_empty && !ath_is_alive(list)) return ath_alloc_dead();
+    int sep_empty = (sep == NULL || sep == ath_NULL);
+    if (!sep_empty && !ath_is_alive(sep)) return ath_alloc_dead();
+    if (list_empty) return ath_NULL;
+
+    char *pbuf = NULL;
+    size_t plen = 0;
+    if (!sep_empty) {
+        if (ath_string_slurp(sep, &pbuf, &plen) != 0) return ath_alloc_dead();
+    }
+
+    /* Two-pass: gather element buffers, then concat. */
+    size_t cap = 8, count = 0;
+    char **bufs = (char **)malloc(sizeof(char *) * cap);
+    size_t *lens = (size_t *)malloc(sizeof(size_t) * cap);
+    if (!bufs || !lens) {
+        free(pbuf); free(bufs); free(lens);
+        return ath_alloc_dead();
+    }
+    size_t total = 0;
+    ath_obj *cur = list;
+    while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        char *ebuf = NULL;
+        size_t elen = 0;
+        if (ath_string_slurp(l, &ebuf, &elen) != 0) {
+            for (size_t k = 0; k < count; k++) free(bufs[k]);
+            free(bufs); free(lens); free(pbuf);
+            return ath_alloc_dead();
+        }
+        if (count >= cap) {
+            cap *= 2;
+            char **nb = (char **)realloc(bufs, sizeof(char *) * cap);
+            size_t *nl = (size_t *)realloc(lens, sizeof(size_t) * cap);
+            if (!nb || !nl) {
+                for (size_t k = 0; k < count; k++) free(bufs[k]);
+                free(nb ? nb : bufs); free(nl ? nl : lens); free(pbuf);
+                free(ebuf);
+                return ath_alloc_dead();
+            }
+            bufs = nb; lens = nl;
+        }
+        bufs[count] = ebuf;
+        lens[count] = elen;
+        total += elen;
+        count++;
+        cur = r;
+    }
+    if (count > 1) total += plen * (count - 1);
+
+    char *out = (count > 0) ? (char *)malloc(total + 1) : NULL;
+    if (count > 0 && !out) {
+        for (size_t k = 0; k < count; k++) free(bufs[k]);
+        free(bufs); free(lens); free(pbuf);
+        return ath_alloc_dead();
+    }
+    size_t oi = 0;
+    for (size_t k = 0; k < count; k++) {
+        memcpy(out + oi, bufs[k], lens[k]);
+        oi += lens[k];
+        if (k + 1 < count && plen > 0) {
+            memcpy(out + oi, pbuf, plen);
+            oi += plen;
+        }
+        free(bufs[k]);
+    }
+    free(bufs); free(lens); free(pbuf);
+
+    if (count == 0 || oi == 0) {
+        free(out);
+        return ath_NULL;
+    }
+    ath_obj *result = ath_buf_to_string(out, oi);
+    free(out);
+    ath_inherit_lifetime(result, list, sep);
+    return result;
 }
 
 _Noreturn void ath_halt(void) {

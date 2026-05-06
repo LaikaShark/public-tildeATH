@@ -1,0 +1,8 @@
+// SPEC §4.8.4 — strip trailing whitespace.
+//
+//   RSTRIP [S, _] R;
+
+import builtin ath_rstrip as ATH_RSTRIP;
+BIFURCATE ARGS [X, Y];
+ATH_RSTRIP [X, Y] R;
+THIS.DIE(R);
