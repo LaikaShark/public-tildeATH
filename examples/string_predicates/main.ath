@@ -1,0 +1,37 @@
+// Tier 3f demo: string predicate verdicts.
+//
+// Reads two lines A and B from stdin and reports, one line each,
+// whether A == B, A starts with / ends with B, and A < / > B in byte
+// order. Every string starts and ends with the empty string, so an
+// empty second line still yields a live STARTSWITH / ENDSWITH.
+//
+// Try:
+//   athc examples/string_predicates/main.ath -o sp
+//   printf 'apple\napp\n' | ./sp
+//   # not equal / prefix / no suffix / not lt / gt
+
+importf <streq>      as STREQ;
+importf <startswith> as STARTSWITH;
+importf <endswith>   as ENDSWITH;
+importf <strlt>      as STRLT;
+importf <strgt>      as STRGT;
+
+INPUT A;
+INPUT B;
+
+STREQ [A, B] V_EQ;
+BRANCH(V_EQ) { print equal; } ELSE { print not equal; }
+
+STARTSWITH [A, B] V_PRE;
+BRANCH(V_PRE) { print prefix; } ELSE { print no prefix; }
+
+ENDSWITH [A, B] V_SUF;
+BRANCH(V_SUF) { print suffix; } ELSE { print no suffix; }
+
+STRLT [A, B] V_LT;
+BRANCH(V_LT) { print lt; } ELSE { print not lt; }
+
+STRGT [A, B] V_GT;
+BRANCH(V_GT) { print gt; } ELSE { print not gt; }
+
+THIS.DIE();

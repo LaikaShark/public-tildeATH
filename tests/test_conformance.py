@@ -45,6 +45,7 @@ def _compile_and_run(
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        timeout=60.0,
     )
     assert compiled.returncode == 0, (
         f"compile failed for {source} (compose={compose}):\n{compiled.stderr}"
@@ -295,6 +296,36 @@ CASES = [
         None,
         "hello world\nvalue: 42\nx=7\ny=8\nsum=15\n",
         id="tier3e_text_primitive_and_interpolation",
+    ),
+    pytest.param(
+        "string_predicates/main.ath",
+        "hello\nhello\n",
+        "equal\nprefix\nsuffix\nnot lt\nnot gt\n",
+        id="tier3f_predicates_equal",
+    ),
+    pytest.param(
+        "string_predicates/main.ath",
+        "apple\napp\n",
+        "not equal\nprefix\nno suffix\nnot lt\ngt\n",
+        id="tier3f_predicates_prefix_gt",
+    ),
+    pytest.param(
+        "string_predicates/main.ath",
+        "x\n\n",
+        "not equal\nprefix\nsuffix\nnot lt\ngt\n",
+        id="tier3f_predicates_empty_suffix_alive",
+    ),
+    pytest.param(
+        "string_transforms/main.ath",
+        "  Hello,World,FOO  \n",
+        "  hello,world,foo  \n  HELLO,WORLD,FOO  \nHello,World,FOO\nHello-World-FOO\n",
+        id="tier3g_transforms_case_trim_splitjoin",
+    ),
+    pytest.param(
+        "string_transforms/main.ath",
+        "a,b,\n",
+        "a,b,\nA,B,\na,b,\na-b-\n",
+        id="tier3g_transforms_trailing_sep_empty",
     ),
 ]
 

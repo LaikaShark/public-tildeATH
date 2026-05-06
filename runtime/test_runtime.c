@@ -841,6 +841,75 @@ int main(void) {
     /* RANDOM with no-payload → dead. */
     assert(!ath_is_alive(ath_random_range(ath_alloc_alive(), r_hi)));
 
+    /* --- String predicates, transforms, split/join (SPEC §4.8.4) ------ */
+    {
+        #define MKS(lit) ath_string_from_bytes(lit, sizeof(lit) - 1)
+
+        /* STREQ: byte-identical → alive; empty == empty. */
+        assert(ath_is_alive(ath_streq(MKS("hello"), MKS("hello"))));
+        assert(!ath_is_alive(ath_streq(MKS("hello"), MKS("help"))));
+        assert(!ath_is_alive(ath_streq(MKS("hi"), MKS("hit"))));   /* prefix, shorter */
+        assert(ath_is_alive(ath_streq(ath_NULL, ath_NULL)));
+        assert(!ath_is_alive(ath_streq(MKS("x"), ath_NULL)));
+
+        /* STARTSWITH: empty prefix is always a prefix. */
+        assert(ath_is_alive(ath_startswith(MKS("apple"), MKS("app"))));
+        assert(!ath_is_alive(ath_startswith(MKS("apple"), MKS("ple"))));
+        assert(ath_is_alive(ath_startswith(MKS("apple"), ath_NULL)));
+        assert(ath_is_alive(ath_startswith(ath_NULL, ath_NULL)));
+        assert(!ath_is_alive(ath_startswith(ath_NULL, MKS("x"))));
+
+        /* ENDSWITH: empty suffix is always a suffix. */
+        assert(ath_is_alive(ath_endswith(MKS("apple"), MKS("ple"))));
+        assert(!ath_is_alive(ath_endswith(MKS("apple"), MKS("app"))));
+        assert(ath_is_alive(ath_endswith(MKS("apple"), ath_NULL)));
+        assert(!ath_is_alive(ath_endswith(ath_NULL, MKS("x"))));
+
+        /* STRLT / STRGT: byte order; equal is neither. */
+        assert(ath_is_alive(ath_strlt(MKS("abc"), MKS("abd"))));
+        assert(ath_is_alive(ath_strlt(MKS("abc"), MKS("abcd"))));   /* prefix < longer */
+        assert(!ath_is_alive(ath_strlt(MKS("abc"), MKS("abc"))));
+        assert(!ath_is_alive(ath_strlt(MKS("abd"), MKS("abc"))));
+        assert(ath_is_alive(ath_strgt(MKS("abd"), MKS("abc"))));
+        assert(ath_is_alive(ath_strgt(MKS("abcd"), MKS("abc"))));
+        assert(!ath_is_alive(ath_strgt(MKS("abc"), MKS("abc"))));
+
+        /* Dead operand → dead verdict. */
+        ath_obj *dead_s = MKS("z");
+        ath_die(dead_s);
+        assert(!ath_is_alive(ath_streq(dead_s, MKS("z"))));
+        assert(!ath_is_alive(ath_strlt(dead_s, MKS("z"))));
+        assert(!ath_is_alive(ath_endswith(dead_s, MKS("z"))));
+
+        /* LOWER / UPPER: verify via STREQ against the expected result. */
+        assert(ath_is_alive(ath_streq(ath_lower(MKS("HeLLo123"), ath_NULL), MKS("hello123"))));
+        assert(ath_is_alive(ath_streq(ath_upper(MKS("HeLLo123"), ath_NULL), MKS("HELLO123"))));
+        assert(ath_lower(ath_NULL, ath_NULL) == ath_NULL);   /* NULL in, NULL out */
+
+        /* TRIM / LSTRIP / RSTRIP. Whitespace = space, tab, LF, CR. */
+        assert(ath_is_alive(ath_streq(ath_trim(MKS("  hi \t\n"), ath_NULL), MKS("hi"))));
+        assert(ath_is_alive(ath_streq(ath_lstrip(MKS("  hi  "), ath_NULL), MKS("hi  "))));
+        assert(ath_is_alive(ath_streq(ath_rstrip(MKS("  hi  "), ath_NULL), MKS("  hi"))));
+        assert(ath_trim(MKS("   "), ath_NULL) == ath_NULL);  /* all whitespace → empty */
+
+        /* SPLIT: element count via LENGTH, element value via INDEX+STREQ. */
+        ath_obj *parts = ath_split(MKS("a,b,c"), MKS(","));
+        assert(ath_is_alive(parts));
+        assert(ath_length(parts, ath_NULL)->value == 3);
+        ath_obj *p0 = ath_index(parts, ath_alloc_number(0));
+        assert(ath_is_alive(ath_streq(p0, MKS("a"))));
+        ath_obj *trailing = ath_split(MKS("a,b,"), MKS(","));  /* trailing sep */
+        assert(ath_length(trailing, ath_NULL)->value == 3);
+        assert(!ath_is_alive(ath_split(MKS("abc"), ath_NULL)));  /* empty sep born dead */
+
+        /* JOIN: inverse of SPLIT when sep is absent from elements. */
+        assert(ath_is_alive(ath_streq(ath_join(parts, MKS(",")), MKS("a,b,c"))));
+        assert(ath_is_alive(ath_streq(ath_join(parts, MKS("-")), MKS("a-b-c"))));
+        assert(ath_join(ath_NULL, MKS(",")) == ath_NULL);  /* empty list → NULL */
+
+        #undef MKS
+    }
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }
