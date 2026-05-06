@@ -1305,11 +1305,16 @@ verdict into `AND`/`OR` directly.
 #### 4.8.4 String operations
 
 Strings are right-nested cons-lists of character atoms (§4.6). The
-runtime exports seven operations over them. Four are surfaced as
-function calls via `stdlib/`; two as dedicated statement syntax
-(§4.4.15, §4.4.16); one (`find`) as a function call and two
-(`replace`, `replace_all`) using the compose-pair pattern described
-below.
+runtime exports operations over them in two waves. The first wave —
+the table immediately below — covers access, measurement, and
+search-and-edit: `length` and `concat` as `stdlib/` function calls;
+`index` and `slice` as dedicated statement syntax (§4.4.15, §4.4.16);
+`find` as a function call and `replace`, `replace_all` using the
+compose-pair pattern described below. The second wave — predicates,
+transforms, and structural reshaping — is documented in the
+"Predicates, transforms, and structural operations" subsection
+further down; every entry there is a `stdlib/` function call over the
+fixed two-operand builtin ABI (§4.4.13).
 
 | Name | Surface form | Result | Born dead when |
 |---|---|---|---|
@@ -1395,6 +1400,60 @@ born-dead `R` — "replace nothing with something" is deliberately
 under-defined (Python's behavior of inserting at every position
 boundary is surprising and rarely what users want; sed rejects
 it). Use `CONCAT` if you want to prepend or append text.
+
+##### Predicates, transforms, and structural operations
+
+The second wave of string operations. Each is a `stdlib/` shim over a
+two-operand builtin. They fall into three kinds:
+
+- **Predicates** return a *verdict* — alive iff the relation holds,
+  dead otherwise (§4.8.3) — with both operands installed as deps via
+  `ath_verdict_true`. They are born dead on a malformed string: a
+  cell whose left half is not a recognized character atom encountered
+  partway through the walk.
+- **Transforms** return a fresh cons-list with the source installed as
+  a dep. `NULL` in yields `NULL` out.
+- **Structural** ops (`split`, `join`) move between a string and a
+  cons-list of strings.
+
+| Name | Surface form | Kind | Result | Born dead when |
+|---|---|---|---|---|
+| `streq` | `STREQ [A, B] V;` | predicate | alive iff `A` and `B` are byte-identical | malformed `A` or `B` |
+| `startswith` | `STARTSWITH [HAY, PREFIX] V;` | predicate | alive iff `HAY` begins with `PREFIX` | malformed operand |
+| `endswith` | `ENDSWITH [HAY, SUFFIX] V;` | predicate | alive iff `HAY` ends with `SUFFIX` | dead operand |
+| `strlt` | `STRLT [A, B] V;` | predicate | alive iff `A` < `B` lexicographically (byte order) | dead operand; `A >= B` → dead verdict |
+| `strgt` | `STRGT [A, B] V;` | predicate | alive iff `A` > `B` lexicographically | dead operand; `A <= B` → dead verdict |
+| `lower` | `LOWER [S, _] R;` | transform | fresh copy of `S` with `A`–`Z` lowercased | `S` dead/malformed (→ `NULL`) |
+| `upper` | `UPPER [S, _] R;` | transform | fresh copy with `a`–`z` uppercased | `S` dead/malformed (→ `NULL`) |
+| `trim` | `TRIM [S, _] R;` | transform | `S` with leading and trailing whitespace removed | `S` dead/malformed (→ `NULL`) |
+| `lstrip` | `LSTRIP [S, _] R;` | transform | `S` with leading whitespace removed | as `trim` |
+| `rstrip` | `RSTRIP [S, _] R;` | transform | `S` with trailing whitespace removed | as `trim` |
+| `split` | `SPLIT [S, SEP] LIST;` | structural | right-nested cons-list whose left halves are the substrings of `S` between occurrences of `SEP` | `SEP` empty or dead; `S` dead |
+| `join` | `JOIN [LIST, SEP] R;` | structural | the strings in `LIST` (its left halves) concatenated, interleaved with `SEP` | `LIST` or `SEP` dead; empty `LIST` → `NULL` |
+
+**Empty-string boundary cases.** Every string starts and ends with the
+empty string: `STARTSWITH`/`ENDSWITH` with an empty (`NULL`) prefix or
+suffix yield an *alive* verdict, and `STREQ [NULL, NULL]` is alive.
+Whitespace for the strip family is space, tab, LF, and CR.
+
+**`split` details.** The empty separator is born dead — "split on
+nothing" is under-defined, matching `replace`'s empty-needle rule
+above. A trailing `SEP` yields a trailing empty-string element, so
+`SPLIT` of `"a,b,"` on `","` is a three-element list `["a", "b", ""]`.
+The result is terminated by `NULL` and inherits both `S` and `SEP` as
+deps.
+
+**`join` details.** `JOIN` walks `LIST`'s right spine; for each cell it
+slurps the left half as a string into the output, appending `SEP`
+between cells but not after the last. An empty `SEP` is permitted and
+concatenates with no separators. An empty `LIST` (`NULL`) returns
+`NULL`. `SPLIT` and `JOIN` are inverses when `SEP` is non-empty and
+does not occur inside any element.
+
+Malformed input is distinguished from empty: a transform whose source
+is dead or contains a non-character atom returns `NULL` (treated as
+the empty result), while a predicate over a malformed operand is born
+dead.
 
 #### 4.8.5 Time and randomness built-ins
 

@@ -860,9 +860,11 @@ for static messages and `PRINT2` for dynamically constructed text.
 
 ### 13.2 String operations
 
-The runtime ships seven string operations (§4.8.4). Two are dedicated
-statement forms, surfaced by the parser; the rest are stdlib shims
-brought in by `importf`.
+The runtime ships string operations in two waves (§4.8.4). Two are
+dedicated statement forms, surfaced by the parser; the rest are stdlib
+shims brought in by `importf`.
+
+The first wave — access, measurement, search-and-edit:
 
 | Operation     | Surface form                              |
 |---------------|-------------------------------------------|
@@ -873,6 +875,34 @@ brought in by `importf`.
 | `replace_all` | `REPLACE_ALL [S, PAIR] R;` (compose-pair) |
 | subscript     | `S[N] X;`                                 |
 | slice         | `S[I..J] X;`                              |
+
+The second wave — predicates (returning verdicts), transforms, and
+structural reshaping. Each is a stdlib shim over the two-operand ABI:
+
+| Operation    | Surface form                | Yields                          |
+|--------------|-----------------------------|---------------------------------|
+| `streq`      | `STREQ [A, B] V;`           | verdict: `A` byte-equals `B`    |
+| `startswith` | `STARTSWITH [HAY, PRE] V;`  | verdict: `HAY` begins with `PRE`|
+| `endswith`   | `ENDSWITH [HAY, SUF] V;`    | verdict: `HAY` ends with `SUF`  |
+| `strlt`      | `STRLT [A, B] V;`           | verdict: `A` < `B` (byte order) |
+| `strgt`      | `STRGT [A, B] V;`           | verdict: `A` > `B` (byte order) |
+| `lower`      | `LOWER [S, _] R;`           | `S` with `A`–`Z` lowercased     |
+| `upper`      | `UPPER [S, _] R;`           | `S` with `a`–`z` uppercased     |
+| `trim`       | `TRIM [S, _] R;`            | `S` without outer whitespace    |
+| `lstrip`     | `LSTRIP [S, _] R;`          | `S` without leading whitespace  |
+| `rstrip`     | `RSTRIP [S, _] R;`          | `S` without trailing whitespace |
+| `split`      | `SPLIT [S, SEP] LIST;`      | cons-list of substrings         |
+| `join`       | `JOIN [LIST, SEP] R;`       | substrings joined by `SEP`      |
+
+The predicates feed a `BRANCH` the same way numeric comparisons do
+(§9): the verdict is alive when the relation holds, dead otherwise.
+Every string starts and ends with the empty string, so `STARTSWITH`
+and `ENDSWITH` against an empty (`NULL`) operand are always alive. The
+transforms return a fresh string and pass `NULL` (or any name) as the
+ignored second operand, exactly like the unary arithmetic shims.
+`SPLIT` born-dies on an empty separator; `JOIN` of an empty list is
+`NULL`. The two are inverses when the separator does not occur inside
+any element.
 
 `LENGTH` returns the number of right-spine cells walked before
 hitting `NULL` or a dead cell. `LENGTH` of `NULL` is `0`, not dead —
