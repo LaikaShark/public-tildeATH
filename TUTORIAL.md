@@ -893,6 +893,26 @@ structural reshaping. Each is a stdlib shim over the two-operand ABI:
 | `rstrip`     | `RSTRIP [S, _] R;`          | `S` without trailing whitespace |
 | `split`      | `SPLIT [S, SEP] LIST;`      | cons-list of substrings         |
 | `join`       | `JOIN [LIST, SEP] R;`       | substrings joined by `SEP`      |
+| `contains`   | `CONTAINS [HAY, NEEDLE] V;` | verdict: `NEEDLE` occurs in `HAY`|
+| `count`      | `COUNT [HAY, NEEDLE] N;`    | # non-overlapping occurrences   |
+| `rfind`      | `RFIND [HAY, NEEDLE] IDX;`  | index of the *last* occurrence  |
+| `repeat`     | `REPEAT [S, N] R;`          | `S` repeated `N` times          |
+| `reverse`    | `REVERSE [S, _] R;`         | `S` with characters reversed    |
+| `pad_left`   | `PAD_LEFT [S, N] R;`        | `S` space-padded to width `N`   |
+| `pad_right`  | `PAD_RIGHT [S, N] R;`       | `S` space-padded to width `N`   |
+| `ord`        | `ORD [A, _] N;`             | code (0..255) of char atom `A`  |
+| `chr`        | `CHR [N, _] S;`             | length-1 string for code `N`    |
+
+`CONTAINS` is the verdict companion to `FIND`: where `FIND` born-dies
+when the needle is absent, `CONTAINS` simply yields a dead verdict, and
+`COUNT` yields a live `0`. `RFIND` is `FIND` from the right. `REPEAT`
+and the `PAD` ops take a number payload as their second operand; padding
+uses spaces and never truncates. `ORD` and `CHR` bridge a character
+atom — the value `S[N]` yields — and its byte code: subscript a string
+to get an atom, `ORD` it to a number, `CHR` a number back to a length-1
+string. Note that killing a string also kills the shared atoms its
+characters came from (§4.4.15), so `ORD` of an atom from a since-killed
+string is dead.
 
 The predicates feed a `BRANCH` the same way numeric comparisons do
 (§9): the verdict is alive when the relation holds, dead otherwise.

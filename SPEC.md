@@ -1455,6 +1455,53 @@ is dead or contains a non-character atom returns `NULL` (treated as
 the empty result), while a predicate over a malformed operand is born
 dead.
 
+##### Search, measurement, construction, and the atom bridge
+
+A further group of `stdlib/` shims, all over the two-operand ABI.
+Search/measurement parallels `find`; construction builds fresh
+cons-lists (like `concat`); the atom bridge moves between the
+character atoms that `S[N]` (§4.4.15) yields and their integer codes.
+
+| Name | Surface form | Result | Born dead when |
+|---|---|---|---|
+| `contains` | `CONTAINS [HAY, NEEDLE] V;` | verdict, alive iff `NEEDLE` occurs in `HAY` | dead operand; malformed string. (Absence → dead verdict, not error.) Empty needle → alive |
+| `count` | `COUNT [HAY, NEEDLE] N;` | int64 payload = number of non-overlapping occurrences (`0` if none, *alive*) | empty `NEEDLE`; dead operand; non-character atom |
+| `rfind` | `RFIND [HAY, NEEDLE] IDX;` | int64 payload = index of the *last* occurrence | `NEEDLE` absent; dead operand; non-character atom. Empty needle → `len(HAY)` |
+| `repeat` | `REPEAT [S, N] R;` | fresh cons-list = `S` repeated `N` times | `N` < 0 or has no payload; `S` dead. `N == 0` → `NULL` |
+| `reverse` | `REVERSE [S, _] R;` | fresh cons-list with `S`'s characters reversed | `S` dead/malformed (→ `NULL`) |
+| `pad_left` | `PAD_LEFT [S, N] R;` | `S` left-padded with spaces to width `N` (copy of `S` if already ≥ `N`) | `N` < 0 or has no payload; `S` dead |
+| `pad_right` | `PAD_RIGHT [S, N] R;` | `S` right-padded with spaces to width `N` | as `pad_left` |
+| `ord` | `ORD [A, _] N;` | int64 payload = code (0..255) of the character atom `A` | `A` is not a character atom; `A` dead |
+| `chr` | `CHR [N, _] S;` | length-1 string whose character has code `N` | `N` < 0, `N` > 255, no payload, or dead |
+
+**Search semantics.** `COUNT` matches non-overlapping, left-to-right:
+`COUNT` of `"aaaa"` for `"aa"` is `2`, not `3`. Unlike `find`, a zero
+count is a live `0` payload, not a dead result — "absent" and "failed"
+coincide for `find`/`rfind` (born dead) but not for `count`. The empty
+needle follows §4.8.4's established split: present everywhere
+(`CONTAINS` alive, `RFIND` at `len`), but born dead for `COUNT`.
+
+**Construction.** `REPEAT` and the `PAD` ops take a number payload as
+their second operand (the same convention as the range endpoints in
+§4.4.16). Padding always uses the space character `0x20` and never
+truncates — widening past `len(S)` is a no-op copy. All three build
+fresh cons cells and inherit both operands as deps.
+
+**Atom bridge.** `ORD` is the inverse of `CHR`. `ORD` consumes a single
+character *atom* — the value `S[N]` (§4.4.15) yields, not a length-1
+string — and `CHR` produces a length-1 string. To go from a one-char
+string to a code, subscript it first (`S[0]` then `ORD`); to print a
+`CHR` result, it is already a string. Codes are byte values (0..255),
+matching the string encoding of §4.6.
+
+> **Caveat (shared-atom liveness).** Because `S[N]` returns the
+> *canonical* character atom and installs the source string as a
+> dependency on it (§4.4.15), killing that source marks the shared
+> atom dead for *every* string that uses the same character. `ORD`,
+> which checks atom liveness, will then see it dead. This is a
+> property of `ath_index`, not of `ORD`; avoid killing a string whose
+> characters you still intend to subscript elsewhere.
+
 #### 4.8.5 Time and randomness built-ins
 
 Two function-call builtins read the runtime clock and the random
