@@ -1,0 +1,48 @@
+// Tier 3i demo: repeat, reverse, pad, and the ord/chr atom bridge.
+//
+// Reads one line S and prints, one per line:
+//   1. S repeated 3 times
+//   2. S reversed
+//   3. S left-padded with spaces to width 5
+//   4. S right-padded with spaces to width 5
+//   5. the code point of S's first character
+//   6. that code point mapped back to a length-1 string (CHR is ORD's
+//      inverse)
+//
+// Try:
+//   athc examples/string_build/main.ath -o sb
+//   printf 'ab\n' | ./sb
+//   # ababab / ba / "   ab" / "ab   " / 97 / a
+
+importf <repeat>    as REPEAT;
+importf <reverse>   as REVERSE;
+importf <pad_left>  as PAD_LEFT;
+importf <pad_right> as PAD_RIGHT;
+importf <ord>       as ORD;
+importf <chr>       as CHR;
+importf <to_string> as TO_STRING;
+
+INPUT S;
+
+import number 3 as N3;
+REPEAT [S, N3] REP;
+PRINT2 REP;
+
+REVERSE [S, NULL] REV;
+PRINT2 REV;
+
+import number 5 as N5;
+PAD_LEFT [S, N5] PL;
+PRINT2 PL;
+PAD_RIGHT [S, N5] PR;
+PRINT2 PR;
+
+import number 0 as I0;
+S[I0] H;
+ORD [H, NULL] OC;
+TO_STRING [OC, NULL] OCS;
+PRINT2 OCS;
+CHR [OC, NULL] BACK;
+PRINT2 BACK;
+
+THIS.DIE();

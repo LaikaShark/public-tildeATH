@@ -1,0 +1,39 @@
+// Tier 3h demo: substring search and measurement.
+//
+// Reads a haystack and a needle (two lines) and prints, one per line:
+//   1. whether the needle is present
+//   2. the count of non-overlapping occurrences
+//   3. the index of the LAST occurrence, or "no match" if absent
+//
+// Try:
+//   athc examples/string_search/main.ath -o ss
+//   printf 'abracadabra\na\n' | ./ss
+//   # present / 5 / 10
+
+importf <contains>  as CONTAINS;
+importf <count>     as COUNT;
+importf <rfind>     as RFIND;
+importf <to_string> as TO_STRING;
+
+INPUT HAY;
+INPUT NEEDLE;
+
+CONTAINS [HAY, NEEDLE] HAS;
+BRANCH(HAS) { print present; } ELSE { print absent; }
+
+COUNT [HAY, NEEDLE] N;
+TO_STRING [N, NULL] NS;
+PRINT2 NS;
+
+// RFIND is born dead when the needle is absent; CLONE to test liveness
+// before consuming the value with a BRANCH.
+RFIND [HAY, NEEDLE] R;
+CLONE R as RCHK;
+BRANCH(RCHK) {
+    TO_STRING [R, NULL] RS;
+    PRINT2 RS;
+} ELSE {
+    print no match;
+}
+
+THIS.DIE();

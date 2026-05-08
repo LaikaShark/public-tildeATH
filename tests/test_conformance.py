@@ -327,6 +327,30 @@ CASES = [
         "a,b,\nA,B,\na,b,\na-b-\n",
         id="tier3g_transforms_trailing_sep_empty",
     ),
+    pytest.param(
+        "string_search/main.ath",
+        "abracadabra\na\n",
+        "present\n5\n10\n",
+        id="tier3h_search_present_count_rfind",
+    ),
+    pytest.param(
+        "string_search/main.ath",
+        "hello\nz\n",
+        "absent\n0\nno match\n",
+        id="tier3h_search_absent",
+    ),
+    pytest.param(
+        "string_build/main.ath",
+        "ab\n",
+        "ababab\nba\n   ab\nab   \n97\na\n",
+        id="tier3i_build_repeat_pad_ordchr",
+    ),
+    pytest.param(
+        "string_build/main.ath",
+        "hello\n",
+        "hellohellohello\nolleh\nhello\nhello\n104\nh\n",
+        id="tier3i_build_pad_noop_when_wide_enough",
+    ),
 ]
 
 

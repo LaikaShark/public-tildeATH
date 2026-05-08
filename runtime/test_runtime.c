@@ -910,6 +910,67 @@ int main(void) {
         #undef MKS
     }
 
+    /* --- Search/measure, construct, atom bridge (SPEC §4.8.4 group 2) -- */
+    {
+        #define MKS(lit) ath_string_from_bytes(lit, sizeof(lit) - 1)
+
+        /* CONTAINS: present → alive; absent → dead; empty needle alive.
+         * Uses 'q' for the absent needle, not 'z' — the in-flight block
+         * above killed the canonical "z" string, which under interning
+         * would make any later MKS("z") a dead operand. */
+        assert(ath_is_alive(ath_contains(MKS("abracadabra"), MKS("cad"))));
+        assert(!ath_is_alive(ath_contains(MKS("hello"), MKS("q"))));
+        assert(ath_is_alive(ath_contains(MKS("hello"), ath_NULL)));     /* empty needle */
+        assert(ath_is_alive(ath_contains(ath_NULL, ath_NULL)));
+        assert(!ath_is_alive(ath_contains(ath_NULL, MKS("x"))));
+
+        /* COUNT: non-overlapping; 0 matches is a live 0; empty needle dead. */
+        assert(ath_count(MKS("abracadabra"), MKS("a"))->value == 5);
+        assert(ath_count(MKS("aaaa"), MKS("aa"))->value == 2);          /* non-overlapping */
+        ath_obj *zero = ath_count(MKS("hello"), MKS("q"));
+        assert(ath_is_alive(zero) && zero->value == 0);
+        assert(!ath_is_alive(ath_count(MKS("hello"), ath_NULL)));       /* empty needle */
+
+        /* RFIND: last index; empty needle → len; absent → dead. */
+        assert(ath_rfind(MKS("abracadabra"), MKS("a"))->value == 10);
+        assert(ath_rfind(MKS("hello"), MKS("l"))->value == 3);
+        assert(ath_rfind(MKS("hello"), ath_NULL)->value == 5);         /* empty → len */
+        assert(!ath_is_alive(ath_rfind(MKS("hello"), MKS("q"))));       /* absent */
+
+        /* REPEAT: S x N; N==0 → empty; N<0 / no payload → dead. */
+        assert(ath_is_alive(ath_streq(ath_repeat(MKS("ab"), ath_alloc_number(3)), MKS("ababab"))));
+        assert(ath_repeat(MKS("ab"), ath_alloc_number(0)) == ath_NULL);
+        assert(!ath_is_alive(ath_repeat(MKS("ab"), ath_alloc_number(-1))));
+        assert(!ath_is_alive(ath_repeat(MKS("ab"), ath_alloc_alive())));  /* no payload */
+
+        /* REVERSE: characters reversed; NULL in, NULL out. */
+        assert(ath_is_alive(ath_streq(ath_reverse(MKS("hello"), ath_NULL), MKS("olleh"))));
+        assert(ath_reverse(ath_NULL, ath_NULL) == ath_NULL);
+
+        /* PAD_LEFT / PAD_RIGHT: pad to width; no-op when already wide. */
+        assert(ath_is_alive(ath_streq(ath_pad_left(MKS("ab"), ath_alloc_number(5)), MKS("   ab"))));
+        assert(ath_is_alive(ath_streq(ath_pad_right(MKS("ab"), ath_alloc_number(5)), MKS("ab   "))));
+        assert(ath_is_alive(ath_streq(ath_pad_left(MKS("hello"), ath_alloc_number(3)), MKS("hello"))));
+        assert(!ath_is_alive(ath_pad_left(MKS("ab"), ath_alloc_number(-1))));
+
+        /* ORD / CHR: round-trip the byte code of a character atom. Uses
+         * 'Q'/'q' — codes untouched by earlier tests — so the result is
+         * unaffected by the subscript-kill test above, which poisons the
+         * shared 'A' atom (ath_index installs a dep on the canonical
+         * atom; killing its source then kills that atom globally). */
+        assert(ath_ord(ath_char_atom('Q'), ath_NULL)->value == 'Q');
+        assert(ath_is_alive(ath_streq(ath_chr(ath_alloc_number('Q'), ath_NULL), MKS("Q"))));
+        /* chr('q') → "q"; its first head is the atom; ord → 'q'. */
+        ath_obj *q_str = ath_chr(ath_alloc_number('q'), ath_NULL);
+        ath_obj *q_atom = ath_index(q_str, ath_alloc_number(0));
+        assert(ath_ord(q_atom, ath_NULL)->value == 'q');
+        assert(!ath_is_alive(ath_chr(ath_alloc_number(256), ath_NULL)));  /* out of range */
+        assert(!ath_is_alive(ath_chr(ath_alloc_number(-1), ath_NULL)));
+        assert(!ath_is_alive(ath_ord(MKS("ab"), ath_NULL)));  /* not a single atom */
+
+        #undef MKS
+    }
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }
