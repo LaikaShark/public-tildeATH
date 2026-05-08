@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — repeat a string N times.
+//
+//   REPEAT [S, N] R;
+//
+// R is a fresh cons-list: S concatenated with itself N times. N is a
+// number payload; N == 0 yields the empty string, N < 0 is born dead.
+
+import builtin ath_repeat as ATH_REPEAT;
+BIFURCATE ARGS [X, Y];
+ATH_REPEAT [X, Y] R;
+THIS.DIE(R);

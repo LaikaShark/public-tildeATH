@@ -1574,6 +1574,209 @@ ath_obj *ath_join(ath_obj *list, ath_obj *sep) {
     return result;
 }
 
+/* --- Search/measure, construct, and atom bridge (SPEC §4.8.4
+ *     second-wave extensions, group 2) -------------------------------- */
+
+/* CONTAINS: verdict, alive iff NEEDLE occurs anywhere in HAY. The empty
+ * needle is contained in every string. Dead operand or malformed string
+ * → dead verdict. */
+ath_obj *ath_contains(ath_obj *hay, ath_obj *needle) {
+    int hay_empty = (hay == NULL || hay == ath_NULL);
+    int needle_empty = (needle == NULL || needle == ath_NULL);
+    if (!hay_empty && !ath_is_alive(hay)) return ath_verdict_false();
+    if (!needle_empty && !ath_is_alive(needle)) return ath_verdict_false();
+
+    char *hbuf = NULL, *nbuf = NULL;
+    size_t hlen = 0, nlen = 0;
+    if (ath_string_slurp(hay, &hbuf, &hlen) != 0) return ath_verdict_false();
+    if (ath_string_slurp(needle, &nbuf, &nlen) != 0) {
+        free(hbuf);
+        return ath_verdict_false();
+    }
+    int found = (nlen == 0);  /* empty needle is always present */
+    for (size_t i = 0; !found && i + nlen <= hlen; i++) {
+        if (memcmp(hbuf + i, nbuf, nlen) == 0) found = 1;
+    }
+    free(hbuf); free(nbuf);
+    return found ? ath_verdict_true(hay, needle) : ath_verdict_false();
+}
+
+/* COUNT: int64 payload = number of non-overlapping occurrences of NEEDLE
+ * in HAY. Empty needle is born dead (matches REPLACE). Zero matches
+ * yields payload 0 (alive). Dead/malformed operand → dead. */
+ath_obj *ath_count(ath_obj *hay, ath_obj *needle) {
+    int hay_empty = (hay == NULL || hay == ath_NULL);
+    int needle_empty = (needle == NULL || needle == ath_NULL);
+    if (!hay_empty && !ath_is_alive(hay)) return ath_alloc_dead_number();
+    if (!needle_empty && !ath_is_alive(needle)) return ath_alloc_dead_number();
+
+    char *hbuf = NULL, *nbuf = NULL;
+    size_t hlen = 0, nlen = 0;
+    if (ath_string_slurp(hay, &hbuf, &hlen) != 0) return ath_alloc_dead_number();
+    if (ath_string_slurp(needle, &nbuf, &nlen) != 0) {
+        free(hbuf);
+        return ath_alloc_dead_number();
+    }
+    if (nlen == 0) {  /* empty needle born dead */
+        free(hbuf); free(nbuf);
+        return ath_alloc_dead_number();
+    }
+    int64_t n = 0;
+    for (size_t i = 0; i + nlen <= hlen; ) {
+        if (memcmp(hbuf + i, nbuf, nlen) == 0) { n++; i += nlen; }
+        else i++;
+    }
+    free(hbuf); free(nbuf);
+    ath_obj *r = ath_alloc_number(n);
+    ath_inherit_lifetime(r, hay, needle);
+    return r;
+}
+
+/* RFIND: int64 payload = index of the LAST occurrence of NEEDLE in HAY.
+ * Empty needle matches at len(HAY). Absent needle or dead/malformed
+ * operand → dead. */
+ath_obj *ath_rfind(ath_obj *hay, ath_obj *needle) {
+    int hay_empty = (hay == NULL || hay == ath_NULL);
+    int needle_empty = (needle == NULL || needle == ath_NULL);
+    if (!hay_empty && !ath_is_alive(hay)) return ath_alloc_dead_number();
+    if (!needle_empty && !ath_is_alive(needle)) return ath_alloc_dead_number();
+
+    char *hbuf = NULL, *nbuf = NULL;
+    size_t hlen = 0, nlen = 0;
+    if (ath_string_slurp(hay, &hbuf, &hlen) != 0) return ath_alloc_dead_number();
+    if (ath_string_slurp(needle, &nbuf, &nlen) != 0) {
+        free(hbuf);
+        return ath_alloc_dead_number();
+    }
+    if (nlen == 0) {  /* empty needle matches at the end */
+        free(hbuf); free(nbuf);
+        ath_obj *idx = ath_alloc_number((int64_t)hlen);
+        ath_inherit_lifetime(idx, hay, needle);
+        return idx;
+    }
+    int found = 0;
+    size_t pos = 0;
+    for (size_t i = 0; i + nlen <= hlen; i++) {
+        if (memcmp(hbuf + i, nbuf, nlen) == 0) { found = 1; pos = i; }
+    }
+    free(hbuf); free(nbuf);
+    if (!found) return ath_alloc_dead_number();
+    ath_obj *idx = ath_alloc_number((int64_t)pos);
+    ath_inherit_lifetime(idx, hay, needle);
+    return idx;
+}
+
+/* REPEAT: fresh cons-list = S concatenated with itself N times. N is a
+ * number payload; N == 0 → empty (NULL); N < 0 or no payload → dead.
+ * S dead/malformed → dead. */
+ath_obj *ath_repeat(ath_obj *s, ath_obj *n) {
+    if (n == NULL || !ath_is_alive(n) || !n->has_value) return ath_alloc_dead();
+    if (n->value < 0) return ath_alloc_dead();
+    int s_empty = (s == NULL || s == ath_NULL);
+    if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
+    if (n->value == 0 || s_empty) return ath_NULL;
+
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(s, &buf, &len) != 0) return ath_alloc_dead();
+    if (len == 0) { free(buf); return ath_NULL; }
+    if ((size_t)n->value > ((size_t)-1) / len) {  /* overflow guard */
+        free(buf);
+        return ath_alloc_dead();
+    }
+    size_t total = len * (size_t)n->value;
+    char *out = (char *)malloc(total);
+    if (!out) { free(buf); fputs("ath: out of memory\n", stderr); exit(1); }
+    for (int64_t k = 0; k < n->value; k++) {
+        memcpy(out + (size_t)k * len, buf, len);
+    }
+    free(buf);
+    ath_obj *result = ath_buf_to_string(out, total);
+    free(out);
+    ath_inherit_lifetime(result, s, n);
+    return result;
+}
+
+/* REVERSE: fresh cons-list with the characters of S in reverse order.
+ * NULL/dead/malformed source → NULL (empty), per the transform family. */
+ath_obj *ath_reverse(ath_obj *s, ath_obj *unused) {
+    (void)unused;
+    if (s == NULL || s == ath_NULL) return ath_NULL;
+    if (!ath_is_alive(s)) return ath_NULL;
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(s, &buf, &len) != 0) return ath_NULL;
+    if (len == 0) { free(buf); return ath_NULL; }
+    for (size_t i = 0, j = len - 1; i < j; i++, j--) {
+        char t = buf[i]; buf[i] = buf[j]; buf[j] = t;
+    }
+    ath_obj *result = ath_buf_to_string(buf, len);
+    free(buf);
+    ath_inherit_lifetime(result, s, NULL);
+    return result;
+}
+
+/* Generic space-padding to width N. on_left selects left vs right pad.
+ * If S is already at least N long, returns a fresh copy unchanged. N is
+ * a number payload; N < 0 or no payload → dead. S dead/malformed →
+ * dead. */
+static ath_obj *ath_pad_impl(ath_obj *s, ath_obj *n, int on_left) {
+    if (n == NULL || !ath_is_alive(n) || !n->has_value) return ath_alloc_dead();
+    if (n->value < 0) return ath_alloc_dead();
+    int s_empty = (s == NULL || s == ath_NULL);
+    if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
+
+    char *buf = NULL;
+    size_t len = 0;
+    if (!s_empty && ath_string_slurp(s, &buf, &len) != 0) return ath_alloc_dead();
+    size_t width = (size_t)n->value;
+    size_t pad = (len >= width) ? 0 : (width - len);
+    size_t total = len + pad;
+    if (total == 0) { free(buf); return ath_NULL; }
+    char *out = (char *)malloc(total);
+    if (!out) { free(buf); fputs("ath: out of memory\n", stderr); exit(1); }
+    if (on_left) {
+        memset(out, ' ', pad);
+        if (len > 0) memcpy(out + pad, buf, len);
+    } else {
+        if (len > 0) memcpy(out, buf, len);
+        memset(out + len, ' ', pad);
+    }
+    free(buf);
+    ath_obj *result = ath_buf_to_string(out, total);
+    free(out);
+    ath_inherit_lifetime(result, s, n);
+    return result;
+}
+
+ath_obj *ath_pad_left(ath_obj *s, ath_obj *n)  { return ath_pad_impl(s, n, 1); }
+ath_obj *ath_pad_right(ath_obj *s, ath_obj *n) { return ath_pad_impl(s, n, 0); }
+
+/* ORD: int64 payload = character code (0..255) of the single character
+ * atom A — the kind of value the subscript form S[N] yields. A non-atom
+ * or dead A → dead. */
+ath_obj *ath_ord(ath_obj *a, ath_obj *unused) {
+    (void)unused;
+    if (a == NULL || a == ath_NULL || !ath_is_alive(a)) return ath_alloc_dead_number();
+    int c = ath_atom_to_char(a);
+    if (c < 0) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number((int64_t)c);
+    ath_inherit_lifetime(r, a, NULL);
+    return r;
+}
+
+/* CHR: length-1 string whose single character has code N (0..255). N out
+ * of range, lacking a payload, or dead → dead. Inverse of ORD. */
+ath_obj *ath_chr(ath_obj *n, ath_obj *unused) {
+    (void)unused;
+    if (n == NULL || !ath_is_alive(n) || !n->has_value) return ath_alloc_dead();
+    if (n->value < 0 || n->value > 255) return ath_alloc_dead();
+    ath_obj *atom = ath_char_atom((int)n->value);
+    ath_obj *result = ath_cons_fresh(atom, ath_NULL);
+    ath_inherit_lifetime(result, n, NULL);
+    return result;
+}
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);

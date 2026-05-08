@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — substring presence verdict.
+//
+//   CONTAINS [HAY, NEEDLE] V;
+//
+// V is alive iff NEEDLE occurs anywhere in HAY. The empty needle is
+// contained in every string. Born dead on a dead or malformed operand.
+
+import builtin ath_contains as ATH_CONTAINS;
+BIFURCATE ARGS [X, Y];
+ATH_CONTAINS [X, Y] R;
+THIS.DIE(R);

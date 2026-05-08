@@ -181,6 +181,28 @@ ath_obj *ath_rstrip(ath_obj *s, ath_obj *unused);
 ath_obj *ath_split(ath_obj *s, ath_obj *sep);
 ath_obj *ath_join(ath_obj *list, ath_obj *sep);
 
+/* String search/measure, construction, and atom bridge (SPEC §4.8.4
+ * second-wave extensions, group 2).
+ * Search (contains/count/rfind): CONTAINS is a verdict; COUNT and RFIND
+ *   carry an int64 payload. Empty needle: contained everywhere (CONTAINS
+ *   alive), born dead for COUNT, matches at len(HAY) for RFIND.
+ * Construct (repeat/reverse/pad_left/pad_right): fresh cons-list with the
+ *   operand(s) installed as deps. REPEAT and the PAD ops take a number
+ *   payload as the second operand; N<0 or no payload is dead. Padding
+ *   uses the space character and is a no-op widening past len(S).
+ * Atom bridge (ord/chr): ORD maps a character atom (e.g. from S[N]) to
+ *   its 0..255 code; CHR maps a 0..255 payload back to a length-1
+ *   string. Out-of-range or malformed input is born dead. */
+ath_obj *ath_contains(ath_obj *hay, ath_obj *needle);
+ath_obj *ath_count(ath_obj *hay, ath_obj *needle);
+ath_obj *ath_rfind(ath_obj *hay, ath_obj *needle);
+ath_obj *ath_repeat(ath_obj *s, ath_obj *n);
+ath_obj *ath_reverse(ath_obj *s, ath_obj *unused);
+ath_obj *ath_pad_left(ath_obj *s, ath_obj *n);
+ath_obj *ath_pad_right(ath_obj *s, ath_obj *n);
+ath_obj *ath_ord(ath_obj *a, ath_obj *unused);
+ath_obj *ath_chr(ath_obj *n, ath_obj *unused);
+
 /* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
  * dep1/dep2 and owns_path, which are zeroed. Independent identity —
  * killing one of (v, result) does not kill the other, and the clone

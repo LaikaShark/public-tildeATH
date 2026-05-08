@@ -1,0 +1,12 @@
+// SPEC §4.8.4 — left-pad a string with spaces to width N.
+//
+//   PAD_LEFT [S, N] R;
+//
+// R is a fresh cons-list of at least N characters: S preceded by enough
+// spaces to reach width N. If S is already that long, R is a copy of S.
+// N is a number payload; N < 0 is born dead.
+
+import builtin ath_pad_left as ATH_PAD_LEFT;
+BIFURCATE ARGS [X, Y];
+ATH_PAD_LEFT [X, Y] R;
+THIS.DIE(R);

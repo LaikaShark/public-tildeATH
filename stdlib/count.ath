@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — count non-overlapping occurrences.
+//
+//   COUNT [HAY, NEEDLE] N;
+//
+// N is an int64-payload object holding the number of non-overlapping
+// occurrences of NEEDLE in HAY (0 if none). Empty NEEDLE is born dead.
+
+import builtin ath_count as ATH_COUNT;
+BIFURCATE ARGS [X, Y];
+ATH_COUNT [X, Y] R;
+THIS.DIE(R);
