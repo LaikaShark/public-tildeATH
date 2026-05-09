@@ -141,17 +141,20 @@ static ath_obj *ath_char_table[ATH_CHAR_TABLE_SIZE] = { 0 };
 ath_obj *ath_char_atom(int c) {
     unsigned int idx = (unsigned int)c & 0xFFu;
     if (ath_char_table[idx] == NULL) {
-        ath_char_table[idx] = ath_alloc_alive();
+        ath_obj *atom = ath_alloc_alive();
+        atom->is_char = 1;
+        atom->char_code = (int)idx;
+        ath_char_table[idx] = atom;
     }
     return ath_char_table[idx];
 }
 
+/* Returns the 0..255 character code of `o`, or -1 if `o` is not a
+ * character. Identity is carried by the is_char/char_code fields rather
+ * than table-pointer equality, so a clone of an atom (notably the
+ * snapshot S[N] returns) is recognized as the same character. */
 static int ath_atom_to_char(ath_obj *o) {
-    for (int i = 0; i < ATH_CHAR_TABLE_SIZE; i++) {
-        if (ath_char_table[i] == o) {
-            return i;
-        }
-    }
+    if (o != NULL && o->is_char) return o->char_code;
     return -1;
 }
 
@@ -809,8 +812,17 @@ ath_obj *ath_index(ath_obj *s, ath_obj *n) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
         if (i == target) {
-            ath_inherit_lifetime(l, s, n);
-            return l;
+            /* Return a fresh snapshot of the element, not the element
+             * itself. The head of a string is the *canonical* character
+             * atom (and a list element may likewise be shared); installing
+             * deps directly on it would mutate a value other expressions
+             * also hold, globally killing it when S dies. Cloning copies
+             * the element's identity — payload, character code (§4.6) —
+             * into an independent object that we then make depend on S and
+             * N, so killing S invalidates this result alone. */
+            ath_obj *view = ath_clone(l);
+            ath_inherit_lifetime(view, s, n);
+            return view;
         }
         i++;
         cur = r;
@@ -901,6 +913,8 @@ ath_obj *ath_clone(ath_obj *v) {
     w->has_value = v->has_value;
     w->value = v->value;
     w->dep_mode = v->dep_mode;
+    w->is_char = v->is_char;
+    w->char_code = v->char_code;
     /* dep1, dep2, owns_path stay zeroed by calloc. The clone is never
      * an owner — §4.7 ext 5. With dep_mode copied but no deps installed,
      * an OR-mode clone degenerates to trusting its captured alive bit;
@@ -1240,9 +1254,13 @@ static int ath_string_atoms_eq(ath_obj *a, ath_obj *b) {
         ath_obj *al, *ar, *bl, *br;
         ath_decompose(a, &al, &ar);
         ath_decompose(b, &bl, &br);
-        if (ath_atom_to_char(al) < 0) return -1;
-        if (ath_atom_to_char(bl) < 0) return -1;
-        if (al != bl) return 0;
+        int ca = ath_atom_to_char(al);
+        int cb = ath_atom_to_char(bl);
+        if (ca < 0 || cb < 0) return -1;
+        /* Compare by character code, not pointer: a snapshot of an atom
+         * (e.g. from S[N]) is the same character without being the same
+         * object as the canonical atom. */
+        if (ca != cb) return 0;
         a = ar;
         b = br;
     }
@@ -1266,9 +1284,10 @@ static int ath_string_starts_with(ath_obj *hay, ath_obj *prefix) {
         ath_obj *hl, *hr, *pl, *pr;
         ath_decompose(hay, &hl, &hr);
         ath_decompose(prefix, &pl, &pr);
-        if (ath_atom_to_char(hl) < 0) return -1;
-        if (ath_atom_to_char(pl) < 0) return -1;
-        if (hl != pl) return 0;
+        int ch = ath_atom_to_char(hl);
+        int cp = ath_atom_to_char(pl);
+        if (ch < 0 || cp < 0) return -1;
+        if (ch != cp) return 0;  /* compare by code, not pointer */
         hay = hr;
         prefix = pr;
     }

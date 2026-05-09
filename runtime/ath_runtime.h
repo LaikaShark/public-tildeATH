@@ -41,6 +41,17 @@ typedef struct ath_obj {
      * disjunctive: result stays alive until both deps are dead. Set only by
      * ath_or; everything else leaves it at 0. */
     int dep_mode;
+    /* §4.6 character identity. is_char is nonzero iff this object carries a
+     * character code (0..255) in char_code. Set by ath_char_atom and copied
+     * by ath_clone, so a *snapshot* of a character atom (e.g. the result of
+     * the subscript form S[N], §4.4.15) is still recognized as that character
+     * by ath_atom_to_char without being the canonical table pointer. This is
+     * what lets S[N] return a fresh, dependency-carrying object instead of
+     * mutating — and thereby globally poisoning — the shared atom. Fields are
+     * appended at the end of the struct so the {alive,left,right} prefix the
+     * codegen models stays at fixed offsets. */
+    int is_char;
+    int char_code;
 } ath_obj;
 
 #define ATH_DEP_AND 0
