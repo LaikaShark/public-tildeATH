@@ -910,9 +910,9 @@ and the `PAD` ops take a number payload as their second operand; padding
 uses spaces and never truncates. `ORD` and `CHR` bridge a character
 atom — the value `S[N]` yields — and its byte code: subscript a string
 to get an atom, `ORD` it to a number, `CHR` a number back to a length-1
-string. Note that killing a string also kills the shared atoms its
-characters came from (§4.4.15), so `ORD` of an atom from a since-killed
-string is dead.
+string. `S[N]` returns an independent snapshot of the character, so
+`ORD` of it is unaffected by what happens to other strings sharing that
+character.
 
 The predicates feed a `BRANCH` the same way numeric comparisons do
 (§9): the verdict is alive when the relation holds, dead otherwise.

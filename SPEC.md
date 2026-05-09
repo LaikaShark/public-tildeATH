@@ -717,9 +717,20 @@ is the source, `N` is a number-payload object holding the index, and
 `ath_index` walks `S` `n` steps to the right (i.e. follows `right`
 halves `n` times), then takes the `left` half of the resulting object.
 For strings (cons-lists of character atoms terminated with `NULL`),
-this returns the Nth character **atom** — not a length-1 string. To
-wrap an atom into a printable single-char string, use
-`BIFURCATE [VAR, NULL] STR;` (§4.4.3).
+this yields the Nth **character** — not a length-1 string. To wrap it
+into a printable single-char string, use `BIFURCATE [VAR, NULL] STR;`
+(§4.4.3).
+
+The result is a fresh *snapshot* of that element, not the element
+object itself. Because a string's head is the **canonical** character
+atom (§4.6) — shared by every string containing that character —
+returning it directly and installing dependencies on it would mutate a
+value other expressions also hold, killing that character globally when
+`S` dies. Instead `ath_index` clones the element (preserving its
+numeric payload and character identity) and installs the dependencies
+on the clone, so the indexed result dies with `S` while leaving the
+shared atom untouched. The snapshot is still recognized as its
+character by `PRINT2` and `ORD`.
 
 The result is born dead if any of the following holds:
 
@@ -1492,15 +1503,10 @@ character *atom* — the value `S[N]` (§4.4.15) yields, not a length-1
 string — and `CHR` produces a length-1 string. To go from a one-char
 string to a code, subscript it first (`S[0]` then `ORD`); to print a
 `CHR` result, it is already a string. Codes are byte values (0..255),
-matching the string encoding of §4.6.
-
-> **Caveat (shared-atom liveness).** Because `S[N]` returns the
-> *canonical* character atom and installs the source string as a
-> dependency on it (§4.4.15), killing that source marks the shared
-> atom dead for *every* string that uses the same character. `ORD`,
-> which checks atom liveness, will then see it dead. This is a
-> property of `ath_index`, not of `ORD`; avoid killing a string whose
-> characters you still intend to subscript elsewhere.
+matching the string encoding of §4.6. Because `S[N]` returns a
+*snapshot* of the character rather than the canonical atom (§4.4.15),
+`ORD` of an `S[N]` result is unaffected by the liveness of other
+strings sharing that character.
 
 #### 4.8.5 Time and randomness built-ins
 
