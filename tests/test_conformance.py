@@ -357,6 +357,18 @@ CASES = [
         "97\n97\n",
         id="tier3j_index_snapshot_no_atom_poison",
     ),
+    pytest.param(
+        "string_polish/main.ath",
+        "hello world\n",
+        "Hello world\nHello World\nh\n7\nhello world\n.hello world\n",
+        id="tier3k_string_polish",
+    ),
+    pytest.param(
+        "numeric_ops/main.ath",
+        None,
+        "1024\n6\n12\n18\n6\n48\n-1\n18\n",
+        id="tier4b_numeric_second_wave",
+    ),
 ]
 
 

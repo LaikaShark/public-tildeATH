@@ -1,0 +1,36 @@
+// Tier 4b: numeric second-wave builtins — pow, gcd, min/max, bitwise,
+// shift, sign, and clamp (pair-packed bounds).
+//
+//   athc examples/numeric_ops/main.ath -o no && ./no
+//   # 1024 / 6 / 12 / 18 / 6 / 48 / -1 / 18
+
+importf <pow>       as POW;
+importf <gcd>       as GCD;
+importf <min>       as MIN;
+importf <max>       as MAX;
+importf <bxor>      as BXOR;
+importf <shl>       as SHL;
+importf <neg>       as NEG;
+importf <sign>      as SIGN;
+importf <clamp>     as CLAMP;
+importf <to_string> as TO_STRING;
+importf <entangle>  as ENTANGLE;
+
+import number 2 as TWO;
+import number 10 as TEN;
+import number 12 as N12;
+import number 18 as N18;
+import number 100 as N100;
+import number 0 as ZERO;
+
+POW [TWO, TEN] A;  TO_STRING [A, NULL] AOUT; PRINT2 AOUT;
+GCD [N12, N18] B;  TO_STRING [B, NULL] BS; PRINT2 BS;
+MIN [N12, N18] C;  TO_STRING [C, NULL] CS; PRINT2 CS;
+MAX [N12, N18] D;  TO_STRING [D, NULL] DS; PRINT2 DS;
+BXOR [N12, TEN] E; TO_STRING [E, NULL] ES; PRINT2 ES;
+SHL [N12, TWO] F;  TO_STRING [F, NULL] FS; PRINT2 FS;
+NEG [TEN, NULL] G; SIGN [G, NULL] H; TO_STRING [H, NULL] HS; PRINT2 HS;
+ENTANGLE [ZERO, N18] LH;
+CLAMP [N100, LH] I; TO_STRING [I, NULL] IS; PRINT2 IS;
+
+THIS.DIE();

@@ -975,6 +975,103 @@ int main(void) {
         #undef MKS
     }
 
+    /* --- Numeric second-wave builtins (SPEC §4.8.2 extensions) -------- */
+    {
+        #define N(v) ath_alloc_number(v)
+
+        assert(ath_pow(N(2), N(10))->value == 1024);
+        assert(ath_pow(N(2), N(0))->value == 1);
+        assert(ath_pow(N(0), N(0))->value == 1);
+        assert(ath_pow(N(7), N(1))->value == 7);
+        assert(!ath_is_alive(ath_pow(N(2), N(-1))));        /* negative exponent */
+        assert(!ath_is_alive(ath_pow(N(2), N(63))));        /* overflow */
+
+        assert(ath_abs(N(-5), ath_NULL)->value == 5);
+        assert(ath_abs(N(5), ath_NULL)->value == 5);
+        assert(!ath_is_alive(ath_abs(N(INT64_MIN), ath_NULL)));
+        assert(ath_neg(N(5), ath_NULL)->value == -5);
+        assert(!ath_is_alive(ath_neg(N(INT64_MIN), ath_NULL)));
+
+        assert(ath_min(N(3), N(7))->value == 3);
+        assert(ath_max(N(3), N(7))->value == 7);
+
+        assert(ath_gcd(N(12), N(18))->value == 6);
+        assert(ath_gcd(N(0), N(0))->value == 0);
+        assert(ath_gcd(N(-12), N(18))->value == 6);
+
+        assert(ath_sign(N(-3), ath_NULL)->value == -1);
+        assert(ath_sign(N(0), ath_NULL)->value == 0);
+        assert(ath_sign(N(9), ath_NULL)->value == 1);
+
+        assert(ath_band(N(12), N(18))->value == 0);
+        assert(ath_bor(N(12), N(18))->value == 30);
+        assert(ath_bxor(N(12), N(10))->value == 6);
+        assert(ath_bnot(N(0), ath_NULL)->value == -1);
+        assert(ath_shl(N(3), N(2))->value == 12);
+        assert(ath_shr(N(12), N(2))->value == 3);
+        assert(ath_shr(N(-8), N(1))->value == -4);          /* arithmetic shift */
+        assert(!ath_is_alive(ath_shl(N(1), N(64))));        /* shift out of range */
+        assert(!ath_is_alive(ath_shr(N(1), N(-1))));
+
+        /* CLAMP with the (LO, HI) pair. */
+        ath_obj *lohi = ath_compose(N(0), N(18));
+        assert(ath_clamp(N(100), lohi)->value == 18);
+        assert(ath_clamp(N(-5), lohi)->value == 0);
+        assert(ath_clamp(N(9), lohi)->value == 9);
+        assert(!ath_is_alive(ath_clamp(N(5), ath_compose(N(18), N(0)))));  /* lo > hi */
+
+        /* Dead / no-payload operand → dead. */
+        ath_obj *dn = N(1);
+        ath_die(dn);
+        assert(!ath_is_alive(ath_min(dn, N(2))));
+        assert(!ath_is_alive(ath_abs(ath_alloc_alive(), ath_NULL)));
+
+        #undef N
+    }
+
+    /* --- String polish builtins (SPEC §4.8.4 extensions) -------------- */
+    {
+        #define MKS(lit) ath_string_from_bytes(lit, sizeof(lit) - 1)
+
+        /* COMPARE: -1/0/1 by byte order. */
+        assert(ath_compare(MKS("abc"), MKS("abc"))->value == 0);
+        assert(ath_compare(MKS("abc"), MKS("abd"))->value == -1);
+        assert(ath_compare(MKS("abd"), MKS("abc"))->value == 1);
+        assert(ath_compare(MKS("ab"), MKS("abc"))->value == -1);  /* prefix < longer */
+
+        /* CHAR_AT: length-1 string; out-of-range / negative → dead. */
+        assert(ath_is_alive(ath_streq(ath_char_at(MKS("hello"), ath_alloc_number(1)), MKS("e"))));
+        assert(!ath_is_alive(ath_char_at(MKS("hello"), ath_alloc_number(5))));
+        assert(!ath_is_alive(ath_char_at(MKS("hello"), ath_alloc_number(-1))));
+
+        /* FIND_FROM: (NEEDLE, START) pair. */
+        assert(ath_find_from(MKS("abracadabra"), ath_compose(MKS("a"), ath_alloc_number(1)))->value == 3);
+        assert(ath_find_from(MKS("abracadabra"), ath_compose(MKS("a"), ath_alloc_number(0)))->value == 0);
+        assert(!ath_is_alive(ath_find_from(MKS("hello"), ath_compose(MKS("q"), ath_alloc_number(0)))));  /* absent ('q' untouched) */
+        assert(ath_find_from(MKS("hello"), ath_compose(ath_NULL, ath_alloc_number(2)))->value == 2);  /* empty needle */
+
+        /* CAPITALIZE / TITLE. */
+        assert(ath_is_alive(ath_streq(ath_capitalize(MKS("hELLO"), ath_NULL), MKS("Hello"))));
+        assert(ath_capitalize(ath_NULL, ath_NULL) == ath_NULL);
+        assert(ath_is_alive(ath_streq(ath_title(MKS("hello world"), ath_NULL), MKS("Hello World"))));
+
+        /* STRIP_CHARS family. Uses '#' as the strip set — the canonical
+         * "x" string is killed earlier in this run (dead_hay), which under
+         * interning would make the result observe a dead dep operand. */
+        assert(ath_is_alive(ath_streq(ath_strip_chars(MKS("##hi##"), MKS("#")), MKS("hi"))));
+        assert(ath_is_alive(ath_streq(ath_lstrip_chars(MKS("##hi##"), MKS("#")), MKS("hi##"))));
+        assert(ath_is_alive(ath_streq(ath_rstrip_chars(MKS("##hi##"), MKS("#")), MKS("##hi"))));
+        assert(ath_is_alive(ath_streq(ath_strip_chars(MKS("hi"), ath_NULL), MKS("hi"))));  /* empty set */
+
+        /* PAD_*_WITH: (WIDTH, FILL) pair; empty fill → dead; no-op if wide. */
+        assert(ath_is_alive(ath_streq(ath_pad_left_with(MKS("ab"), ath_compose(ath_alloc_number(5), MKS("*"))), MKS("***ab"))));
+        assert(ath_is_alive(ath_streq(ath_pad_right_with(MKS("ab"), ath_compose(ath_alloc_number(5), MKS("*"))), MKS("ab***"))));
+        assert(ath_is_alive(ath_streq(ath_pad_left_with(MKS("hello"), ath_compose(ath_alloc_number(3), MKS("*"))), MKS("hello"))));
+        assert(!ath_is_alive(ath_pad_left_with(MKS("ab"), ath_compose(ath_alloc_number(5), ath_NULL))));  /* empty fill */
+
+        #undef MKS
+    }
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }

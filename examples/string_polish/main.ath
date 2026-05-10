@@ -1,0 +1,40 @@
+// Tier 3k: string polish — capitalize, title, char_at, find_from (packed
+// needle+start), strip_chars, and custom-fill pad.
+//
+//   printf 'hello world\n' | ./sp
+//   # Hello world / Hello World / h / 7 / hello world / .hello world
+
+importf <capitalize>    as CAPITALIZE;
+importf <title>         as TITLE;
+importf <char_at>       as CHAR_AT;
+importf <find_from>     as FIND_FROM;
+importf <strip_chars>   as STRIP_CHARS;
+importf <pad_left_with> as PAD_LEFT_WITH;
+importf <to_string>     as TO_STRING;
+importf <entangle>      as ENTANGLE;
+
+INPUT S;
+
+CAPITALIZE [S, NULL] CAP; PRINT2 CAP;
+TITLE [S, NULL] TT; PRINT2 TT;
+
+import number 0 as I0;
+CHAR_AT [S, I0] CA; PRINT2 CA;
+
+// First 'o' at or after index 5.
+text "o" as OO;
+import number 5 as FIVE;
+ENTANGLE [OO, FIVE] NEEDLE_AT;
+FIND_FROM [S, NEEDLE_AT] FF;
+TO_STRING [FF, NULL] FFS; PRINT2 FFS;
+
+// Strip dashes (none here) and left-pad to width 12 with dots.
+text "-" as DASH;
+STRIP_CHARS [S, DASH] SC; PRINT2 SC;
+
+text "." as DOT;
+import number 12 as N12;
+ENTANGLE [N12, DOT] PADSPEC;
+PAD_LEFT_WITH [S, PADSPEC] PL; PRINT2 PL;
+
+THIS.DIE();
