@@ -442,12 +442,15 @@ int main(void) {
     assert(ath_is_alive(len_empty));
     assert(len_empty->value == 0);
 
-    /* INDEX */
+    /* INDEX returns a fresh snapshot carrying the character's identity
+     * (not the canonical atom pointer — see ath_index), so identity is
+     * checked by character code, not by pointer. */
     ath_obj *idx0 = ath_index(s_hi, ath_alloc_number(0));
     assert(ath_is_alive(idx0));
-    assert(idx0 == ath_char_atom('H'));   /* atom identity */
+    assert(idx0 != ath_char_atom('H'));            /* a distinct object */
+    assert(idx0->is_char && idx0->char_code == 'H');
     ath_obj *idx1 = ath_index(s_hi, ath_alloc_number(1));
-    assert(idx1 == ath_char_atom('i'));
+    assert(idx1->is_char && idx1->char_code == 'i');
 
     /* INDEX out of range → dead. */
     ath_obj *idx_oob = ath_index(s_hi, ath_alloc_number(5));
@@ -525,6 +528,11 @@ int main(void) {
     ath_die(src);
     assert(!ath_is_alive(src_len));
     assert(!ath_is_alive(src_idx));
+    /* ...but killing src must NOT poison the shared 'A' atom: src_idx is
+     * a snapshot, so the canonical atom every other string uses stays
+     * alive (regression for the ath_index atom-poisoning bug). */
+    assert(ath_is_alive(ath_char_atom('A')));
+    assert(src_idx != ath_char_atom('A'));
 
     /* --- Clone (SPEC §4.4.18) --- */
 
@@ -953,11 +961,7 @@ int main(void) {
         assert(ath_is_alive(ath_streq(ath_pad_left(MKS("hello"), ath_alloc_number(3)), MKS("hello"))));
         assert(!ath_is_alive(ath_pad_left(MKS("ab"), ath_alloc_number(-1))));
 
-        /* ORD / CHR: round-trip the byte code of a character atom. Uses
-         * 'Q'/'q' — codes untouched by earlier tests — so the result is
-         * unaffected by the subscript-kill test above, which poisons the
-         * shared 'A' atom (ath_index installs a dep on the canonical
-         * atom; killing its source then kills that atom globally). */
+        /* ORD / CHR: round-trip the byte code of a character atom. */
         assert(ath_ord(ath_char_atom('Q'), ath_NULL)->value == 'Q');
         assert(ath_is_alive(ath_streq(ath_chr(ath_alloc_number('Q'), ath_NULL), MKS("Q"))));
         /* chr('q') → "q"; its first head is the atom; ord → 'q'. */

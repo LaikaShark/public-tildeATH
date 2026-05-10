@@ -1,0 +1,39 @@
+// Tier 3j: S[N] returns an independent snapshot of the character, so
+// killing one string does not poison the shared character atom used by
+// others (regression for the ath_index atom-poisoning bug).
+//
+// "abc" and "ant" both contain 'a'. We subscript+ORD the first, kill
+// it, then subscript+ORD the second. The second must still see 'a' (97).
+//
+//   athc examples/index_snapshot/main.ath -o is
+//   ./is
+//   # 97
+//   # 97
+
+importf <ord>       as ORD;
+importf <to_string> as TO_STRING;
+
+import number 0 as I0;
+
+text "abc" as FIRST;
+FIRST[I0] A1;
+ORD [A1, NULL] C1;
+TO_STRING [C1, NULL] S1;
+PRINT2 S1;
+
+// Kill the first string. Under the old code this killed the shared 'a'
+// atom for every string.
+FIRST.DIE();
+
+text "ant" as SECOND;
+SECOND[I0] A2;
+ORD [A2, NULL] C2;
+CLONE C2 as C2CHK;
+BRANCH(C2CHK) {
+    TO_STRING [C2, NULL] S2;
+    PRINT2 S2;
+} ELSE {
+    print poisoned;
+}
+
+THIS.DIE();

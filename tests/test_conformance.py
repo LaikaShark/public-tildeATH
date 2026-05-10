@@ -351,6 +351,12 @@ CASES = [
         "hellohellohello\nolleh\nhello\nhello\n104\nh\n",
         id="tier3i_build_pad_noop_when_wide_enough",
     ),
+    pytest.param(
+        "index_snapshot/main.ath",
+        None,
+        "97\n97\n",
+        id="tier3j_index_snapshot_no_atom_poison",
+    ),
 ]
 
 
