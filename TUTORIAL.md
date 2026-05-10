@@ -536,6 +536,26 @@ Seven arithmetic functions are shipped as stdlib shims (§4.8.2):
 | `TO_STRING [N, _] S;`   | string encoding of `N.value` (§13)    |
 | `PARSE [S, _] N;`       | int64 parsed from the string `S`      |
 
+A numeric **second wave** adds the usual maths and bit-twiddling
+(§4.8.2):
+
+| Surface call            | Result                                |
+|-------------------------|---------------------------------------|
+| `POW [X, Y] R;`         | `X` to the power `Y` (`Y >= 0`)       |
+| `ABS [X, _] R;`         | magnitude of `X`                      |
+| `NEG [X, _] R;`         | `-X`                                  |
+| `MIN [X, Y] R;` / `MAX` | lesser / greater of `X`, `Y`          |
+| `GCD [X, Y] R;`         | greatest common divisor               |
+| `SIGN [X, _] R;`        | `-1`, `0`, or `1`                     |
+| `BAND`/`BOR`/`BXOR`     | bitwise `&` / `\|` / `^`              |
+| `BNOT [X, _] R;`        | bitwise `~X`                          |
+| `SHL [X, Y] R;` / `SHR` | left / arithmetic-right shift (0..63) |
+| `CLAMP [X, PAIR] R;`    | `X` confined to `[LO, HI]`            |
+
+`CLAMP` packs its bounds with `ENTANGLE [LO, HI] PAIR;` (the compose-pair
+pattern, §13.2.3). `POW` rejects negative exponents; `ABS`/`NEG`/`GCD`
+reject `INT64_MIN`; shifts require a count of 0..63.
+
 All are brought in by name:
 
 ```ath
@@ -902,6 +922,14 @@ structural reshaping. Each is a stdlib shim over the two-operand ABI:
 | `pad_right`  | `PAD_RIGHT [S, N] R;`       | `S` space-padded to width `N`   |
 | `ord`        | `ORD [A, _] N;`             | code (0..255) of char atom `A`  |
 | `chr`        | `CHR [N, _] S;`             | length-1 string for code `N`    |
+| `compare`    | `COMPARE [A, B] N;`         | three-way `-1`/`0`/`1`          |
+| `char_at`    | `CHAR_AT [S, N] STR;`       | Nth char as a length-1 string   |
+| `find_from`  | `FIND_FROM [S, PAIR] IDX;`  | find from an offset (packed)    |
+| `capitalize` | `CAPITALIZE [S, _] R;`      | first char up, rest down        |
+| `title`      | `TITLE [S, _] R;`           | titlecase each word             |
+| `strip_chars`| `STRIP_CHARS [S, CHARS] R;` | strip a custom char set         |
+| `lstrip_chars`/`rstrip_chars` | `… [S, CHARS] R;` | one-sided custom strip     |
+| `pad_left_with`/`pad_right_with` | `… [S, PAIR] R;` | pad with a custom fill char |
 
 `CONTAINS` is the verdict companion to `FIND`: where `FIND` born-dies
 when the needle is absent, `CONTAINS` simply yields a dead verdict, and
@@ -913,6 +941,13 @@ to get an atom, `ORD` it to a number, `CHR` a number back to a length-1
 string. `S[N]` returns an independent snapshot of the character, so
 `ORD` of it is unaffected by what happens to other strings sharing that
 character.
+
+`COMPARE` collapses `STRLT`/`STREQ`/`STRGT` into one `-1`/`0`/`1` sort
+key. `CHAR_AT` is the string-valued cousin of `S[N]` (atom). The
+two-extra-argument ops — `FIND_FROM` (needle + start), `CLAMP` (lo +
+hi), and `PAD_LEFT_WITH`/`PAD_RIGHT_WITH` (width + fill) — pack the pair
+with `ENTANGLE` just like `REPLACE` (§13.2.3). `STRIP_CHARS` and its
+one-sided variants take the strip set as a plain string.
 
 The predicates feed a `BRANCH` the same way numeric comparisons do
 (§9): the verdict is alive when the relation holds, dead otherwise.

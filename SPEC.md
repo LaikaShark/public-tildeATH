@@ -1241,6 +1241,35 @@ trailing non-digit characters fail.
 leading `-` for negatives, no leading zeros (except for `0` itself), no
 thousands separators.
 
+##### Numeric second wave
+
+A further group of `stdlib/` shims over the same int64-payload ABI. Each
+installs its operands as deps and is born dead on a dead or
+non-payload operand.
+
+| Name | Surface call | Result `value` | Born dead when |
+|---|---|---|---|
+| `pow` | `POW [X, Y] R;` | `X` raised to `Y` | `Y < 0` (integer exponents only); overflow |
+| `abs` | `ABS [X, _] R;` | magnitude of `X` | `X == INT64_MIN` (no positive rep) |
+| `neg` | `NEG [X, _] R;` | `-X` | `X == INT64_MIN` (overflow) |
+| `min` | `MIN [X, Y] R;` | lesser of `X`, `Y` | — |
+| `max` | `MAX [X, Y] R;` | greater of `X`, `Y` | — |
+| `gcd` | `GCD [X, Y] R;` | gcd of `\|X\|`, `\|Y\|` (gcd(0,0)=0) | `X` or `Y` is `INT64_MIN` |
+| `sign` | `SIGN [X, _] R;` | `-1`, `0`, or `1` | — |
+| `band` | `BAND [X, Y] R;` | `X & Y` | — |
+| `bor` | `BOR [X, Y] R;` | `X \| Y` | — |
+| `bxor` | `BXOR [X, Y] R;` | `X ^ Y` | — |
+| `bnot` | `BNOT [X, _] R;` | `~X` (one's complement) | — |
+| `shl` | `SHL [X, Y] R;` | `X << Y` (logical) | `Y < 0` or `Y > 63` |
+| `shr` | `SHR [X, Y] R;` | `X >> Y` (arithmetic) | `Y < 0` or `Y > 63` |
+| `clamp` | `CLAMP [X, PAIR] R;` | `X` confined to `[LO, HI]` | `LO > HI`; `X`/`LO`/`HI` unusable |
+
+`POW` uses exponentiation by squaring with overflow checks at every
+multiply; `0^0 == 1`. `SHL` shifts an unsigned copy to avoid
+signed-overflow UB; `SHR` is sign-extending. `CLAMP` packs its bounds
+`(LO, HI)` into a single composite, exactly like the compose-pair
+pattern of §4.8.4 — pass `ENTANGLE [LO, HI] PAIR;` for dep propagation.
+
 #### 4.8.3 Comparisons as verdicts
 
 A **verdict** is an object whose alive bit carries the truth of a
@@ -1507,6 +1536,36 @@ matching the string encoding of §4.6. Because `S[N]` returns a
 *snapshot* of the character rather than the canonical atom (§4.4.15),
 `ORD` of an `S[N]` result is unaffected by the liveness of other
 strings sharing that character.
+
+##### String polish
+
+The remaining `stdlib/` string shims: a three-way compare, a
+string-valued subscript, an offset search, two case transforms, a
+custom-charset strip family, and custom-fill padding.
+
+| Name | Surface form | Result | Born dead when |
+|---|---|---|---|
+| `compare` | `COMPARE [A, B] N;` | int64 `-1`/`0`/`1` by byte-lexicographic order | dead or malformed operand |
+| `char_at` | `CHAR_AT [S, N] STR;` | the Nth character as a **length-1 string** (vs `S[N]`'s bare atom) | `N` < 0, no payload, or out of range; `S` dead/malformed |
+| `find_from` | `FIND_FROM [S, PAIR] IDX;` | int64 = first index of `NEEDLE` at or after `START`, where `PAIR` packs `(NEEDLE, START)` | needle absent at/after `START`; `START` < 0 or no payload; dead operand. Empty needle → `min(START, len)` |
+| `capitalize` | `CAPITALIZE [S, _] R;` | first character uppercased, the rest lowercased | `S` dead/malformed (→ `NULL`) |
+| `title` | `TITLE [S, _] R;` | first character of each whitespace-delimited word uppercased, rest lowercased | `S` dead/malformed (→ `NULL`) |
+| `strip_chars` | `STRIP_CHARS [S, CHARS] R;` | `S` with leading and trailing characters in the `CHARS` set removed | `S` dead/malformed (→ `NULL`). Empty `CHARS` → copy of `S` |
+| `lstrip_chars` | `LSTRIP_CHARS [S, CHARS] R;` | as `strip_chars`, leading only | as `strip_chars` |
+| `rstrip_chars` | `RSTRIP_CHARS [S, CHARS] R;` | as `strip_chars`, trailing only | as `strip_chars` |
+| `pad_left_with` | `PAD_LEFT_WITH [S, PAIR] R;` | `S` left-padded to width with a fill character, where `PAIR` packs `(WIDTH, FILL)` | `WIDTH` < 0 or no payload; empty `FILL`; `S` dead |
+| `pad_right_with` | `PAD_RIGHT_WITH [S, PAIR] R;` | as `pad_left_with`, padding on the right | as `pad_left_with` |
+
+`COMPARE` is the three-way form of the `strlt`/`streq`/`strgt`
+verdicts — useful as a sort key. `CHAR_AT` complements `S[N]`: the
+subscript yields a character atom (for `ORD`), `CHAR_AT` a printable
+length-1 string. `FIND_FROM`, `CLAMP` (§4.8.2), and the `PAD_*_WITH`
+ops all use the compose-pair convention of the search-and-replace
+family: pack the two trailing arguments with `ENTANGLE` (dep
+propagation) or `BIFURCATE`. The fill for padding is the first
+character of `FILL`; widening past `len(S)` is a no-op copy. `TITLE`
+treats only whitespace as a word boundary, so `"abc-def"` titlecases
+to `"Abc-def"`.
 
 #### 4.8.5 Time and randomness built-ins
 
