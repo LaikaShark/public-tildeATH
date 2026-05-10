@@ -214,6 +214,43 @@ ath_obj *ath_pad_right(ath_obj *s, ath_obj *n);
 ath_obj *ath_ord(ath_obj *a, ath_obj *unused);
 ath_obj *ath_chr(ath_obj *n, ath_obj *unused);
 
+/* Numeric second-wave builtins (SPEC §4.8.2 extensions). All take int64
+ * payloads and are born dead on a non-payload or dead operand. POW
+ * rejects negative exponents; ABS/NEG/GCD reject INT64_MIN (no positive
+ * representation); SHL/SHR require a 0..63 shift; CLAMP packs (LO, HI) as
+ * a pair and rejects LO > HI. */
+ath_obj *ath_pow(ath_obj *x, ath_obj *y);
+ath_obj *ath_abs(ath_obj *x, ath_obj *unused);
+ath_obj *ath_neg(ath_obj *x, ath_obj *unused);
+ath_obj *ath_min(ath_obj *x, ath_obj *y);
+ath_obj *ath_max(ath_obj *x, ath_obj *y);
+ath_obj *ath_gcd(ath_obj *x, ath_obj *y);
+ath_obj *ath_sign(ath_obj *x, ath_obj *unused);
+ath_obj *ath_band(ath_obj *x, ath_obj *y);
+ath_obj *ath_bor(ath_obj *x, ath_obj *y);
+ath_obj *ath_bxor(ath_obj *x, ath_obj *y);
+ath_obj *ath_bnot(ath_obj *x, ath_obj *unused);
+ath_obj *ath_shl(ath_obj *x, ath_obj *y);
+ath_obj *ath_shr(ath_obj *x, ath_obj *y);
+ath_obj *ath_clamp(ath_obj *x, ath_obj *pair);
+
+/* String polish builtins (SPEC §4.8.4 extensions). COMPARE is the
+ * three-way (-1/0/1) form of the string verdicts. CHAR_AT returns a
+ * length-1 string (vs S[N]'s bare atom). FIND_FROM packs (NEEDLE, START).
+ * CAPITALIZE/TITLE are case transforms; the STRIP_CHARS family strips a
+ * custom character set; the PAD_*_WITH ops pad with a custom fill
+ * character packed as (WIDTH, FILL). */
+ath_obj *ath_compare(ath_obj *a, ath_obj *b);
+ath_obj *ath_char_at(ath_obj *s, ath_obj *n);
+ath_obj *ath_find_from(ath_obj *s, ath_obj *pair);
+ath_obj *ath_capitalize(ath_obj *s, ath_obj *unused);
+ath_obj *ath_title(ath_obj *s, ath_obj *unused);
+ath_obj *ath_strip_chars(ath_obj *s, ath_obj *chars);
+ath_obj *ath_lstrip_chars(ath_obj *s, ath_obj *chars);
+ath_obj *ath_rstrip_chars(ath_obj *s, ath_obj *chars);
+ath_obj *ath_pad_left_with(ath_obj *s, ath_obj *pair);
+ath_obj *ath_pad_right_with(ath_obj *s, ath_obj *pair);
+
 /* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
  * dep1/dep2 and owns_path, which are zeroed. Independent identity —
  * killing one of (v, result) does not kill the other, and the clone

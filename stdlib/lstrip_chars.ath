@@ -1,0 +1,5 @@
+// SPEC §4.8.4 — strip chars in CHARS from the left. LSTRIP_CHARS [S, CHARS] R;
+import builtin ath_lstrip_chars as ATH_LSTRIP_CHARS;
+BIFURCATE ARGS [X, Y];
+ATH_LSTRIP_CHARS [X, Y] R;
+THIS.DIE(R);

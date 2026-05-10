@@ -1796,6 +1796,354 @@ ath_obj *ath_chr(ath_obj *n, ath_obj *unused) {
     return result;
 }
 
+/* --- Numeric second-wave builtins (SPEC §4.8.2 extensions) ----------- */
+
+/* Single number operand is usable iff alive and payload-bearing. */
+static int ath_num_usable(ath_obj *x) {
+    return x != NULL && ath_is_alive(x) && x->has_value;
+}
+
+/* POW: X raised to Y. Y must be >= 0 (integer exponents only). Overflow
+ * or a negative exponent is born dead. 0^0 == 1. */
+ath_obj *ath_pow(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (y->value < 0) return ath_alloc_dead_number();
+    int64_t base = x->value, exp = y->value, result = 1;
+    while (exp > 0) {
+        if (exp & 1) {
+            if (__builtin_mul_overflow(result, base, &result))
+                return ath_alloc_dead_number();
+        }
+        exp >>= 1;
+        if (exp > 0 && __builtin_mul_overflow(base, base, &base))
+            return ath_alloc_dead_number();
+    }
+    ath_obj *r = ath_alloc_number(result);
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+
+/* ABS: magnitude of X. INT64_MIN has no positive representation → dead. */
+ath_obj *ath_abs(ath_obj *x, ath_obj *unused) {
+    (void)unused;
+    if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    if (x->value == INT64_MIN) return ath_alloc_dead_number();
+    int64_t v = x->value < 0 ? -x->value : x->value;
+    ath_obj *r = ath_alloc_number(v);
+    ath_inherit_lifetime(r, x, NULL);
+    return r;
+}
+
+/* NEG: arithmetic negation. INT64_MIN overflows → dead. */
+ath_obj *ath_neg(ath_obj *x, ath_obj *unused) {
+    (void)unused;
+    if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    if (x->value == INT64_MIN) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(-x->value);
+    ath_inherit_lifetime(r, x, NULL);
+    return r;
+}
+
+/* MIN / MAX of two payloads. */
+ath_obj *ath_min(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(x->value < y->value ? x->value : y->value);
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+ath_obj *ath_max(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(x->value > y->value ? x->value : y->value);
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+
+/* GCD of the magnitudes (Euclid). gcd(0,0) == 0. INT64_MIN → dead, as
+ * its magnitude is unrepresentable. */
+ath_obj *ath_gcd(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    int64_t a = x->value, b = y->value;
+    if (a == INT64_MIN || b == INT64_MIN) return ath_alloc_dead_number();
+    if (a < 0) a = -a;
+    if (b < 0) b = -b;
+    while (b != 0) { int64_t t = a % b; a = b; b = t; }
+    ath_obj *r = ath_alloc_number(a);
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+
+/* SIGN: -1, 0, or +1. */
+ath_obj *ath_sign(ath_obj *x, ath_obj *unused) {
+    (void)unused;
+    if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    int64_t s = (x->value > 0) - (x->value < 0);
+    ath_obj *r = ath_alloc_number(s);
+    ath_inherit_lifetime(r, x, NULL);
+    return r;
+}
+
+/* Bitwise ops over the two's-complement int64 payload. */
+ath_obj *ath_band(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(x->value & y->value);
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+ath_obj *ath_bor(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(x->value | y->value);
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+ath_obj *ath_bxor(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(x->value ^ y->value);
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+ath_obj *ath_bnot(ath_obj *x, ath_obj *unused) {
+    (void)unused;
+    if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(~x->value);
+    ath_inherit_lifetime(r, x, NULL);
+    return r;
+}
+
+/* SHL / SHR: shift by 0..63. Out-of-range shift is born dead. SHL uses an
+ * unsigned shift to avoid signed-overflow UB; SHR is an arithmetic
+ * (sign-extending) right shift. */
+ath_obj *ath_shl(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (y->value < 0 || y->value > 63) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number((int64_t)((uint64_t)x->value << y->value));
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+ath_obj *ath_shr(ath_obj *x, ath_obj *y) {
+    if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (y->value < 0 || y->value > 63) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(x->value >> y->value);
+    ath_inherit_lifetime(r, x, y);
+    return r;
+}
+
+/* CLAMP: confine X to [LO, HI], packed as the pair (LO, HI). Born dead if
+ * X or the pair is unusable, or LO > HI. */
+ath_obj *ath_clamp(ath_obj *x, ath_obj *pair) {
+    if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    if (pair == NULL || pair == ath_NULL || !ath_is_alive(pair))
+        return ath_alloc_dead_number();
+    ath_obj *lo, *hi;
+    ath_decompose(pair, &lo, &hi);
+    if (!ath_num_usable(lo) || !ath_num_usable(hi)) return ath_alloc_dead_number();
+    if (lo->value > hi->value) return ath_alloc_dead_number();
+    int64_t v = x->value;
+    if (v < lo->value) v = lo->value;
+    else if (v > hi->value) v = hi->value;
+    ath_obj *r = ath_alloc_number(v);
+    ath_inherit_lifetime(r, x, pair);
+    return r;
+}
+
+/* --- String polish builtins (SPEC §4.8.4 extensions) ----------------- */
+
+/* COMPARE: int64 -1/0/1 by byte-lexicographic order (the three-way form
+ * of strlt/streq/strgt). Born dead on a dead or malformed operand. */
+ath_obj *ath_compare(ath_obj *a, ath_obj *b) {
+    if (a != NULL && a != ath_NULL && !ath_is_alive(a)) return ath_alloc_dead_number();
+    if (b != NULL && b != ath_NULL && !ath_is_alive(b)) return ath_alloc_dead_number();
+    int err = 0;
+    int c = ath_string_lexcmp(a, b, &err);
+    if (err) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(c);
+    ath_inherit_lifetime(r, a, b);
+    return r;
+}
+
+/* CHAR_AT: the Nth character of S as a length-1 string (where S[N] yields
+ * the bare atom). Born dead if N is negative, lacks a payload, or is out
+ * of range, or S is dead/malformed. */
+ath_obj *ath_char_at(ath_obj *s, ath_obj *n) {
+    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value < 0)
+        return ath_alloc_dead();
+    int s_empty = (s == NULL || s == ath_NULL);
+    if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(s, &buf, &len) != 0) return ath_alloc_dead();
+    if ((size_t)n->value >= len) { free(buf); return ath_alloc_dead(); }
+    ath_obj *atom = ath_char_atom((unsigned char)buf[n->value]);
+    free(buf);
+    ath_obj *result = ath_cons_fresh(atom, ath_NULL);
+    ath_inherit_lifetime(result, s, n);
+    return result;
+}
+
+/* FIND_FROM: first index of NEEDLE in S at or after START, where the pair
+ * packs (NEEDLE, START) — START a number payload. Empty needle matches at
+ * min(START, len). Absent needle, START < 0, or dead operand → dead. */
+ath_obj *ath_find_from(ath_obj *s, ath_obj *pair) {
+    int s_empty = (s == NULL || s == ath_NULL);
+    if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead_number();
+    if (pair == NULL || pair == ath_NULL || !ath_is_alive(pair))
+        return ath_alloc_dead_number();
+    ath_obj *needle, *start_obj;
+    ath_decompose(pair, &needle, &start_obj);
+    if (start_obj == NULL || !ath_is_alive(start_obj) || !start_obj->has_value)
+        return ath_alloc_dead_number();
+    int64_t start = start_obj->value;
+    if (start < 0) return ath_alloc_dead_number();
+
+    char *hbuf = NULL, *nbuf = NULL;
+    size_t hlen = 0, nlen = 0;
+    if (ath_string_slurp(s, &hbuf, &hlen) != 0) return ath_alloc_dead_number();
+    if (ath_string_slurp(needle, &nbuf, &nlen) != 0) {
+        free(hbuf);
+        return ath_alloc_dead_number();
+    }
+    if (nlen == 0) {  /* empty needle matches at the clamped start */
+        free(hbuf); free(nbuf);
+        int64_t pos = start <= (int64_t)hlen ? start : (int64_t)hlen;
+        ath_obj *idx = ath_alloc_number(pos);
+        ath_inherit_lifetime(idx, s, pair);
+        return idx;
+    }
+    for (size_t i = (size_t)start; i + nlen <= hlen; i++) {
+        if (memcmp(hbuf + i, nbuf, nlen) == 0) {
+            free(hbuf); free(nbuf);
+            ath_obj *idx = ath_alloc_number((int64_t)i);
+            ath_inherit_lifetime(idx, s, pair);
+            return idx;
+        }
+    }
+    free(hbuf); free(nbuf);
+    return ath_alloc_dead_number();
+}
+
+/* CAPITALIZE: first character uppercased, the rest lowercased. NULL in,
+ * NULL out. */
+ath_obj *ath_capitalize(ath_obj *s, ath_obj *unused) {
+    (void)unused;
+    if (s == NULL || s == ath_NULL) return ath_NULL;
+    if (!ath_is_alive(s)) return ath_NULL;
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(s, &buf, &len) != 0) return ath_NULL;
+    if (len == 0) { free(buf); return ath_NULL; }
+    buf[0] = (char)ath_xform_upper((unsigned char)buf[0]);
+    for (size_t i = 1; i < len; i++) buf[i] = (char)ath_xform_lower((unsigned char)buf[i]);
+    ath_obj *result = ath_buf_to_string(buf, len);
+    free(buf);
+    ath_inherit_lifetime(result, s, NULL);
+    return result;
+}
+
+/* TITLE: the first character of each whitespace-delimited word is
+ * uppercased, all others lowercased. */
+ath_obj *ath_title(ath_obj *s, ath_obj *unused) {
+    (void)unused;
+    if (s == NULL || s == ath_NULL) return ath_NULL;
+    if (!ath_is_alive(s)) return ath_NULL;
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(s, &buf, &len) != 0) return ath_NULL;
+    if (len == 0) { free(buf); return ath_NULL; }
+    int at_word_start = 1;
+    for (size_t i = 0; i < len; i++) {
+        if (ath_is_strip_space((unsigned char)buf[i])) {
+            at_word_start = 1;
+        } else {
+            buf[i] = (char)(at_word_start
+                ? ath_xform_upper((unsigned char)buf[i])
+                : ath_xform_lower((unsigned char)buf[i]));
+            at_word_start = 0;
+        }
+    }
+    ath_obj *result = ath_buf_to_string(buf, len);
+    free(buf);
+    ath_inherit_lifetime(result, s, NULL);
+    return result;
+}
+
+/* Strip characters that appear in the CHARS set. side: 0 both, -1 left,
+ * +1 right. Empty CHARS strips nothing (returns a copy). */
+static ath_obj *ath_strip_chars_impl(ath_obj *s, ath_obj *chars, int side) {
+    if (s == NULL || s == ath_NULL) return ath_NULL;
+    if (!ath_is_alive(s)) return ath_NULL;
+    int chars_empty = (chars == NULL || chars == ath_NULL);
+    if (!chars_empty && !ath_is_alive(chars)) return ath_NULL;
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(s, &buf, &len) != 0) return ath_NULL;
+    char *cbuf = NULL;
+    size_t clen = 0;
+    if (!chars_empty && ath_string_slurp(chars, &cbuf, &clen) != 0) {
+        free(buf);
+        return ath_NULL;
+    }
+    size_t lo = 0, hi = len;
+    if (clen > 0) {
+        if (side <= 0)
+            while (lo < hi && memchr(cbuf, (unsigned char)buf[lo], clen)) lo++;
+        if (side >= 0)
+            while (hi > lo && memchr(cbuf, (unsigned char)buf[hi - 1], clen)) hi--;
+    }
+    ath_obj *result = ath_buf_to_string(buf + lo, hi - lo);
+    free(buf); free(cbuf);
+    ath_inherit_lifetime(result, s, chars);
+    return result;
+}
+
+ath_obj *ath_strip_chars(ath_obj *s, ath_obj *chars)  { return ath_strip_chars_impl(s, chars,  0); }
+ath_obj *ath_lstrip_chars(ath_obj *s, ath_obj *chars) { return ath_strip_chars_impl(s, chars, -1); }
+ath_obj *ath_rstrip_chars(ath_obj *s, ath_obj *chars) { return ath_strip_chars_impl(s, chars, +1); }
+
+/* Pad S to width with a custom fill character, packed as the pair
+ * (WIDTH, FILL). The fill is the first character of FILL; an empty FILL is
+ * born dead. on_left selects the side. No-op when S is already wide. */
+static ath_obj *ath_pad_with_impl(ath_obj *s, ath_obj *pair, int on_left) {
+    int s_empty = (s == NULL || s == ath_NULL);
+    if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
+    if (pair == NULL || pair == ath_NULL || !ath_is_alive(pair)) return ath_alloc_dead();
+    ath_obj *width_obj, *fill_obj;
+    ath_decompose(pair, &width_obj, &fill_obj);
+    if (width_obj == NULL || !ath_is_alive(width_obj) || !width_obj->has_value)
+        return ath_alloc_dead();
+    if (width_obj->value < 0) return ath_alloc_dead();
+
+    char *fbuf = NULL;
+    size_t flen = 0;
+    if (ath_string_slurp(fill_obj, &fbuf, &flen) != 0) return ath_alloc_dead();
+    if (flen == 0) { free(fbuf); return ath_alloc_dead(); }  /* empty fill */
+    char fill = fbuf[0];
+    free(fbuf);
+
+    char *buf = NULL;
+    size_t len = 0;
+    if (!s_empty && ath_string_slurp(s, &buf, &len) != 0) return ath_alloc_dead();
+    size_t width = (size_t)width_obj->value;
+    size_t pad = (len >= width) ? 0 : (width - len);
+    size_t total = len + pad;
+    if (total == 0) { free(buf); return ath_NULL; }
+    char *out = (char *)malloc(total);
+    if (!out) { free(buf); fputs("ath: out of memory\n", stderr); exit(1); }
+    if (on_left) {
+        memset(out, fill, pad);
+        if (len > 0) memcpy(out + pad, buf, len);
+    } else {
+        if (len > 0) memcpy(out, buf, len);
+        memset(out + len, fill, pad);
+    }
+    free(buf);
+    ath_obj *result = ath_buf_to_string(out, total);
+    free(out);
+    ath_inherit_lifetime(result, s, pair);
+    return result;
+}
+
+ath_obj *ath_pad_left_with(ath_obj *s, ath_obj *pair)  { return ath_pad_with_impl(s, pair, 1); }
+ath_obj *ath_pad_right_with(ath_obj *s, ath_obj *pair) { return ath_pad_with_impl(s, pair, 0); }
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);

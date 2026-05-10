@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — X raised to the power Y (Y >= 0). POW [X, Y] R;
+import builtin ath_pow as ATH_POW;
+BIFURCATE ARGS [X, Y];
+ATH_POW [X, Y] R;
+THIS.DIE(R);

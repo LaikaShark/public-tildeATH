@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — greatest common divisor of |X| and |Y|. GCD [X, Y] R;
+import builtin ath_gcd as ATH_GCD;
+BIFURCATE ARGS [X, Y];
+ATH_GCD [X, Y] R;
+THIS.DIE(R);

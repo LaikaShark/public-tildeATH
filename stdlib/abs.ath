@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — magnitude of X. ABS [X, _] R;
+import builtin ath_abs as ATH_ABS;
+BIFURCATE ARGS [X, Y];
+ATH_ABS [X, Y] R;
+THIS.DIE(R);

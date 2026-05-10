@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — bitwise NOT (one's complement). BNOT [X, _] R;
+import builtin ath_bnot as ATH_BNOT;
+BIFURCATE ARGS [X, Y];
+ATH_BNOT [X, Y] R;
+THIS.DIE(R);

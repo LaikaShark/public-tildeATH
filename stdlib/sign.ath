@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — -1, 0, or 1 by the sign of X. SIGN [X, _] R;
+import builtin ath_sign as ATH_SIGN;
+BIFURCATE ARGS [X, Y];
+ATH_SIGN [X, Y] R;
+THIS.DIE(R);

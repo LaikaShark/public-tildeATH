@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — arithmetic right shift X by Y (0..63). SHR [X, Y] R;
+import builtin ath_shr as ATH_SHR;
+BIFURCATE ARGS [X, Y];
+ATH_SHR [X, Y] R;
+THIS.DIE(R);

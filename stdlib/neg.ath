@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — arithmetic negation of X. NEG [X, _] R;
+import builtin ath_neg as ATH_NEG;
+BIFURCATE ARGS [X, Y];
+ATH_NEG [X, Y] R;
+THIS.DIE(R);
