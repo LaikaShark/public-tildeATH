@@ -1,0 +1,5 @@
+// SPEC §4.8.6 — verdict: some element payload equals X. MEMBER [LIST, X] V;
+import builtin ath_member as ATH_MEMBER;
+BIFURCATE ARGS [X, Y];
+ATH_MEMBER [X, Y] R;
+THIS.DIE(R);

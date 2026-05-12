@@ -251,6 +251,21 @@ ath_obj *ath_rstrip_chars(ath_obj *s, ath_obj *chars);
 ath_obj *ath_pad_left_with(ath_obj *s, ath_obj *pair);
 ath_obj *ath_pad_right_with(ath_obj *s, ath_obj *pair);
 
+/* Generic cons-list operations (SPEC §4.8.6). These walk the right-spine
+ * of any list and read each element's int64 payload. SUM/PRODUCT fold the
+ * payloads (identity 0 / 1; empty list yields the identity); MAXIMUM/
+ * MINIMUM born-die on an empty list; MEMBER is a verdict over payload
+ * equality; TAKE/DROP return a fresh sublist. A non-payload or dead
+ * element born-dies the aggregates, so they reject strings (whose elements
+ * are character atoms). */
+ath_obj *ath_sum(ath_obj *list, ath_obj *unused);
+ath_obj *ath_product(ath_obj *list, ath_obj *unused);
+ath_obj *ath_maximum(ath_obj *list, ath_obj *unused);
+ath_obj *ath_minimum(ath_obj *list, ath_obj *unused);
+ath_obj *ath_member(ath_obj *list, ath_obj *x);
+ath_obj *ath_take(ath_obj *list, ath_obj *n);
+ath_obj *ath_drop(ath_obj *list, ath_obj *n);
+
 /* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
  * dep1/dep2 and owns_path, which are zeroed. Independent identity —
  * killing one of (v, result) does not kill the other, and the clone

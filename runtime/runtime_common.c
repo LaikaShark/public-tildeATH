@@ -2144,6 +2144,114 @@ static ath_obj *ath_pad_with_impl(ath_obj *s, ath_obj *pair, int on_left) {
 ath_obj *ath_pad_left_with(ath_obj *s, ath_obj *pair)  { return ath_pad_with_impl(s, pair, 1); }
 ath_obj *ath_pad_right_with(ath_obj *s, ath_obj *pair) { return ath_pad_with_impl(s, pair, 0); }
 
+/* --- Generic cons-list operations (SPEC §4.8.6) ---------------------- */
+
+/* Fold the payloads of LIST's elements (each a left half of the
+ * right-spine). Every element must be alive and payload-bearing, else the
+ * result is born dead — so SUM/PRODUCT over a string (whose elements are
+ * character atoms) dies. The identity is 0 for sum, 1 for product; an
+ * empty list yields the identity. Overflow is born dead. */
+static ath_obj *ath_fold_num(ath_obj *list, int is_product) {
+    int64_t acc = is_product ? 1 : 0;
+    ath_obj *cur = list;
+    while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        if (l == NULL || !ath_is_alive(l) || !l->has_value)
+            return ath_alloc_dead_number();
+        if (is_product) {
+            if (__builtin_mul_overflow(acc, l->value, &acc))
+                return ath_alloc_dead_number();
+        } else {
+            if (__builtin_add_overflow(acc, l->value, &acc))
+                return ath_alloc_dead_number();
+        }
+        cur = r;
+    }
+    ath_obj *out = ath_alloc_number(acc);
+    ath_inherit_lifetime(out, list, NULL);
+    return out;
+}
+
+ath_obj *ath_sum(ath_obj *list, ath_obj *unused)     { (void)unused; return ath_fold_num(list, 0); }
+ath_obj *ath_product(ath_obj *list, ath_obj *unused) { (void)unused; return ath_fold_num(list, 1); }
+
+/* MAXIMUM / MINIMUM element payload. An empty list is born dead (no
+ * extremum); a non-payload or dead element is born dead. */
+static ath_obj *ath_extremum(ath_obj *list, int is_max) {
+    int seen = 0;
+    int64_t best = 0;
+    ath_obj *cur = list;
+    while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        if (l == NULL || !ath_is_alive(l) || !l->has_value)
+            return ath_alloc_dead_number();
+        if (!seen) { best = l->value; seen = 1; }
+        else if (is_max ? (l->value > best) : (l->value < best)) best = l->value;
+        cur = r;
+    }
+    if (!seen) return ath_alloc_dead_number();
+    ath_obj *out = ath_alloc_number(best);
+    ath_inherit_lifetime(out, list, NULL);
+    return out;
+}
+
+ath_obj *ath_maximum(ath_obj *list, ath_obj *unused) { (void)unused; return ath_extremum(list, 1); }
+ath_obj *ath_minimum(ath_obj *list, ath_obj *unused) { (void)unused; return ath_extremum(list, 0); }
+
+/* MEMBER: verdict, alive iff some element of LIST carries a payload equal
+ * to X's. X must have a payload (else born dead). Non-payload elements are
+ * skipped. */
+ath_obj *ath_member(ath_obj *list, ath_obj *x) {
+    if (x == NULL || !ath_is_alive(x) || !x->has_value) return ath_verdict_false();
+    ath_obj *cur = list;
+    while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        if (l != NULL && ath_is_alive(l) && l->has_value && l->value == x->value)
+            return ath_verdict_true(list, x);
+        cur = r;
+    }
+    return ath_verdict_false();
+}
+
+/* TAKE: a fresh list of the first N elements (all of LIST when N >= its
+ * length). N < 0 or no payload → dead; N == 0 → NULL; dead LIST → dead. */
+ath_obj *ath_take(ath_obj *list, ath_obj *n) {
+    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value < 0)
+        return ath_alloc_dead();
+    if (list != NULL && list != ath_NULL && !ath_is_alive(list)) return ath_alloc_dead();
+    if (n->value == 0) return ath_NULL;
+    int64_t len = ath_spine_length(list);
+    if (len == 0) return ath_NULL;
+    ath_obj **buf = (ath_obj **)calloc((size_t)len, sizeof(ath_obj *));
+    if (!buf) { fputs("ath: out of memory\n", stderr); exit(1); }
+    int64_t got = ath_collect_spine(list, buf, len);
+    int64_t take = n->value < got ? n->value : got;
+    ath_obj *out = ath_build_spine(buf, take);
+    free(buf);
+    ath_inherit_lifetime(out, list, n);
+    return out;
+}
+
+/* DROP: a fresh list of all but the first N elements. N < 0 or no payload
+ * → dead; N >= length → NULL; dead LIST → dead. */
+ath_obj *ath_drop(ath_obj *list, ath_obj *n) {
+    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value < 0)
+        return ath_alloc_dead();
+    if (list != NULL && list != ath_NULL && !ath_is_alive(list)) return ath_alloc_dead();
+    int64_t len = ath_spine_length(list);
+    if (n->value >= len) return ath_NULL;
+    ath_obj **buf = (ath_obj **)calloc((size_t)len, sizeof(ath_obj *));
+    if (!buf) { fputs("ath: out of memory\n", stderr); exit(1); }
+    int64_t got = ath_collect_spine(list, buf, len);
+    ath_obj *out = ath_build_spine(buf + n->value, got - n->value);
+    free(buf);
+    ath_inherit_lifetime(out, list, n);
+    return out;
+}
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);
