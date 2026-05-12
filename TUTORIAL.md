@@ -1130,6 +1130,40 @@ To print a constructed string, use `text` + `PRINT2`. To emit a
 fixed literal that needs no value, use `print` directly. Use
 `PRINT2` over `print` whenever the content is dynamic.
 
+### 13.4 Lists
+
+A string is a right-nested cons-list of character atoms; a **list** is
+the same shape with arbitrary elements. Build one with `BIFURCATE`,
+head first:
+
+```ath
+import number 8 as N8;
+import number 3 as N3;
+import number 4 as N4;
+BIFURCATE [N8, NULL] L1;     // [8]
+BIFURCATE [N3, L1] L2;       // [3, 8]
+BIFURCATE [N4, L2] LIST;     // [4, 3, 8]
+```
+
+A family of stdlib shims folds and slices number lists (§4.8.6):
+
+| Surface call            | Result                                  |
+|-------------------------|-----------------------------------------|
+| `SUM [LIST, _] N;`      | Σ of element payloads (empty → `0`)     |
+| `PRODUCT [LIST, _] N;`  | Π of element payloads (empty → `1`)     |
+| `MAXIMUM [LIST, _] N;`  | greatest element (empty → dead)         |
+| `MINIMUM [LIST, _] N;`  | least element (empty → dead)            |
+| `MEMBER [LIST, X] V;`   | verdict: some element payload equals `X`|
+| `TAKE [LIST, N] R;`     | fresh list of the first `N` elements    |
+| `DROP [LIST, N] R;`     | fresh list of all but the first `N`     |
+
+These read each element's payload, so they work on number lists and
+born-die on a string (whose elements are character atoms). `LENGTH`,
+`S[N]`, and `S[I..J]` (the slice form) already apply to any list.
+There is no `map`/`filter`/`reduce` — ~ATH has no first-class
+functions to pass — so list processing stays at the level of these
+fixed folds plus `SPLIT`/`JOIN` (§13.2) for strings.
+
 ---
 
 ## 14. `BRANCH` and `CLONE`

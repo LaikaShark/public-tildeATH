@@ -1599,6 +1599,36 @@ non-decreasing values. The zero point is the system's monotonic
 clock origin (typically boot), not a wall-clock epoch. Programs that
 care only about elapsed time between two readings can subtract.
 
+#### 4.8.6 Generic list operations
+
+A **list** is any right-nested cons-list (§4.6) — the same shape as a
+string, but with arbitrary objects as the left-half elements. These
+`stdlib/` shims walk the right-spine and read each element's int64
+payload, so they operate on lists of numbers (and born-die on a
+string, whose elements are payload-less character atoms). Build a list
+with `BIFURCATE`: `BIFURCATE [HEAD, REST] LIST;`.
+
+| Name | Surface call | Result | Born dead when |
+|---|---|---|---|
+| `sum` | `SUM [LIST, _] N;` | Σ of element payloads (empty → `0`) | a non-payload or dead element; overflow |
+| `product` | `PRODUCT [LIST, _] N;` | Π of element payloads (empty → `1`) | a non-payload or dead element; overflow |
+| `maximum` | `MAXIMUM [LIST, _] N;` | greatest element payload | empty list; non-payload/dead element |
+| `minimum` | `MINIMUM [LIST, _] N;` | least element payload | empty list; non-payload/dead element |
+| `member` | `MEMBER [LIST, X] V;` | verdict, alive iff some element's payload equals `X`'s | `X` lacks a payload (→ dead verdict) |
+| `take` | `TAKE [LIST, N] R;` | fresh list of the first `N` elements (all of `LIST` if `N >= length`) | `N < 0` or no payload; dead `LIST`. `N == 0` → `NULL` |
+| `drop` | `DROP [LIST, N] R;` | fresh list of all but the first `N` elements | `N < 0` or no payload; dead `LIST`. `N >= length` → `NULL` |
+
+`SUM`/`PRODUCT` use the empty-list **identity** (0 and 1), mirroring
+`LENGTH`'s "empty is real" rule (§4.8.4); `MAXIMUM`/`MINIMUM` instead
+born-die on an empty list, since there is no extremum. `MEMBER`
+compares by payload, so it finds numbers, not arbitrary sub-objects.
+`TAKE`/`DROP` allocate fresh cons cells (like `CONCAT`/`SLICE`) and
+inherit `LIST` and `N` as deps. There is no `map`/`filter`/`reduce`:
+~ATH has no first-class functions to pass, so transformation stays at
+the level of these fixed folds. `LENGTH` (§4.8.4) and the subscript
+forms `S[N]` / `S[I..J]` (§4.4.15–16) already cover length, indexing,
+and slicing for lists as well as strings.
+
 ---
 
 ## 5. Runtime ABI
