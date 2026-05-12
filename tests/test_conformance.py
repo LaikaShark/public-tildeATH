@@ -369,6 +369,12 @@ CASES = [
         "1024\n6\n12\n18\n6\n48\n-1\n18\n",
         id="tier4b_numeric_second_wave",
     ),
+    pytest.param(
+        "list_ops/main.ath",
+        None,
+        "15\n96\n8\n3\nhas 3\nno 99\n2\n7\n8\n",
+        id="tier4c_list_ops",
+    ),
 ]
 
 

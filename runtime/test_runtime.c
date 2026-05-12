@@ -1072,6 +1072,47 @@ int main(void) {
         #undef MKS
     }
 
+    /* --- Generic cons-list operations (SPEC §4.8.6) ------------------- */
+    {
+        #define N(v) ath_alloc_number(v)
+        /* Build the number list [4, 3, 8]. */
+        ath_obj *list = ath_compose(N(4), ath_compose(N(3), ath_compose(N(8), ath_NULL)));
+
+        assert(ath_sum(list, ath_NULL)->value == 15);
+        assert(ath_product(list, ath_NULL)->value == 96);
+        assert(ath_maximum(list, ath_NULL)->value == 8);
+        assert(ath_minimum(list, ath_NULL)->value == 3);
+
+        /* Empty list: sum 0, product 1, extremum dead. */
+        assert(ath_sum(ath_NULL, ath_NULL)->value == 0);
+        assert(ath_product(ath_NULL, ath_NULL)->value == 1);
+        assert(!ath_is_alive(ath_maximum(ath_NULL, ath_NULL)));
+
+        /* A string is not a number list: its elements are char atoms. */
+        assert(!ath_is_alive(ath_sum(ath_string_from_bytes("hi", 2), ath_NULL)));
+
+        /* MEMBER by payload equality. */
+        assert(ath_is_alive(ath_member(list, N(3))));
+        assert(!ath_is_alive(ath_member(list, N(99))));
+        assert(!ath_is_alive(ath_member(list, ath_alloc_alive())));  /* X no payload */
+
+        /* TAKE / DROP build fresh sublists. */
+        ath_obj *t2 = ath_take(list, N(2));            /* [4, 3] */
+        assert(ath_length(t2, ath_NULL)->value == 2);
+        assert(ath_sum(t2, ath_NULL)->value == 7);
+        assert(ath_take(list, N(0)) == ath_NULL);
+        assert(ath_length(ath_take(list, N(99)), ath_NULL)->value == 3);  /* N >= len → all */
+        assert(!ath_is_alive(ath_take(list, N(-1))));
+
+        ath_obj *d2 = ath_drop(list, N(2));            /* [8] */
+        assert(ath_sum(d2, ath_NULL)->value == 8);
+        assert(ath_length(d2, ath_NULL)->value == 1);
+        assert(ath_drop(list, N(3)) == ath_NULL);      /* N >= len → empty */
+        assert(ath_length(ath_drop(list, N(0)), ath_NULL)->value == 3);   /* whole copy */
+
+        #undef N
+    }
+
     fputs("runtime test: all checks passed\n", stdout);
     return 0;
 }
