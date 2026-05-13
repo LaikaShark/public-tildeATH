@@ -608,9 +608,9 @@ in which case the function is a C-ABI shim.
 In both forms, `FN` is matched against the function registry; if no such
 function is registered, compilation fails (§6.1).
 
-#### 4.4.12 `watch "PATH" as VAR;` and `watch signal NAME as VAR;`
+#### 4.4.12 `watch` — file, signal, pid, and mtime forms
 
-Two forms, dispatched on the first token after `watch`.
+Four forms, dispatched on the first token after `watch`.
 
 **File form** — `watch "PATH" as VAR;`:
 
@@ -643,12 +643,40 @@ flag.
   that triggered it), the object is born dead — the flag is sticky.
 - Multiple watchers of the same signal all die when the signal arrives.
 
-**Shared rules** (both forms):
+**Pid form** — `watch pid N as VAR;`:
+
+Allocates a fresh object whose liveness is tied to a running process.
+`N` is an identifier bound to a number-payload object; its value is the
+pid.
+
+- Born **dead** if `N` has no payload, is non-positive, exceeds `INT_MAX`,
+  or names a process that does not exist at allocation time.
+- On every `ath_is_alive` check the runtime calls `kill(pid, 0)`. The
+  object transitions to dead exactly when that reports `ESRCH` (no such
+  process) — i.e. when the process has exited *and been reaped*. A
+  permission error (`EPERM`, the process exists but is not signalable) is
+  **not** death. A zombie still counts as alive until reaped.
+
+**Mtime form** — `watch mtime "PATH" as VAR;`:
+
+Allocates a fresh object whose liveness is tied to a file's modification
+time, captured (seconds + nanoseconds) at allocation.
+
+- Born **dead** if `PATH` does not exist at allocation time.
+- On every check the runtime `stat()`s the path; the object dies once the
+  mtime differs from the captured value, or the file is gone. This is
+  change detection, and like all death it is one-way — the watcher does
+  not revive if the file is restored to its original mtime.
+
+**Shared rules** (all forms):
 
 `VAR` must not be `NULL` (§4.2). If `VAR` is already bound, `watch` is a
-no-op (idempotent, matching `import`). The contextual keyword `signal`
-is recognized only as the second token after `watch`; elsewhere it is a
-normal identifier.
+no-op (idempotent, matching `import`). The contextual keywords `signal`,
+`pid`, and `mtime` are recognized only as the second token after
+`watch`; elsewhere they are normal identifiers. All four forms are
+**monotonic**: file deletion, signal arrival, process exit, and the
+first mtime change are permanent, so they never violate one-way death
+(§4.1).
 
 #### 4.4.13 `import builtin SYM as NAME;`
 

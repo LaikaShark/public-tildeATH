@@ -595,6 +595,8 @@ first that fails flips `alive` to false.
 | Deadline       | `import <library-entry>`, `TIMER N as T;`             | Dies when the monotonic clock reaches the timestamp.           |
 | Watched path   | `watch "PATH" as V;`, `read "PATH" as V;`             | Dies when `access(F_OK)` on the path fails.                    |
 | Awaited signal | `watch signal NAME as V;`                             | Dies when the named POSIX signal is received.                  |
+| Watched pid    | `watch pid N as V;`                                   | Dies when process `N` exits (and is reaped) — `kill(pid,0)` ESRCH. |
+| Watched mtime  | `watch mtime "PATH" as V;`                            | Dies when the file's modification time changes, or it is gone. |
 | One-shot       | `import once V;`                                      | First observation returns alive; subsequent observations dead. |
 | `owns_path`    | `read "PATH" as V;` only                              | Combined with watch_path, direct kill calls `unlink`.          |
 
@@ -695,6 +697,36 @@ file does not revive the object.
 
 `watch` is purely observational. It does **not** create, delete, or
 take ownership of the file. The owning equivalent is `read` (§16).
+
+### 11.5 Watching processes and file changes
+
+Two more `watch` forms tie liveness to external state (§4.4.12):
+
+```ath
+import number 4242 as PID;
+watch pid PID as PROC;          // alive while process 4242 runs
+~ATH(PROC) {
+    print worker still up;
+    sleep ONE_SEC;
+}
+print worker exited;
+
+watch mtime "config.toml" as CFG;   // alive until the file changes
+~ATH(CFG) {
+    print config unchanged;
+    sleep ONE_SEC;
+}
+print config changed;
+```
+
+`watch pid N` reads `N`'s payload as a pid and dies when `kill(pid, 0)`
+reports the process is gone (after it exits *and* is reaped; a zombie
+still counts as alive, and a permission error does not). `watch mtime
+"PATH"` captures the file's modification time at allocation and dies the
+moment a `stat()` shows a different mtime — change detection — or the
+file disappears. Both are monotonic: once dead they stay dead, so they
+honor one-way death like every other lifetime source. `pid` and `mtime`
+are contextual markers, special only right after `watch`.
 
 ---
 
