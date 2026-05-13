@@ -1,0 +1,36 @@
+// Tier 4d: n-ary lifetime combinators ALL_OF / ANY_OF over a list of
+// lifetimes. The result is dep-tracked — killing an element later
+// propagates through the fold to the combined verdict.
+//
+//   athc examples/lifetime_combinators/main.ath -o lc && ./lc
+//   # all before alive / all after dead / any after alive / any final dead
+
+importf <all_of> as ALL_OF;
+importf <any_of> as ANY_OF;
+
+import number 1 as A1;
+import number 2 as A2;
+
+// LIST = [A1, A2], both alive.
+BIFURCATE [A2, NULL] L1;
+BIFURCATE [A1, L1] LIST;
+
+ALL_OF [LIST, NULL] ALLV;
+ANY_OF [LIST, NULL] ANYV;
+
+CLONE ALLV as C1;
+BRANCH(C1) { print all before alive; } ELSE { print all before dead; }
+
+// Kill one element: ALL_OF must now observe dead, ANY_OF stays alive.
+A2.DIE();
+CLONE ALLV as C2;
+BRANCH(C2) { print all after alive; } ELSE { print all after dead; }
+CLONE ANYV as C3;
+BRANCH(C3) { print any after alive; } ELSE { print any after dead; }
+
+// Kill the last live element: ANY_OF now dies too.
+A1.DIE();
+CLONE ANYV as C4;
+BRANCH(C4) { print any final alive; } ELSE { print any final dead; }
+
+THIS.DIE();

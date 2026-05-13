@@ -375,6 +375,12 @@ CASES = [
         "15\n96\n8\n3\nhas 3\nno 99\n2\n7\n8\n",
         id="tier4c_list_ops",
     ),
+    pytest.param(
+        "lifetime_combinators/main.ath",
+        None,
+        "all before alive\nall after dead\nany after alive\nany final dead\n",
+        id="tier4d_lifetime_combinators",
+    ),
 ]
 
 

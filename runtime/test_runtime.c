@@ -1110,6 +1110,24 @@ int main(void) {
         assert(ath_drop(list, N(3)) == ath_NULL);      /* N >= len → empty */
         assert(ath_length(ath_drop(list, N(0)), ath_NULL)->value == 3);   /* whole copy */
 
+        /* n-ary lifetime combinators ALL_OF / ANY_OF. */
+        ath_obj *x = ath_alloc_alive();
+        ath_obj *y = ath_alloc_alive();
+        ath_obj *xy = ath_compose(x, ath_compose(y, ath_NULL));
+        ath_obj *allv = ath_all_of(xy, ath_NULL);
+        ath_obj *anyv = ath_any_of(xy, ath_NULL);
+        assert(ath_is_alive(allv));
+        assert(ath_is_alive(anyv));
+        /* Empty list: ALL_OF vacuously alive, ANY_OF dead. */
+        assert(ath_is_alive(ath_all_of(ath_NULL, ath_NULL)));
+        assert(!ath_is_alive(ath_any_of(ath_NULL, ath_NULL)));
+        /* Kill one element: deaths propagate through the fold. */
+        ath_die(y);
+        assert(!ath_is_alive(allv));   /* dep on y now dead */
+        assert(ath_is_alive(anyv));    /* x still alive */
+        ath_die(x);
+        assert(!ath_is_alive(anyv));   /* both dead */
+
         #undef N
     }
 
