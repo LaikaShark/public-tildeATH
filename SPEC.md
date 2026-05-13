@@ -1629,6 +1629,31 @@ the level of these fixed folds. `LENGTH` (§4.8.4) and the subscript
 forms `S[N]` / `S[I..J]` (§4.4.15–16) already cover length, indexing,
 and slicing for lists as well as strings.
 
+##### n-ary lifetime combinators
+
+Two further shims fold the AND/OR verdict combinators (§4.8.3) over a
+**list of lifetimes** — useful for "wait for all of these" or "any of
+these" without manually nesting `AND`/`OR`.
+
+| Name | Surface call | Result | Empty list |
+|---|---|---|---|
+| `all_of` | `ALL_OF [LIST, _] V;` | verdict alive iff **every** element of `LIST` is alive — dies when the first element dies | alive (vacuous) |
+| `any_of` | `ANY_OF [LIST, _] V;` | verdict alive iff **some** element of `LIST` is alive — dies only when the last does | dead |
+
+The result is **dependency-tracked**, not a point-in-time snapshot:
+`ALL_OF` folds `ath_and` from a fresh always-alive identity, `ANY_OF`
+folds `ath_or` from a fresh dead identity, so the verdict is a tree of
+`AND`/`OR` nodes (§4.8.1) over the elements. Killing any element after
+the call propagates through the tree to invalidate the combined verdict
+on its next observation — exactly as a nested `AND`/`OR` would. The
+elements are read as lifetimes, not payloads, so the lists need not be
+numbers.
+
+There is no `none_of`/value-level "is dead": a verdict that went from
+dead to alive as its operand died would contradict the monotonic-death
+invariant (§4.7) — once observed dead, an object stays dead. Negation
+lives only at the loop level, in the inverted `~ATH(!V)` form (§4.4.10).
+
 ---
 
 ## 5. Runtime ABI

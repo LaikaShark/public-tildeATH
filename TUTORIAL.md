@@ -1156,6 +1156,15 @@ A family of stdlib shims folds and slices number lists (§4.8.6):
 | `MEMBER [LIST, X] V;`   | verdict: some element payload equals `X`|
 | `TAKE [LIST, N] R;`     | fresh list of the first `N` elements    |
 | `DROP [LIST, N] R;`     | fresh list of all but the first `N`     |
+| `ALL_OF [LIST, _] V;`   | verdict: every element alive (n-ary AND)|
+| `ANY_OF [LIST, _] V;`   | verdict: some element alive (n-ary OR)  |
+
+`ALL_OF`/`ANY_OF` read each element as a *lifetime* rather than a
+payload: they fold the `AND`/`OR` verdicts (§12) over the list, so the
+result is dep-tracked — killing an element later invalidates the
+combined verdict. Use them for "wait for all / any of these." (There is
+no `none_of`: a verdict that came alive as its operand died would break
+monotonic death; negation lives only in the inverted `~ATH(!V)` loop.)
 
 These read each element's payload, so they work on number lists and
 born-die on a string (whose elements are character atoms). `LENGTH`,
