@@ -2252,6 +2252,43 @@ ath_obj *ath_drop(ath_obj *list, ath_obj *n) {
     return out;
 }
 
+/* --- n-ary lifetime combinators (SPEC §4.8.6) ------------------------ */
+
+/* ALL_OF: a verdict alive iff every element of LIST is alive — the n-ary
+ * generalization of AND (§4.8.3), so it dies when the first element dies.
+ * Built by folding ath_and from a fresh always-alive identity, yielding a
+ * dep-tracked tree (never the bare elements) whose death propagates. An
+ * empty list is vacuously alive. */
+ath_obj *ath_all_of(ath_obj *list, ath_obj *unused) {
+    (void)unused;
+    ath_obj *acc = ath_alloc_alive();   /* vacuous-true identity */
+    ath_obj *cur = list;
+    while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        acc = ath_and(acc, l);
+        cur = r;
+    }
+    return acc;
+}
+
+/* ANY_OF: a verdict alive iff some element of LIST is alive — the n-ary
+ * generalization of OR (§4.8.3), dying only when the last element dies.
+ * Folds ath_or from a fresh dead identity, so the result is dep-tracked
+ * (OR installs every operand as a dep). An empty list is dead. */
+ath_obj *ath_any_of(ath_obj *list, ath_obj *unused) {
+    (void)unused;
+    ath_obj *acc = ath_alloc_dead();    /* vacuous-false identity */
+    ath_obj *cur = list;
+    while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
+        ath_obj *l, *r;
+        ath_decompose(cur, &l, &r);
+        acc = ath_or(acc, l);
+        cur = r;
+    }
+    return acc;
+}
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);

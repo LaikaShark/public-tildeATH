@@ -1,0 +1,6 @@
+// SPEC §4.8.6 — verdict alive iff some element of LIST is alive (n-ary OR
+// over lifetimes). Empty list is dead. ANY_OF [LIST, _] V;
+import builtin ath_any_of as ATH_ANY_OF;
+BIFURCATE ARGS [X, Y];
+ATH_ANY_OF [X, Y] R;
+THIS.DIE(R);

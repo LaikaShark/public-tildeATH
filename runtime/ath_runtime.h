@@ -266,6 +266,14 @@ ath_obj *ath_member(ath_obj *list, ath_obj *x);
 ath_obj *ath_take(ath_obj *list, ath_obj *n);
 ath_obj *ath_drop(ath_obj *list, ath_obj *n);
 
+/* n-ary lifetime combinators (SPEC §4.8.6): the list generalizations of
+ * the AND/OR verdicts (§4.8.3). ALL_OF is alive iff every element is alive
+ * (empty → alive); ANY_OF iff some element is alive (empty → dead). Both
+ * fold ath_and/ath_or into a dep-tracked tree, so element deaths propagate
+ * to the result. */
+ath_obj *ath_all_of(ath_obj *list, ath_obj *unused);
+ath_obj *ath_any_of(ath_obj *list, ath_obj *unused);
+
 /* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
  * dep1/dep2 and owns_path, which are zeroed. Independent identity —
  * killing one of (v, result) does not kill the other, and the clone
