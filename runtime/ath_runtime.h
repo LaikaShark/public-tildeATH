@@ -52,6 +52,17 @@ typedef struct ath_obj {
      * codegen models stays at fixed offsets. */
     int is_char;
     int char_code;
+    /* §4.4.12 extended watch sources. watch_pid > 0 ties liveness to a
+     * running process (dies when kill(pid,0) reports ESRCH). mtime_path,
+     * when non-NULL, ties liveness to a file's modification time: the
+     * object dies once stat() reports a different mtime than the
+     * (mtime_sec, mtime_nsec) captured at allocation, or the file is gone.
+     * Both are monotonic — process exit and the first mtime change are
+     * permanent. Appended after the codegen-modeled prefix. */
+    int watch_pid;
+    const char *mtime_path;
+    int64_t mtime_sec;
+    int64_t mtime_nsec;
 } ath_obj;
 
 #define ATH_DEP_AND 0
@@ -98,6 +109,13 @@ ath_obj *ath_alloc_with_lifetime(double min_s, double max_s);
 ath_obj *ath_alloc_watching_file(const char *path);
 ath_obj *ath_alloc_watching_signal(int signum);
 ath_obj *ath_alloc_watching_signal_by_name(const char *name);
+/* Extended watch sources (SPEC §4.4.12). ath_alloc_watching_pid ties
+ * liveness to a running process (n's payload is the pid); born dead if the
+ * pid is absent, non-positive, or out of range. ath_alloc_watching_mtime
+ * ties liveness to a file's modification time, captured at allocation;
+ * born dead if the path is missing. */
+ath_obj *ath_alloc_watching_pid(ath_obj *n);
+ath_obj *ath_alloc_watching_mtime(const char *path);
 ath_obj *ath_alloc_oneshot(void);
 ath_obj *ath_alloc_from_library(const char *name);
 int      ath_library_lookup(const char *name, double *min_out, double *max_out);

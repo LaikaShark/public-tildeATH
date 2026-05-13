@@ -102,6 +102,8 @@ class WatchStmt:
     col: int
     path: str | None = None         # file form: watch "PATH" as VAR;
     signal_name: str | None = None  # signal form: watch signal NAME as VAR;
+    pid_var: str | None = None      # pid form:   watch pid N as VAR;
+    mtime_path: str | None = None   # mtime form: watch mtime "PATH" as VAR;
 
 
 @dataclass

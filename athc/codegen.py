@@ -187,6 +187,16 @@ class Codegen:
             ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
             name="ath_alloc_watching_signal_by_name",
         )
+        self.f_alloc_watching_pid = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
+            name="ath_alloc_watching_pid",
+        )
+        self.f_alloc_watching_mtime = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
+            name="ath_alloc_watching_mtime",
+        )
         self.f_register_lifetime = ir.Function(
             self.module,
             ir.FunctionType(
@@ -569,9 +579,16 @@ class FunctionEmitter:
                 fresh = builder.call(
                     self.cg.f_alloc_watching_signal_by_name, [name_ptr]
                 )
+            elif stmt.pid_var is not None:
+                n = self._read_var(builder, stmt.pid_var)
+                fresh = builder.call(self.cg.f_alloc_watching_pid, [n])
+            elif stmt.mtime_path is not None:
+                target_g = self.cg.make_cstring_global(stmt.mtime_path)
+                target_ptr = builder.gep(target_g, [zero, zero], inbounds=True)
+                fresh = builder.call(self.cg.f_alloc_watching_mtime, [target_ptr])
             else:
                 raise CodegenError(
-                    "WatchStmt has neither path nor signal_name"
+                    "WatchStmt has no path, signal_name, pid_var, or mtime_path"
                 )
             builder.store(fresh, slot)
 

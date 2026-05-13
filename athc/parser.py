@@ -473,8 +473,35 @@ class Parser:
                 col=kw.col,
                 signal_name=sig.value,
             )
+        if nxt.kind is TokenKind.IDENT and nxt.value.lower() == "pid":
+            # Pid form: watch pid N as VAR;  (N is a number-payload var)
+            self._advance()  # consume 'pid'
+            pidvar = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.KW_AS)
+            var = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return WatchStmt(
+                var=var.value,
+                line=kw.line,
+                col=kw.col,
+                pid_var=pidvar.value,
+            )
+        if nxt.kind is TokenKind.IDENT and nxt.value.lower() == "mtime":
+            # Mtime form: watch mtime "PATH" as VAR;
+            self._advance()  # consume 'mtime'
+            path = self._expect(TokenKind.STRING).value
+            self._expect(TokenKind.KW_AS)
+            var = self._expect(TokenKind.IDENT)
+            self._expect(TokenKind.SEMI)
+            return WatchStmt(
+                var=var.value,
+                line=kw.line,
+                col=kw.col,
+                mtime_path=path,
+            )
         raise ParseError(
-            f"expected STRING or 'signal' after 'watch'; got {nxt.kind.name}",
+            "expected STRING, 'signal', 'pid', or 'mtime' after 'watch'; "
+            f"got {nxt.kind.name}",
             nxt.line,
             nxt.col,
         )

@@ -135,6 +135,8 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             defined.add(s.left)
             defined.add(s.right)
         elif isinstance(s, WatchStmt):
+            if s.pid_var is not None:
+                _check_read(s.pid_var, defined, s)
             _check_write(s.var, s)
             defined.add(s.var)
         elif isinstance(s, SubscriptStmt):

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -94,6 +95,16 @@ static int ath_observe(ath_obj *v) {
     if (v->watch_path != NULL && access(v->watch_path, F_OK) != 0) return 0;
     if (v->awaiting_signal > 0 && v->awaiting_signal < ATH_MAX_SIGNAL
         && ath_signal_received[v->awaiting_signal]) return 0;
+    /* §4.4.12 extended watches: process exit and file-mtime change. Both
+     * are read-only syscalls, keeping ath_observe non-mutating. */
+    if (v->watch_pid > 0 && kill(v->watch_pid, 0) != 0 && errno == ESRCH)
+        return 0;
+    if (v->mtime_path != NULL) {
+        struct stat mst;
+        if (stat(v->mtime_path, &mst) != 0) return 0;   /* gone */
+        if ((int64_t)mst.st_mtim.tv_sec != v->mtime_sec
+            || (int64_t)mst.st_mtim.tv_nsec != v->mtime_nsec) return 0;  /* changed */
+    }
     if (v->dep_mode == ATH_DEP_OR) {
         int d1_present = (v->dep1 != NULL);
         int d2_present = (v->dep2 != NULL);
@@ -454,6 +465,43 @@ ath_obj *ath_alloc_watching_file(const char *path) {
     if (access(copy, F_OK) != 0) {
         o->alive = 0;
     }
+    return o;
+}
+
+ath_obj *ath_alloc_watching_pid(ath_obj *n) {
+    ath_obj *o = ath_alloc_alive();
+    if (n == NULL || !ath_is_alive(n) || !n->has_value
+        || n->value <= 0 || n->value > INT_MAX) {
+        o->alive = 0;
+        return o;
+    }
+    o->watch_pid = (int)n->value;
+    /* Born dead if the process is already gone. */
+    if (kill(o->watch_pid, 0) != 0 && errno == ESRCH) o->alive = 0;
+    return o;
+}
+
+ath_obj *ath_alloc_watching_mtime(const char *path) {
+    ath_obj *o = ath_alloc_alive();
+    if (path == NULL) {
+        o->alive = 0;
+        return o;
+    }
+    struct stat st;
+    if (stat(path, &st) != 0) {   /* missing → born dead */
+        o->alive = 0;
+        return o;
+    }
+    size_t len = strlen(path);
+    char *copy = (char *)malloc(len + 1);
+    if (!copy) {
+        fputs("ath: out of memory\n", stderr);
+        exit(1);
+    }
+    memcpy(copy, path, len + 1);
+    o->mtime_path = copy;
+    o->mtime_sec = (int64_t)st.st_mtim.tv_sec;
+    o->mtime_nsec = (int64_t)st.st_mtim.tv_nsec;
     return o;
 }
 
