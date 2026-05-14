@@ -1,0 +1,15 @@
+// Tier 4g: the `every N { body }` interval loop (§4.4.27). Runs the body,
+// sleeps N.value ms, and repeats forever; the only exit is the body
+// ending the activation (here THIS.DIE after the first beat) or a signal.
+//
+//   athc examples/every_loop/main.ath -o el && ./el
+//   # beat
+
+import number 1 as MS;
+
+every MS {
+    print beat;
+    THIS.DIE();
+}
+print unreachable;
+THIS.DIE();

@@ -387,6 +387,18 @@ CASES = [
         "pid alive\nother dead\n",
         id="tier4e_watch_pid",
     ),
+    pytest.param(
+        "repeat_loop/main.ath",
+        None,
+        "row\ndot\ndot\nrow\ndot\ndot\ndone\n",
+        id="tier4f_repeat_loop",
+    ),
+    pytest.param(
+        "every_loop/main.ath",
+        None,
+        "beat\n",
+        id="tier4g_every_loop",
+    ),
 ]
 
 

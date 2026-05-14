@@ -10,6 +10,8 @@ from athc.ast import (
     CloseStmt,
     ComposeStmt,
     DecomposeStmt,
+    EveryStmt,
+    LoopStmt,
     DieStmt,
     FuncCallComposeArg,
     FuncCallDecomposeRet,
@@ -134,6 +136,30 @@ def test_ath_loop_with_inversion():
     assert isinstance(s, AthLoop)
     assert s.var == "V"
     assert s.inverted is True
+
+
+def test_repeat_loop():
+    p = parse("loop N { print x; print y; }")
+    s = p.statements[0]
+    assert isinstance(s, LoopStmt)
+    assert s.count_var == "N"
+    assert len(s.body) == 2
+    assert isinstance(s.body[0], PrintStmt)
+
+
+def test_every_loop():
+    p = parse("every MS { print beat; }")
+    s = p.statements[0]
+    assert isinstance(s, EveryStmt)
+    assert s.interval_var == "MS"
+    assert len(s.body) == 1
+
+
+def test_repeat_every_nest():
+    p = parse("loop N { every MS { print x; } }")
+    outer = p.statements[0]
+    assert isinstance(outer, LoopStmt)
+    assert isinstance(outer.body[0], EveryStmt)
 
 
 def test_ath_loop_with_execute_suffix():

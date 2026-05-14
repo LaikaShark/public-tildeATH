@@ -1,0 +1,17 @@
+// Tier 4f: the `loop N { body }` count loop (§4.4.26). Runs the body
+// N.value times; a non-positive count runs it zero times. Loops nest.
+//
+//   athc examples/repeat_loop/main.ath -o rl && ./rl
+//   # row / dot / dot / row / dot / dot / done
+
+import number 2 as TWO;
+import number 0 as ZERO;
+
+loop TWO {
+    print row;
+    loop TWO { print dot; }
+}
+loop ZERO { print skipped; }
+print done;
+
+THIS.DIE();
