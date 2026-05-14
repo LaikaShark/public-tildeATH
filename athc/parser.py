@@ -253,14 +253,20 @@ class Parser:
                 )
             body.append(self._parse_statement())
         self._expect(TokenKind.RBRACE)
+        execute: str | None = None
         if self._peek().kind is TokenKind.KW_EXECUTE:
             self._advance()
             self._expect(TokenKind.LPAREN)
-            self._expect(TokenKind.IDENT)
+            execute = self._expect(TokenKind.IDENT).value
             self._expect(TokenKind.RPAREN)
             self._expect(TokenKind.SEMI)
         return AthLoop(
-            var=var.value, body=body, line=kw.line, col=kw.col, inverted=inverted
+            var=var.value,
+            body=body,
+            line=kw.line,
+            col=kw.col,
+            inverted=inverted,
+            execute=execute,
         )
 
     def _parse_loop(self) -> LoopStmt:

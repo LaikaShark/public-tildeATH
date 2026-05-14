@@ -646,6 +646,28 @@ class FunctionEmitter:
             builder.branch(header)
 
         builder.position_at_start(end)
+        # EXECUTE(F) postfix (§4.4.4): on the loop's natural exit, call F with
+        # the subject as its argument. The subject is dead here (the condition
+        # failed) for a normal loop, alive for an inverted one. "NULL" is the
+        # no-op idiom. This fires only on the condition-false exit — a
+        # THIS.DIE() in the body returns past `end` and does not run F.
+        if stmt.execute is not None and stmt.execute != "NULL":
+            self._emit_execute(builder, stmt.execute, stmt.var)
+
+    def _emit_execute(
+        self, builder: ir.IRBuilder, fname_raw: str, subject_var: str
+    ) -> None:
+        fname = fname_raw.lower()
+        subject = self._read_var(builder, subject_var)
+        if fname in self.local_builtins:
+            # Builtins take (l, r); pass the subject and NULL. Result discarded.
+            null = self._read_var(builder, "NULL")
+            builder.call(self.local_builtins[fname], [subject, null])
+        elif fname in self.cg.user_fns:
+            # User functions take a single composed argument; pass the subject.
+            builder.call(self.cg.user_fns[fname], [subject])
+        else:
+            raise CodegenError(f"unknown EXECUTE function {fname_raw!r}")
 
     def _emit_loop(self, builder: ir.IRBuilder, stmt: LoopStmt) -> None:
         # repeat N { body }  -- a counted loop over an i64 phi. The count is

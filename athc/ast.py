@@ -36,6 +36,10 @@ class AthLoop:
     line: int = 0
     col: int = 0
     inverted: bool = False
+    # Optional EXECUTE(IDENT) postfix (§4.4.4): the function called once the
+    # loop exits, with the (then-dead) subject as its argument. "NULL" (the
+    # canonical idiom) is the no-op. None means no EXECUTE postfix.
+    execute: str | None = None
 
 
 @dataclass

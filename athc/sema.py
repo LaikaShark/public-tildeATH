@@ -109,6 +109,9 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             defined.add(s.target)
         elif isinstance(s, AthLoop):
             _check_read(s.var, defined, s)
+            # EXECUTE(F): F must be a declared function (or the NULL no-op).
+            if s.execute is not None and s.execute != "NULL":
+                _check_function(s.execute, s, fnames, local_builtins)
             _walk(s.body, defined, fnames, local_builtins)
         elif isinstance(s, LoopStmt):
             _check_read(s.count_var, defined, s)
