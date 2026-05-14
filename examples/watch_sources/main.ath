@@ -1,0 +1,20 @@
+// Tier 4e: extended watch sources. `watch pid N` ties an object's
+// liveness to a running process. PID 1 (init) is always present;
+// a pid beyond the system maximum never is.
+//
+//   athc examples/watch_sources/main.ath -o ws && ./ws
+//   # pid alive / other dead
+//
+// (`watch mtime "PATH"` — die on a file's modification — is exercised
+// deterministically in the C runtime tests, where timing is controlled.)
+
+import number 1 as PID1;
+import number 2147480000 as PIDX;
+
+watch pid PID1 as A;
+BRANCH(A) { print pid alive; } ELSE { print pid dead; }
+
+watch pid PIDX as B;
+BRANCH(B) { print other alive; } ELSE { print other dead; }
+
+THIS.DIE();

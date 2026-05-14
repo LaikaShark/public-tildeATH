@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -1129,6 +1131,53 @@ int main(void) {
         assert(!ath_is_alive(anyv));   /* both dead */
 
         #undef N
+    }
+
+    /* --- Extended watch sources: pid + mtime (SPEC §4.4.12) ----------- */
+    {
+        /* pid watch: a running child is alive; once it exits and is
+         * reaped, the watcher dies. */
+        pid_t child = fork();
+        if (child == 0) {
+            struct timespec ts = {5, 0};
+            nanosleep(&ts, NULL);
+            _exit(0);
+        }
+        assert(child > 0);
+        ath_obj *pw = ath_alloc_watching_pid(ath_alloc_number(child));
+        assert(ath_is_alive(pw));               /* child running */
+        kill(child, SIGKILL);
+        int status;
+        waitpid(child, &status, 0);             /* reap (avoid zombie) */
+        assert(!ath_is_alive(pw));              /* child gone */
+
+        /* Born dead on a bad pid payload. */
+        assert(!ath_is_alive(ath_alloc_watching_pid(ath_alloc_number(0))));
+        assert(!ath_is_alive(ath_alloc_watching_pid(ath_alloc_alive())));  /* no payload */
+
+        /* mtime watch: alive while unchanged, dead once mtime differs. */
+        const char *mp = "/tmp/ath_test_mtime_target";
+        unlink(mp);
+        FILE *mf = fopen(mp, "w");
+        assert(mf != NULL);
+        fputs("x\n", mf);
+        fclose(mf);
+        ath_obj *mw = ath_alloc_watching_mtime(mp);
+        assert(ath_is_alive(mw));               /* unchanged */
+        struct timeval tv[2];
+        tv[0].tv_sec = 1000; tv[0].tv_usec = 0;
+        tv[1].tv_sec = 1000; tv[1].tv_usec = 0;
+        assert(utimes(mp, tv) == 0);            /* force a different mtime */
+        assert(!ath_is_alive(mw));              /* changed → dead */
+
+        /* A watcher on a since-deleted file is dead too. */
+        ath_obj *mw2 = ath_alloc_watching_mtime(mp);
+        assert(ath_is_alive(mw2));
+        unlink(mp);
+        assert(!ath_is_alive(mw2));             /* gone → dead */
+
+        /* Missing path → born dead. */
+        assert(!ath_is_alive(ath_alloc_watching_mtime("/tmp/ath_no_such_file_xyz_q")));
     }
 
     fputs("runtime test: all checks passed\n", stdout);

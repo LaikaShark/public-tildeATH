@@ -261,9 +261,35 @@ def test_watch_signal_keyword_is_contextual_and_case_insensitive():
     assert p.statements[0].signal_name == "SIGTERM"
 
 
+def test_watch_pid_form():
+    p = parse("watch pid P as V;")
+    s = p.statements[0]
+    assert isinstance(s, WatchStmt)
+    assert s.pid_var == "P"
+    assert s.path is None and s.signal_name is None and s.mtime_path is None
+    assert s.var == "V"
+
+
+def test_watch_mtime_form():
+    p = parse('watch mtime "config.toml" as V;')
+    s = p.statements[0]
+    assert isinstance(s, WatchStmt)
+    assert s.mtime_path == "config.toml"
+    assert s.path is None and s.signal_name is None and s.pid_var is None
+    assert s.var == "V"
+
+
+def test_watch_pid_mtime_keywords_are_contextual():
+    # 'pid' and 'mtime' are ordinary identifiers outside the watch slot.
+    p = parse("import number 1 as pid; watch pid pid as V;")
+    s = p.statements[1]
+    assert isinstance(s, WatchStmt)
+    assert s.pid_var == "pid" and s.var == "V"
+
+
 def test_watch_rejects_bare_identifier_after_watch():
-    # foo is neither STRING nor 'signal' -> parse error.
-    with pytest.raises(ParseError, match="STRING or 'signal'"):
+    # foo is none of STRING / 'signal' / 'pid' / 'mtime' -> parse error.
+    with pytest.raises(ParseError, match="after 'watch'"):
         parse("watch foo as F;")
 
 

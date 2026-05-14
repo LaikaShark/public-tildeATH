@@ -381,6 +381,12 @@ CASES = [
         "all before alive\nall after dead\nany after alive\nany final dead\n",
         id="tier4d_lifetime_combinators",
     ),
+    pytest.param(
+        "watch_sources/main.ath",
+        None,
+        "pid alive\nother dead\n",
+        id="tier4e_watch_pid",
+    ),
 ]
 
 
