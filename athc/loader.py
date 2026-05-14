@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from athc.ast import AthLoop, ImportFuncStmt, Program
+from athc.ast import AthLoop, EveryStmt, ImportFuncStmt, Program, LoopStmt
 from athc.lexer import LexError
 from athc.parser import ParseError, parse
 
@@ -82,7 +82,7 @@ def _iter_importfs(stmts):
     for s in stmts:
         if isinstance(s, ImportFuncStmt):
             yield s
-        elif isinstance(s, AthLoop):
+        elif isinstance(s, (AthLoop, LoopStmt, EveryStmt)):
             yield from _iter_importfs(s.body)
 
 

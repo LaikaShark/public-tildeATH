@@ -5,6 +5,8 @@ from athc.ast import (
     AthLoop,
     BranchStmt,
     CloneStmt,
+    EveryStmt,
+    LoopStmt,
     CloseStmt,
     ComposeStmt,
     DecomposeStmt,
@@ -107,6 +109,12 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             defined.add(s.target)
         elif isinstance(s, AthLoop):
             _check_read(s.var, defined, s)
+            _walk(s.body, defined, fnames, local_builtins)
+        elif isinstance(s, LoopStmt):
+            _check_read(s.count_var, defined, s)
+            _walk(s.body, defined, fnames, local_builtins)
+        elif isinstance(s, EveryStmt):
+            _check_read(s.interval_var, defined, s)
             _walk(s.body, defined, fnames, local_builtins)
         elif isinstance(s, DieStmt):
             _check_read(s.var, defined, s)

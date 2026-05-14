@@ -22,6 +22,8 @@ class TokenKind(Enum):
     KW_APPEND = auto()
     KW_CLOSE = auto()
     KW_TEXT = auto()
+    KW_LOOP = auto()
+    KW_EVERY = auto()
     ATH = auto()
     DIE = auto()
     IDENT = auto()
@@ -80,6 +82,8 @@ KEYWORDS = {
     "append": TokenKind.KW_APPEND,
     "close": TokenKind.KW_CLOSE,
     "text": TokenKind.KW_TEXT,
+    "loop": TokenKind.KW_LOOP,
+    "every": TokenKind.KW_EVERY,
 }
 
 RESERVED_V1: set[str] = set()

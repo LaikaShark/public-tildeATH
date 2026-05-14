@@ -2337,6 +2337,14 @@ ath_obj *ath_any_of(ath_obj *list, ath_obj *unused) {
     return acc;
 }
 
+/* Iteration count for the `repeat` loop (SPEC §4.4.26): N's int64 payload
+ * if N is alive, payload-bearing, and non-negative; otherwise 0 (the loop
+ * body runs zero times). */
+int64_t ath_count_of(ath_obj *n) {
+    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value < 0) return 0;
+    return n->value;
+}
+
 _Noreturn void ath_halt(void) {
     fflush(stdout);
     exit(0);

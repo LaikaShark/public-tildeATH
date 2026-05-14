@@ -292,6 +292,10 @@ ath_obj *ath_drop(ath_obj *list, ath_obj *n);
 ath_obj *ath_all_of(ath_obj *list, ath_obj *unused);
 ath_obj *ath_any_of(ath_obj *list, ath_obj *unused);
 
+/* Iteration count for the `repeat N { ... }` loop (SPEC §4.4.26): N's
+ * non-negative int64 payload, or 0 if N is dead/payload-less/negative. */
+int64_t ath_count_of(ath_obj *n);
+
 /* Shallow snapshot clone (SPEC §4.4.18). Copies every field of v except
  * dep1/dep2 and owns_path, which are zeroed. Independent identity —
  * killing one of (v, result) does not kill the other, and the clone

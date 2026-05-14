@@ -3,6 +3,8 @@ from athc.ast import (
     AthLoop,
     BranchStmt,
     CloneStmt,
+    EveryStmt,
+    LoopStmt,
     CloseStmt,
     ComposeStmt,
     DecomposeStmt,
@@ -93,6 +95,10 @@ class Parser:
             return self._parse_sleep()
         if tok.kind is TokenKind.KW_TIMER:
             return self._parse_timer()
+        if tok.kind is TokenKind.KW_LOOP:
+            return self._parse_loop()
+        if tok.kind is TokenKind.KW_EVERY:
+            return self._parse_every()
         if tok.kind is TokenKind.KW_READ:
             return self._parse_read()
         if tok.kind is TokenKind.KW_WRITE:
@@ -255,6 +261,22 @@ class Parser:
             self._expect(TokenKind.SEMI)
         return AthLoop(
             var=var.value, body=body, line=kw.line, col=kw.col, inverted=inverted
+        )
+
+    def _parse_loop(self) -> LoopStmt:
+        kw = self._expect(TokenKind.KW_LOOP)
+        count = self._expect(TokenKind.IDENT)
+        body = self._parse_brace_block()
+        return LoopStmt(
+            count_var=count.value, body=body, line=kw.line, col=kw.col
+        )
+
+    def _parse_every(self) -> EveryStmt:
+        kw = self._expect(TokenKind.KW_EVERY)
+        interval = self._expect(TokenKind.IDENT)
+        body = self._parse_brace_block()
+        return EveryStmt(
+            interval_var=interval.value, body=body, line=kw.line, col=kw.col
         )
 
     def _parse_branch(self) -> BranchStmt:

@@ -6,6 +6,8 @@ from athc.ast import (
     BranchStmt,
     CloneStmt,
     CloseStmt,
+    EveryStmt,
+    LoopStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -51,6 +53,12 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.target)
         elif isinstance(s, AthLoop):
             names.add(s.var)
+            _collect_names(s.body, names)
+        elif isinstance(s, LoopStmt):
+            names.add(s.count_var)
+            _collect_names(s.body, names)
+        elif isinstance(s, EveryStmt):
+            names.add(s.interval_var)
             _collect_names(s.body, names)
         elif isinstance(s, DieStmt):
             names.add(s.var)
@@ -237,6 +245,11 @@ class Codegen:
             self.module,
             ir.FunctionType(ir.VoidType(), [self.obj_ptr]),
             name="ath_sleep_ms",
+        )
+        self.f_count_of = ir.Function(
+            self.module,
+            ir.FunctionType(self.i64, [self.obj_ptr]),
+            name="ath_count_of",
         )
         self.f_alloc_timer_ms = ir.Function(
             self.module,
@@ -486,6 +499,10 @@ class FunctionEmitter:
             self._emit_compose(builder, stmt)
         elif isinstance(stmt, AthLoop):
             self._emit_ath_loop(builder, stmt)
+        elif isinstance(stmt, LoopStmt):
+            self._emit_loop(builder, stmt)
+        elif isinstance(stmt, EveryStmt):
+            self._emit_every(builder, stmt)
         elif isinstance(stmt, DieStmt):
             self._emit_die(builder, stmt)
         elif isinstance(stmt, PrintStmt):
@@ -629,6 +646,62 @@ class FunctionEmitter:
             builder.branch(header)
 
         builder.position_at_start(end)
+
+    def _emit_loop(self, builder: ir.IRBuilder, stmt: LoopStmt) -> None:
+        # repeat N { body }  -- a counted loop over an i64 phi. The count is
+        # ath_count_of(N) (clamped to >= 0); the body runs that many times.
+        fn = builder.function
+        loop_id = self._loop_id
+        self._loop_id += 1
+        n = self._read_var(builder, stmt.count_var)
+        count0 = builder.call(self.cg.f_count_of, [n])
+        preheader = builder.block
+        header = fn.append_basic_block(f"repeat_header_{loop_id}")
+        body = fn.append_basic_block(f"repeat_body_{loop_id}")
+        latch = fn.append_basic_block(f"repeat_latch_{loop_id}")
+        end = fn.append_basic_block(f"repeat_end_{loop_id}")
+
+        builder.branch(header)
+        builder.position_at_start(header)
+        i = builder.phi(self.cg.i64, name=f"repeat_i_{loop_id}")
+        i.add_incoming(count0, preheader)
+        cond = builder.icmp_signed(">", i, ir.Constant(self.cg.i64, 0))
+        builder.cbranch(cond, body, end)
+
+        builder.position_at_start(body)
+        self._emit_block(builder, stmt.body)
+        if not builder.block.is_terminated:
+            builder.branch(latch)
+
+        # Latch decrements and re-enters the header. It is a CFG predecessor
+        # of the header (so the phi lists it) even when the body always
+        # terminates and never reaches it.
+        builder.position_at_start(latch)
+        i_next = builder.sub(i, ir.Constant(self.cg.i64, 1))
+        builder.branch(header)
+        i.add_incoming(i_next, latch)
+
+        builder.position_at_start(end)
+
+    def _emit_every(self, builder: ir.IRBuilder, stmt: EveryStmt) -> None:
+        # every N { body }  -- run body, sleep N ms, forever. Exits only when
+        # the body terminates the activation (THIS.DIE / a signal). Code after
+        # the loop is unreachable, like the tail of any infinite construct.
+        fn = builder.function
+        loop_id = self._loop_id
+        self._loop_id += 1
+        loop = fn.append_basic_block(f"every_loop_{loop_id}")
+        after = fn.append_basic_block(f"every_after_{loop_id}")
+
+        builder.branch(loop)
+        builder.position_at_start(loop)
+        self._emit_block(builder, stmt.body)
+        if not builder.block.is_terminated:
+            interval = self._read_var(builder, stmt.interval_var)
+            builder.call(self.cg.f_sleep_ms, [interval])
+            builder.branch(loop)
+
+        builder.position_at_start(after)
 
     def _emit_die(self, builder: ir.IRBuilder, stmt: DieStmt) -> None:
         # Read the arg first (spec §4.4.5 step 1): so THIS.DIE(THIS) returns

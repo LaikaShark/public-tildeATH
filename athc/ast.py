@@ -39,6 +39,24 @@ class AthLoop:
 
 
 @dataclass
+class LoopStmt:
+    """loop N { body }  -- run body N.value times (count loop, §4.4.26)."""
+    count_var: str
+    body: list = field(default_factory=list)
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class EveryStmt:
+    """every N { body }  -- run body, sleep N.value ms, forever (§4.4.27)."""
+    interval_var: str
+    body: list = field(default_factory=list)
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
 class DieStmt:
     var: str
     line: int
@@ -252,6 +270,8 @@ Stmt = Union[
     DecomposeStmt,
     ComposeStmt,
     AthLoop,
+    LoopStmt,
+    EveryStmt,
     DieStmt,
     PrintStmt,
     InputStmt,
