@@ -371,6 +371,37 @@ This composes a new alive object from two `NULL` halves and binds `V`
 to it. The new object is alive, so the inverted-loop condition fails
 and the loop exits.
 
+### 7.4 Count and interval loops
+
+Two loops are driven by a count and a clock rather than by liveness.
+
+```ath
+import number 3 as N;
+loop N { print tick; }       // runs the body 3 times
+```
+
+`loop N { body }` (§4.4.26) runs `body` exactly `N.value` times; a
+dead, payload-less, or negative `N` runs it zero times. The count is
+snapshotted on entry, so rebinding `N` in the body does not change the
+remaining iterations. Unlike `~ATH`, it never consults liveness.
+
+```ath
+import number 1000 as SEC;
+every SEC {                  // every second, forever
+    print poll;
+}
+```
+
+`every N { body }` (§4.4.27) runs `body`, sleeps `N.value` ms, and
+repeats forever — the "do this every N ms" daemon. Its only exits are
+the body ending the activation (`THIS.DIE()`) or a signal; code after
+an `every` with a non-terminating body is unreachable. Recurrence is a
+property of the *loop*, never of an object — an object cannot come back
+alive (§6).
+
+(Do not confuse `loop` with the string built-in `repeat`, §13.2, which
+repeats a string. They share no syntax.)
+
 ---
 
 ## 8. Functions

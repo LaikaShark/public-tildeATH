@@ -1075,6 +1075,39 @@ to `ath_coerce_string(N)`: a fresh TO_STRING result for a
 payload-bearing `N` (with `N` installed as a dep), or `N` itself
 (pointer-aliased) for any non-payload operand.
 
+#### 4.4.26 `loop N { body }` (count loop)
+
+Runs `body` exactly `N.value` times. `N` is an identifier bound to a
+number-payload object.
+
+1. Read `N` and compute the count via `ath_count_of(N)` (§5.2): its
+   non-negative int64 payload, or `0` if `N` is dead, lacks a payload,
+   or is negative — so a bad or non-positive count runs `body` zero
+   times.
+2. Iterate, emitting `body` each time, until the counter reaches `0`.
+
+`loop` is **not** a liveness loop: it does not consult `ath_is_alive`,
+and rebinding `N` inside the body does not change the remaining count
+(the count is snapshotted once on entry). Loops nest, and `body` may
+exit early by terminating the activation (`THIS.DIE()`), which returns
+from the enclosing function. This is distinct from the string built-in
+`repeat` (§4.8.4), which repeats a *string*; the two share no syntax.
+
+#### 4.4.27 `every N { body }` (interval loop)
+
+Runs `body`, sleeps `N.value` milliseconds, and repeats — forever.
+`N` is an identifier bound to a number-payload object, re-read each
+iteration; the sleep uses the same semantics as the `sleep` statement
+(§4.4.19), so a dead/non-positive `N` makes the pause a no-op.
+
+The loop has no liveness guard and no count: the **only** exits are the
+body terminating the activation (`THIS.DIE()` / `EXECUTE`) or process
+death (a watched signal, `ath_halt`, a fatal signal). It is the
+canonical "do this every N ms" daemon construct. Recurrence lives here,
+in the loop — never in a liveness object, which could not come back
+alive without violating one-way death (§4.1). Code textually after an
+`every` whose body never terminates is unreachable.
+
 ### 4.5 Program termination
 
 A program terminates when its main activation returns. This happens when:
