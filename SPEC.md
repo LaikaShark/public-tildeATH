@@ -479,13 +479,31 @@ if `V` is alive at entry, the loop never runs.
 An optional `EXECUTE(IDENT)` postfix may follow the closing `}`:
 
 ```
-~ATH(V) { S* } EXECUTE(NULL);
+~ATH(V) { S* } EXECUTE(F);
 ```
 
-The `IDENT` after `EXECUTE` is **accepted but currently has no semantic
-effect** — it is a syntactic accommodation of the Homestuck surface,
-where `EXECUTE` historically named the action to perform after the loop
-exits. Future revisions may interpret it (e.g., as a function to invoke).
+`EXECUTE(F)` names a **function to invoke once the loop exits by its
+condition** — the Homestuck reading of "when the subject dies, EXECUTE
+the action." On reaching the loop's exit:
+
+1. The subject `V` is read. For a normal loop it is dead (the condition
+   failed); for an inverted loop it is alive.
+2. `F` is called with `V` as its single argument. `F` is resolved like
+   any function call (§4.4.13): a user function (`importf`) receives `V`
+   as its composed argument; a builtin (`import builtin`) is called as
+   `F(V, NULL)`. The result is discarded.
+
+The canonical idiom `EXECUTE(NULL)` is the **no-op**: `NULL` is the
+predefined empty object, not a function, so no call is emitted. Any
+other `IDENT` must be a declared function (sema rejects an undeclared
+name with the same error as a bad function call).
+
+`EXECUTE` fires **only on the condition-false exit**. A `THIS.DIE()`
+inside the body returns from the enclosing function before reaching the
+exit, so `F` does not run — `EXECUTE` is the subject's death action, not
+a finalizer that survives an abrupt `THIS.DIE` (§4.5). The loop never
+entering (subject dead at entry) still counts as a condition-false exit,
+so `F` runs.
 
 With an `EXECUTE` postfix, the construct terminates with `;`. Without
 `EXECUTE`, the closing `}` is the terminator (no `;`).
@@ -1101,8 +1119,8 @@ iteration; the sleep uses the same semantics as the `sleep` statement
 (§4.4.19), so a dead/non-positive `N` makes the pause a no-op.
 
 The loop has no liveness guard and no count: the **only** exits are the
-body terminating the activation (`THIS.DIE()` / `EXECUTE`) or process
-death (a watched signal, `ath_halt`, a fatal signal). It is the
+body terminating the activation (`THIS.DIE()`) or process death (a
+watched signal, `ath_halt`, a fatal signal). It is the
 canonical "do this every N ms" daemon construct. Recurrence lives here,
 in the loop — never in a liveness object, which could not come back
 alive without violating one-way death (§4.1). Code textually after an

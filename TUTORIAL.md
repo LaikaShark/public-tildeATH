@@ -322,16 +322,29 @@ never runs.
 An optional `EXECUTE(IDENT)` may follow the closing brace:
 
 ```ath
+importf "cleanup.ath" as CLEANUP;
 ~ATH(V) {
     statements
-} EXECUTE(NULL);
+} EXECUTE(CLEANUP);
 ```
 
-The identifier inside `EXECUTE(...)` is parsed and scope-checked but
-has no current runtime effect. It is accepted for syntactic
-compatibility with surface-level Homestuck `~ATH` source. With the
-postfix, the construct terminates with `;`; without it, the closing
-`}` is the terminator and no `;` follows.
+`EXECUTE(F)` calls the function `F` once, when the loop exits by its
+condition, passing the subject `V` (dead, for a normal loop) as `F`'s
+argument. It is the Homestuck "when the subject dies, do the action"
+hook — handy for an after-loop report or cleanup.
+
+```ath
+~ATH(V) { ... } EXECUTE(NULL);   // the canonical no-op
+```
+
+`EXECUTE(NULL)` runs nothing — `NULL` is the empty object, not a
+function. Any other name must be a declared function. The hook fires
+**only** on the normal (condition-false) exit; a `THIS.DIE()` inside the
+body returns before the loop's exit, so `F` does not run — `EXECUTE` is
+a death action, not a guaranteed finalizer.
+
+With the postfix, the construct terminates with `;`; without it, the
+closing `}` is the terminator and no `;` follows.
 
 ### 7.3 Exiting a loop by rebinding
 
