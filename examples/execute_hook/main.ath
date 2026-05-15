@@ -1,0 +1,18 @@
+// Tier 4h: the EXECUTE(F) postfix (§4.4.4) runs function F once the loop
+// exits naturally, passing the now-dead subject as F's argument. A
+// THIS.DIE() inside the body returns past the hook, so F would not run;
+// here the loop ends by killing its subject, so FAREWELL fires.
+//
+//   athc examples/execute_hook/main.ath -o eh && ./eh
+//   # working / farewell / after
+
+importf "farewell.ath" as FAREWELL;
+import number 1 as V;
+
+~ATH(V) {
+    print working;
+    V.DIE();
+} EXECUTE(FAREWELL);
+
+print after;
+THIS.DIE();

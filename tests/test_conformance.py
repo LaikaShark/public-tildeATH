@@ -399,6 +399,12 @@ CASES = [
         "beat\n",
         id="tier4g_every_loop",
     ),
+    pytest.param(
+        "execute_hook/main.ath",
+        None,
+        "working\nfarewell\nafter\n",
+        id="tier4h_execute_postfix_hook",
+    ),
 ]
 
 

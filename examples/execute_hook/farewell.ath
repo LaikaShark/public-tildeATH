@@ -1,0 +1,4 @@
+// Called by an EXECUTE(...) postfix; receives the loop's dead subject as
+// ARGS (unused here) and prints a parting line.
+print farewell;
+THIS.DIE();

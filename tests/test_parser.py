@@ -167,6 +167,7 @@ def test_ath_loop_with_execute_suffix():
     s = p.statements[0]
     assert isinstance(s, AthLoop)
     assert s.var == "V"
+    assert s.execute == "NULL"
 
 
 def test_ath_loop_inversion_plus_execute():
@@ -174,6 +175,12 @@ def test_ath_loop_inversion_plus_execute():
     s = p.statements[0]
     assert isinstance(s, AthLoop)
     assert s.inverted is True
+    assert s.execute == "F"
+
+
+def test_ath_loop_without_execute_has_none():
+    p = parse("~ATH(V) { print x; }")
+    assert p.statements[0].execute is None
 
 
 def test_ath_loop_empty_body():

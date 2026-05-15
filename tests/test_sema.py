@@ -419,3 +419,12 @@ def test_text_ident_part_must_be_in_scope():
 
 def test_text_introduces_target():
     check('text "hi" as M; print done;')
+
+
+def test_execute_undeclared_function_errors():
+    with pytest.raises(SemaError, match="GHOST.*not declared"):
+        check("import number 1 as V; ~ATH(V) { } EXECUTE(GHOST);")
+
+
+def test_execute_null_is_noop_ok():
+    check("import number 1 as V; ~ATH(V) { } EXECUTE(NULL);")
