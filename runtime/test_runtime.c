@@ -1146,10 +1146,15 @@ int main(void) {
         assert(child > 0);
         ath_obj *pw = ath_alloc_watching_pid(ath_alloc_number(child));
         assert(ath_is_alive(pw));               /* child running */
+        /* A clone inherits the pid watch (§4.4.18 "same intrinsic
+         * mortality"), so it dies with the process too. */
+        ath_obj *pw_clone = ath_clone(pw);
+        assert(ath_is_alive(pw_clone));
         kill(child, SIGKILL);
         int status;
         waitpid(child, &status, 0);             /* reap (avoid zombie) */
         assert(!ath_is_alive(pw));              /* child gone */
+        assert(!ath_is_alive(pw_clone));        /* clone inherited the watch */
 
         /* Born dead on a bad pid payload. */
         assert(!ath_is_alive(ath_alloc_watching_pid(ath_alloc_number(0))));
@@ -1164,11 +1169,14 @@ int main(void) {
         fclose(mf);
         ath_obj *mw = ath_alloc_watching_mtime(mp);
         assert(ath_is_alive(mw));               /* unchanged */
+        ath_obj *mw_clone = ath_clone(mw);      /* inherits the mtime watch */
+        assert(ath_is_alive(mw_clone));
         struct timeval tv[2];
         tv[0].tv_sec = 1000; tv[0].tv_usec = 0;
         tv[1].tv_sec = 1000; tv[1].tv_usec = 0;
         assert(utimes(mp, tv) == 0);            /* force a different mtime */
         assert(!ath_is_alive(mw));              /* changed → dead */
+        assert(!ath_is_alive(mw_clone));        /* clone sees the change too */
 
         /* A watcher on a since-deleted file is dead too. */
         ath_obj *mw2 = ath_alloc_watching_mtime(mp);

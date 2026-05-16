@@ -958,6 +958,14 @@ ath_obj *ath_clone(ath_obj *v) {
     w->watch_path = v->watch_path;
     w->is_oneshot = v->is_oneshot;
     w->awaiting_signal = v->awaiting_signal;
+    /* §4.4.12 process/mtime watches are mortality conditions like the
+     * others, so a clone must inherit them to keep "the same intrinsic
+     * mortality" (§4.4.18). mtime_path is shared by pointer, like
+     * watch_path above (objects are never freed). */
+    w->watch_pid = v->watch_pid;
+    w->mtime_path = v->mtime_path;
+    w->mtime_sec = v->mtime_sec;
+    w->mtime_nsec = v->mtime_nsec;
     w->has_value = v->has_value;
     w->value = v->value;
     w->dep_mode = v->dep_mode;
