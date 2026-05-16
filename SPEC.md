@@ -215,11 +215,13 @@ import-stmt   = import-concept
               | import-number ;
 
 import-concept
-              = 'import' IDENT+ ';' ;
-                (* the last IDENT is the variable bound; preceding IDENTs
-                   are metadata, joined with single spaces. The first IDENT
-                   must not be the contextual marker 'builtin' or 'number'
-                   (matched case-insensitively). *)
+              = 'import' IDENT+ IDENT ';' ;
+                (* at least TWO IDENTs: one or more metadata words (joined
+                   with single spaces into the concept name) followed by the
+                   variable bound. A bare `import VAR;` (single IDENT) is a
+                   compile-time error (§6.1). The first IDENT must not be the
+                   contextual marker 'builtin' or 'number' (matched
+                   case-insensitively). *)
 
 import-builtin
               = 'import' 'builtin' IDENT 'as' IDENT ';' ;
@@ -415,9 +417,11 @@ Reading the variable always reads its current binding.
 
 #### 4.4.1 `import NAME... VAR;` (concept form)
 
-One or more IDENTs follow `import`. The **last** IDENT is `VAR`, the
-variable to bind. Any preceding IDENTs are metadata, joined by single
-spaces into a "concept name."
+**Two or more** IDENTs follow `import`. The **last** IDENT is `VAR`, the
+variable to bind. The one-or-more preceding IDENTs are metadata, joined
+by single spaces into a "concept name." A bare `import VAR;` with no
+metadata word is a compile-time error (§6.1) — every concept import
+carries at least one concept word.
 
 The first IDENT after `import` must not be the contextual marker
 `builtin` or `number` (matched case-insensitively). Those words dispatch
@@ -452,6 +456,19 @@ to plain alive.
 If `L`, `R`, and `V` overlap, the reads in step 1–3 happen before the writes
 in step 4. If `L == R` literally (same identifier), the second write wins
 (`R`'s value is what remains bound).
+
+**NULL and dead sources.** Step 2's test is pointer identity against the
+`NULL` singleton (§4.2), **not** a liveness check:
+
+- If `o` is `NULL` (V unbound, or bound to the dead singleton), both `L`
+  and `R` are bound to `NULL`. No halves are allocated, nothing is
+  mutated. This is the only outcome that yields dead children.
+- If `o` is a real object that is **dead** (e.g. killed via `.DIE()` but
+  not the `NULL` singleton), decompose proceeds normally: on first
+  decomposition it allocates two **fresh alive** halves and caches them on
+  `o`; thereafter it returns those same halves. A dead parent therefore
+  hands back *live* children. Liveness does not propagate downward through
+  decomposition — only the `NULL` singleton is barren.
 
 #### 4.4.3 `BIFURCATE [L, R] V;` (compose)
 
@@ -2170,7 +2187,10 @@ v0 errors fall into two classes:
 
 - Lexical: unterminated `/*`, unterminated `"..."`, missing space after
   `print`, illegal character.
-- Syntactic: any deviation from the grammar in §3.
+- Syntactic: any deviation from the grammar in §3. This includes a
+  concept `import` with no metadata word (a bare `import VAR;`): a
+  concept import requires at least one metadata word before `VAR`
+  (§4.4.1).
 - Reference to an unbound name in any read position, checked syntactically:
   a name is in scope if introduced by some preceding statement in the same
   block or an enclosing block. The scope is per-activation — function
