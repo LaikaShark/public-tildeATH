@@ -60,7 +60,8 @@ KEYWORD     := 'import' | 'importf' | 'as' | 'watch' | 'BIFURCATE'
               | 'print' | 'INPUT' | 'PRINT2' | 'EXECUTE'
               | 'BRANCH' | 'ELSE' | 'CLONE'
               | 'sleep' | 'TIMER'
-              | 'read' | 'write' | 'append' | 'close'      [matched case-insensitively]
+              | 'read' | 'write' | 'append' | 'close'
+              | 'text' | 'loop' | 'every'                   [matched case-insensitively]
 LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
@@ -75,7 +76,8 @@ parser checks for their literal value at specific positions:
 
 - `builtin` and `number` as the second token after `import` (§4.4.13,
   §4.4.14).
-- `signal` as the second token after `watch` (§4.4.12).
+- `signal`, `pid`, and `mtime` as the second token after `watch`
+  (§4.4.12).
 - `to` between the source ident and the destination string in
   `write` and `append` (§4.4.22, §4.4.23).
 
@@ -105,7 +107,7 @@ identifier):
 
 - Active: `import`, `importf`, `as`, `watch`, `BIFURCATE`, `print`,
   `INPUT`, `PRINT2`, `EXECUTE`, `BRANCH`, `ELSE`, `CLONE`, `sleep`,
-  `TIMER`, `read`, `write`, `append`, `close`.
+  `TIMER`, `read`, `write`, `append`, `close`, `text`, `loop`, `every`.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
 they follow the case-sensitive identifier rule. The names `this`, `Null`,
@@ -204,7 +206,9 @@ statement     = import-stmt
               | write-stmt
               | append-stmt
               | close-stmt
-              | text-stmt ;
+              | text-stmt
+              | loop-stmt
+              | every-stmt ;
 
 import-stmt   = import-concept
               | import-builtin
@@ -234,11 +238,14 @@ importf-stmt  = 'importf' STRING 'as' IDENT ';'
                    angle form: name is resolved against ATH_PATH (§5.4),
                    appending '.ath' to the bare identifier. *)
 
-watch-stmt    = 'watch' STRING 'as' IDENT ';'              (* file form *)
-              | 'watch' 'signal' IDENT 'as' IDENT ';' ;   (* signal form *)
-                (* 'signal' is a *contextual* keyword: a bare IDENT whose
-                   value matches "signal" case-insensitively. Outside the
-                   second token after 'watch' it is a normal identifier. *)
+watch-stmt    = 'watch' STRING 'as' IDENT ';'              (* file form   *)
+              | 'watch' 'signal' IDENT 'as' IDENT ';'      (* signal form *)
+              | 'watch' 'pid' IDENT 'as' IDENT ';'         (* pid form    *)
+              | 'watch' 'mtime' STRING 'as' IDENT ';' ;    (* mtime form  *)
+                (* 'signal', 'pid', and 'mtime' are *contextual* keywords:
+                   bare IDENTs recognized only as the second token after
+                   'watch' (case-insensitive). Elsewhere they are normal
+                   identifiers. See §4.4.12. *)
 
 bifurcate-stmt
               = decompose-stmt
@@ -322,6 +329,16 @@ text-part     = STRING | IDENT ;
                    through TO_STRING; existing cons-lists pass through).
                    Parts are folded left to right with CONCAT.
                    See §4.4.25. *)
+
+loop-stmt     = 'loop' IDENT '{' statement* '}' ;
+                (* Run the body exactly IDENT.value times (count snapshotted
+                   on entry via ath_count_of; dead/payload-less/negative
+                   runs zero times). Not a liveness loop. See §4.4.26. *)
+
+every-stmt    = 'every' IDENT '{' statement* '}' ;
+                (* Run the body, sleep IDENT.value ms (re-read each pass),
+                   repeat forever. Only exits are THIS.DIE() or process
+                   death. See §4.4.27. *)
 
 Notes:
 
@@ -1791,6 +1808,23 @@ typedef struct ath_obj {
      *                              once both observed dead.
      * Set exclusively by ath_or; everything else leaves it at 0. */
     int dep_mode;
+
+    /* §4.6 character identity. is_char nonzero iff char_code (0..255)
+     * carries this object's character. Set by ath_char_atom and copied by
+     * ath_clone, so a snapshot of a character atom (e.g. the result of the
+     * subscript form S[N], §4.4.15) is still recognized as that character. */
+    int            is_char;
+    int            char_code;
+
+    /* §4.4.12 extended watch sources, appended after the codegen-modeled
+     * prefix. watch_pid > 0 ties liveness to a running process (dies when
+     * kill(pid,0) reports ESRCH). mtime_path, when non-NULL, ties liveness
+     * to a file's modification time captured at allocation. Both are
+     * monotonic — process exit and the first mtime change are permanent. */
+    int            watch_pid;
+    const char    *mtime_path;
+    int64_t        mtime_sec;
+    int64_t        mtime_nsec;
 } ath_obj;
 ```
 
@@ -1825,9 +1859,14 @@ ath_obj *ath_alloc_with_lifetime(double min_s, double max_s);
 ath_obj *ath_alloc_watching_file(const char *path);
 ath_obj *ath_alloc_watching_signal(int signum);
 ath_obj *ath_alloc_watching_signal_by_name(const char *name);
+ath_obj *ath_alloc_watching_pid(ath_obj *n);      /* §4.4.12 watch pid  */
+ath_obj *ath_alloc_watching_mtime(const char *p); /* §4.4.12 watch mtime */
 ath_obj *ath_alloc_oneshot(void);
 ath_obj *ath_alloc_from_library(const char *name);
 int      ath_library_lookup(const char *name, double *min_out, double *max_out);
+/* Registers a runtime lifetime-library entry; emitted in main's prologue
+ * for each built-in and -D/--define-lifetime range (§5.3.1). */
+void     ath_register_lifetime(const char *name, double min_s, double max_s);
 
 /* Numeric payload + arithmetic (§4.8) */
 ath_obj *ath_alloc_number(int64_t v);
@@ -1845,6 +1884,24 @@ ath_obj *ath_gt(ath_obj *x, ath_obj *y);
 ath_obj *ath_le(ath_obj *x, ath_obj *y);
 ath_obj *ath_ge(ath_obj *x, ath_obj *y);
 ath_obj *ath_ne(ath_obj *x, ath_obj *y);
+
+/* Second-wave numeric built-ins (§4.8.2). Unary ops take a dummy second
+ * operand. ath_pow/abs/neg/min/max/gcd/sign are arithmetic; the band/bor/
+ * bxor/bnot/shl/shr group is bitwise; ath_clamp takes a (lo, hi) pair. */
+ath_obj *ath_pow(ath_obj *x, ath_obj *y);
+ath_obj *ath_abs(ath_obj *x, ath_obj *unused);
+ath_obj *ath_neg(ath_obj *x, ath_obj *unused);
+ath_obj *ath_min(ath_obj *x, ath_obj *y);
+ath_obj *ath_max(ath_obj *x, ath_obj *y);
+ath_obj *ath_gcd(ath_obj *x, ath_obj *y);
+ath_obj *ath_sign(ath_obj *x, ath_obj *unused);
+ath_obj *ath_band(ath_obj *x, ath_obj *y);
+ath_obj *ath_bor(ath_obj *x, ath_obj *y);
+ath_obj *ath_bxor(ath_obj *x, ath_obj *y);
+ath_obj *ath_bnot(ath_obj *x, ath_obj *unused);
+ath_obj *ath_shl(ath_obj *x, ath_obj *y);
+ath_obj *ath_shr(ath_obj *x, ath_obj *y);
+ath_obj *ath_clamp(ath_obj *x, ath_obj *pair);
 
 /* Logical combinators over verdicts (§4.8.3). NOT is not provided —
  * see the §4.8.3 commentary. */
@@ -1867,6 +1924,58 @@ ath_obj *ath_slice(ath_obj *s, ath_obj *range);
 ath_obj *ath_find(ath_obj *hay, ath_obj *needle);
 ath_obj *ath_replace(ath_obj *s, ath_obj *pair);
 ath_obj *ath_replace_all(ath_obj *s, ath_obj *pair);
+
+/* String predicates returning verdicts (§4.8.4). */
+ath_obj *ath_streq(ath_obj *a, ath_obj *b);
+ath_obj *ath_startswith(ath_obj *hay, ath_obj *prefix);
+ath_obj *ath_endswith(ath_obj *hay, ath_obj *suffix);
+ath_obj *ath_strlt(ath_obj *a, ath_obj *b);
+ath_obj *ath_strgt(ath_obj *a, ath_obj *b);
+ath_obj *ath_contains(ath_obj *hay, ath_obj *needle);
+ath_obj *ath_count(ath_obj *hay, ath_obj *needle);   /* occurrence count */
+ath_obj *ath_compare(ath_obj *a, ath_obj *b);        /* -1 / 0 / 1 */
+
+/* String transforms (§4.8.4). Unary ops take a dummy second operand;
+ * the *_chars / *_with / repeat / pad family take an operand or pair. */
+ath_obj *ath_lower(ath_obj *s, ath_obj *unused);
+ath_obj *ath_upper(ath_obj *s, ath_obj *unused);
+ath_obj *ath_trim(ath_obj *s, ath_obj *unused);
+ath_obj *ath_lstrip(ath_obj *s, ath_obj *unused);
+ath_obj *ath_rstrip(ath_obj *s, ath_obj *unused);
+ath_obj *ath_reverse(ath_obj *s, ath_obj *unused);
+ath_obj *ath_capitalize(ath_obj *s, ath_obj *unused);
+ath_obj *ath_title(ath_obj *s, ath_obj *unused);
+ath_obj *ath_strip_chars(ath_obj *s, ath_obj *chars);
+ath_obj *ath_lstrip_chars(ath_obj *s, ath_obj *chars);
+ath_obj *ath_rstrip_chars(ath_obj *s, ath_obj *chars);
+ath_obj *ath_repeat(ath_obj *s, ath_obj *n);
+ath_obj *ath_pad_left(ath_obj *s, ath_obj *n);
+ath_obj *ath_pad_right(ath_obj *s, ath_obj *n);
+ath_obj *ath_pad_left_with(ath_obj *s, ath_obj *pair);
+ath_obj *ath_pad_right_with(ath_obj *s, ath_obj *pair);
+
+/* String indexing/search/codec (§4.8.4). */
+ath_obj *ath_rfind(ath_obj *hay, ath_obj *needle);
+ath_obj *ath_find_from(ath_obj *s, ath_obj *pair);   /* (needle, start) */
+ath_obj *ath_char_at(ath_obj *s, ath_obj *n);
+ath_obj *ath_ord(ath_obj *a, ath_obj *unused);
+ath_obj *ath_chr(ath_obj *n, ath_obj *unused);
+ath_obj *ath_split(ath_obj *s, ath_obj *sep);        /* string -> list  */
+ath_obj *ath_join(ath_obj *list, ath_obj *sep);      /* list -> string  */
+
+/* Generic list operations over any cons-list payload (§4.8.6). */
+ath_obj *ath_sum(ath_obj *list, ath_obj *unused);
+ath_obj *ath_product(ath_obj *list, ath_obj *unused);
+ath_obj *ath_maximum(ath_obj *list, ath_obj *unused);
+ath_obj *ath_minimum(ath_obj *list, ath_obj *unused);
+ath_obj *ath_member(ath_obj *list, ath_obj *x);
+ath_obj *ath_take(ath_obj *list, ath_obj *n);
+ath_obj *ath_drop(ath_obj *list, ath_obj *n);
+
+/* N-ary lifetime combinators over a list (§4.7). all_of/any_of build a
+ * dep-tracked verdict that is alive while every / any element is alive. */
+ath_obj *ath_all_of(ath_obj *list, ath_obj *unused);
+ath_obj *ath_any_of(ath_obj *list, ath_obj *unused);
 
 /* Shallow clone for non-destructive checking (SPEC §4.4.18). Copies all
  * fields of v except dep1/dep2, which are zeroed. */
@@ -1891,6 +2000,11 @@ ath_obj *ath_alloc_read_file(const char *path);
 ath_obj *ath_write_file(ath_obj *s, const char *path);
 ath_obj *ath_append_file(ath_obj *s, const char *path);
 void     ath_close(ath_obj *v);
+
+/* Extracts a non-negative int64 iteration count from a number object,
+ * clamped at 0 for dead/payload-less/negative inputs. Called by the
+ * `loop N` and `every N` statement codegen (§4.4.26-27). */
+int64_t  ath_count_of(ath_obj *n);
 
 /* program control */
 void     ath_halt(void) __attribute__((noreturn));
