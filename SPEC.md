@@ -22,15 +22,21 @@ decisions on points the reference interpreter leaves ambiguous.
 - `//` line comments and `/* ... */` block comments
 - Predefined names `THIS` and `NULL`
 
-### Deferred (reserved syntax — implementations must reject for v0)
+### Implemented since v0 (formerly deferred)
 
-- `V.DIE(ARG);` (function return form)
-- `importf "FILE" as FN;` and function call forms `FN [A,B]C;`, `FN A[B,C];`
-- `INPUT V;`, `PRINT2 V;`
-- The predefined name `ARGS`
-- Homestuck-surface syntax: `EXECUTE(...)` postfix, lowercase `bifurcate`,
-  `!VAR` inversion, multi-word concept names in `import`
-- Numeric, string, or list literal sugar
+These were reserved in the original v0 draft and are now part of the
+language — they are **not** rejected. Each is specified in §4:
+
+- `V.DIE(ARG);` return form (§4.4.5), and `importf` plus the function-call
+  forms `FN [A,B] C;` / `FN A [B,C];` (§4.4.9–4.4.11).
+- `INPUT V;` (§4.4.7), `PRINT2 V;` (§4.4.8), and the predefined name
+  `ARGS` in function bodies (§4.2).
+- Homestuck-surface syntax: the `EXECUTE(F)` postfix (§4.4.4), lowercase
+  `bifurcate`, `!VAR` loop inversion (§4.4.4), and multi-word concept
+  names in `import` (§4.4.1).
+- Numeric literals (`import number`, §4.4.14) and the numeric / string /
+  list builtins (§4.8). General literal sugar (e.g. inline list/string
+  literals) remains future work (§8).
 
 ---
 
@@ -59,7 +65,7 @@ LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensiti
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
 INT         := '-'? [0-9]+                     [signed int64 literal, §4.8]
-STRING      := '"' (any char except '"')* '"'  [no escapes in v1]
+STRING      := '"' (any char except '"')* '"'  [escapes \" \\ \n \t \r, §2.3]
 PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | ',' | ';' | '!'
 ```
 
@@ -540,8 +546,9 @@ Killing an already-dead object is a no-op.
 #### 4.4.6 `print TEXT;`
 
 Write `TEXT` to standard output, followed by a single line feed (`U+000A`).
-No interpretation of escape sequences. No flushing guarantees beyond what
-the C runtime provides.
+`TEXT`'s escape sequences (`\;` `\\` `\n` `\t` `\r`) are decoded at lex
+time (§2.4), so by this point `TEXT` is the already-decoded byte string.
+No flushing guarantees beyond what the C runtime provides.
 
 #### 4.4.7 `INPUT VAR;`
 
@@ -1164,7 +1171,7 @@ The encoding is deliberately the same as drocta `~ATH`'s `getStrObj` /
 
 ### 4.7 Lifetime extensions
 
-Every object carries five optional lifetime conditions in addition to
+Every object carries seven optional lifetime conditions in addition to
 its explicit `.DIE`-driven mortality:
 
 1. **Deadline.** A monotonic-clock timestamp (in seconds since some
@@ -1201,6 +1208,16 @@ its explicit `.DIE`-driven mortality:
    `read "PATH" as VAR;` (§4.4.21). Not copied by `CLONE` (§4.4.18),
    not propagated by `BIFURCATE` composition, not installed by
    `watch "PATH" as VAR;` (which is observation-only).
+6. **Watched pid.** A process id. When set, every `ath_is_alive`
+   observation calls `kill(pid, 0)`; the object becomes dead exactly
+   when that reports `ESRCH` (the process has exited and been reaped). A
+   permission error (`EPERM`) is not death, and a zombie counts as alive
+   until reaped. Set by `watch pid N as VAR;` (§4.4.12).
+7. **Watched mtime.** A filesystem path plus the modification time
+   (seconds + nanoseconds) captured at allocation. When set, every
+   observation `stat()`s the path; the object becomes dead once the
+   mtime differs from the captured value, or the file is gone. Set by
+   `watch mtime "PATH" as VAR;` (§4.4.12).
 
 These conditions are independent of the object's `alive` field — they
 are *additional* ways an object can be observed dead. An object with
@@ -1212,8 +1229,10 @@ range-based library entry (§5.3), or sets the one-shot flag when
 `NAME` matches the special entry `once`. `watch "PATH" as VAR;` sets
 the watched path (only). `read "PATH" as VAR;` (§4.4.21) sets the
 watched path *and* the ownership flag. `TIMER N as T;` (§4.4.20)
-sets the deadline. There are no other surface forms that set these
-— they are entry-point allocations, not mutators.
+sets the deadline. `watch pid N as VAR;` sets the watched pid and
+`watch mtime "PATH" as VAR;` the watched mtime (both §4.4.12). There
+are no other surface forms that set these — they are entry-point
+allocations, not mutators.
 
 The lifetime sampling is **uniform** over the library entry's range,
 seeded by the `ATH_SEED` environment variable if set (decimal unsigned
@@ -1539,7 +1558,7 @@ two-operand builtin. They fall into three kinds:
 |---|---|---|---|---|
 | `streq` | `STREQ [A, B] V;` | predicate | alive iff `A` and `B` are byte-identical | malformed `A` or `B` |
 | `startswith` | `STARTSWITH [HAY, PREFIX] V;` | predicate | alive iff `HAY` begins with `PREFIX` | malformed operand |
-| `endswith` | `ENDSWITH [HAY, SUFFIX] V;` | predicate | alive iff `HAY` ends with `SUFFIX` | dead operand |
+| `endswith` | `ENDSWITH [HAY, SUFFIX] V;` | predicate | alive iff `HAY` ends with `SUFFIX` | malformed operand |
 | `strlt` | `STRLT [A, B] V;` | predicate | alive iff `A` < `B` lexicographically (byte order) | dead operand; `A >= B` → dead verdict |
 | `strgt` | `STRGT [A, B] V;` | predicate | alive iff `A` > `B` lexicographically | dead operand; `A <= B` → dead verdict |
 | `lower` | `LOWER [S, _] R;` | transform | fresh copy of `S` with `A`–`Z` lowercased | `S` dead/malformed (→ `NULL`) |
@@ -2043,7 +2062,8 @@ v0 errors fall into two classes:
   block or an enclosing block. The scope is per-activation — function
   bodies have their own scope starting with `THIS`, `NULL`, `ARGS`.
 - Reference to an unknown function in a `funcall-stmt`: matched
-  case-insensitively against names registered by `importf`.
+  case-insensitively against names registered by `importf` or
+  `import builtin` (§4.4.13).
 - Binding `NULL` (any case variant in a write position) is rejected per §4.2.
 - File-not-found or parse error in an `importf` target. For the
   search-path form (§4.4.9), "not found" means no `ATH_PATH` entry and
@@ -2150,10 +2170,9 @@ empty pending v2+ features.)
   `~ATH` loop, or is the environment flat within an activation? (Currently
   flat per activation. Activations themselves are isolated.)
 - Should `import NAME VAR;` warn on duplicate `NAME` across distinct `VAR`s?
-- Should `print` support an escape mechanism for `;`?
 - Should `importf` registering a name twice be a hard error rather than
   last-wins?
-- Should `STRING` support escape sequences (`\n`, `\"`, `\\`)? Currently
-  no escapes in v1.
+- (Resolved.) `print` escapes `;` via `\;`, plus `\\ \n \t \r`. See §2.4.
+- (Resolved.) `STRING` supports the escapes `\" \\ \n \t \r`. See §2.3.
 - (Resolved.) `intern` mode hashes by raw pointer pair, not recursive
   structural identity. See §4.4.3.
