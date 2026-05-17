@@ -826,6 +826,15 @@ The result is born dead if any of the following holds:
 - The walk encounters `NULL` or a dead object before reaching position
   `n` (out-of-range).
 
+A born-dead failure result is a **fresh, payload-less, character-less
+dead object** — *not* the `NULL` singleton (§4.2). The distinction is
+observable: it exits a `~ATH(VAR)` guard like any dead object and carries
+no number or character for downstream arithmetic/`ORD`/`PRINT2`, but
+because it is a real object rather than `NULL`, decomposing it with
+`BIFURCATE VAR[L,R];` yields two **fresh alive** halves (the dead-source
+rule of §4.4.2), not dead ones. Code that means to test "did the
+subscript land?" should branch on `VAR`'s liveness, not decompose it.
+
 The result inherits both `S` and `N` as dependencies (§4.8.1), so
 killing either invalidates the indexed value on the next observation.
 
@@ -860,6 +869,11 @@ The result is born dead if:
   design, to keep failure-as-death uniform).
 - The walk encounters `NULL` or a dead object before reaching
   position `J` (out-of-range).
+
+As with `S[N]` (§4.4.15), a born-dead slice is a fresh, payload-less,
+non-`NULL` dead object: it fails liveness guards but decomposes into
+fresh alive halves, so test the slice by its liveness rather than by
+decomposing it.
 
 The result inherits `S` and the range pair as dependencies, and the
 range pair inherits `I` and `J`, so killing any of `S`, `I`, or `J`
@@ -1760,6 +1774,30 @@ inherit `LIST` and `N` as deps. There is no `map`/`filter`/`reduce`:
 the level of these fixed folds. `LENGTH` (§4.8.4) and the subscript
 forms `S[N]` / `S[I..J]` (§4.4.15–16) already cover length, indexing,
 and slicing for lists as well as strings.
+
+**Dead backbone vs. dead element.** Every generic list operation walks
+the right-spine under one guard: a cell is visited only while it is
+non-`NULL` **and alive**. The two ways a list can be "partially dead"
+therefore behave differently:
+
+- A **dead spine cell** (a cons cell on the backbone whose `alive` bit
+  is clear) acts as a **terminator**, indistinguishable from the `NULL`
+  end of the list. The walk stops *before* it; every element from that
+  cell onward is invisible. `LENGTH` counts only the live prefix; the
+  folds, `MEMBER`, and `TAKE`/`DROP` all see just that prefix. Killing a
+  backbone cell thus silently truncates the list at that point.
+- A **dead element** (the `left` head of a still-live spine cell) is not
+  a terminator — the walk continues past it — but its treatment is
+  per-operation: `SUM`/`PRODUCT`/`MAXIMUM`/`MINIMUM` born-die on it (a
+  dead or payload-less element poisons the whole fold); `MEMBER` simply
+  fails to match it and keeps scanning; `TAKE`/`DROP` copy the element
+  through **as-is**, so a dead element survives structurally in the
+  fresh result. `ALL_OF`/`ANY_OF` read elements as lifetimes, so a dead
+  element directly drives the combined verdict (see below).
+
+This matches `LENGTH`'s "empty is real, but a dead spine cell stops the
+count" rule (§4.8.4): liveness gates the **backbone**, while element
+liveness is a value-level concern each fold decides for itself.
 
 ##### n-ary lifetime combinators
 
