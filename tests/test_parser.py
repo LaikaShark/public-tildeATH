@@ -96,7 +96,30 @@ def test_print_statement():
     p = parse("print hello world;")
     s = p.statements[0]
     assert isinstance(s, PrintStmt)
-    assert s.text == "hello world"
+    assert len(s.parts) == 1
+    assert s.parts[0].kind == "lit"
+    assert s.parts[0].value == "hello world"
+
+
+def test_print_statement_with_interpolation():
+    p = parse("print Hi $NAME, count $N!;")
+    s = p.statements[0]
+    assert isinstance(s, PrintStmt)
+    shape = [(part.kind, part.value) for part in s.parts]
+    assert shape == [
+        ("lit", "Hi "),
+        ("var", "NAME"),
+        ("lit", ", count "),
+        ("var", "N"),
+        ("lit", "!"),
+    ]
+
+
+def test_print_statement_empty_has_no_parts():
+    p = parse("print ;")
+    s = p.statements[0]
+    assert isinstance(s, PrintStmt)
+    assert s.parts == []
 
 
 def test_input_statement():
@@ -498,9 +521,9 @@ def test_looptest_sample_parses():
     assert isinstance(loop.body[0], DecomposeStmt)
     assert isinstance(loop.body[1], DieStmt)
     assert isinstance(loop.body[2], PrintStmt)
-    assert loop.body[2].text == "APPLE"
+    assert loop.body[2].parts[0].value == "APPLE"
     assert isinstance(loop.body[3], PrintStmt)
-    assert loop.body[3].text == "ORANGE"
+    assert loop.body[3].parts[0].value == "ORANGE"
 
 
 # --- BRANCH / CLONE ---

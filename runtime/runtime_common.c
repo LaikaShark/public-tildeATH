@@ -139,10 +139,14 @@ int ath_is_alive(ath_obj *v) {
     return 1;
 }
 
-void ath_print(const char *text, size_t len) {
+void ath_print_bytes(const char *text, size_t len) {
     if (len > 0) {
         fwrite(text, 1, len, stdout);
     }
+}
+
+void ath_print(const char *text, size_t len) {
+    ath_print_bytes(text, len);
     fputc('\n', stdout);
 }
 
@@ -210,7 +214,7 @@ ath_obj *ath_input_line(void) {
     return acc;
 }
 
-void ath_print_obj(ath_obj *s) {
+void ath_print_obj_raw(ath_obj *s) {
     while (s != NULL && s != ath_NULL && ath_is_alive(s)) {
         ath_obj *l, *r;
         ath_decompose(s, &l, &r);
@@ -221,6 +225,10 @@ void ath_print_obj(ath_obj *s) {
         fputc(ch, stdout);
         s = r;
     }
+}
+
+void ath_print_obj(ath_obj *s) {
+    ath_print_obj_raw(s);
     fputc('\n', stdout);
 }
 

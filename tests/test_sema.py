@@ -421,6 +421,19 @@ def test_text_introduces_target():
     check('text "hi" as M; print done;')
 
 
+def test_print_interpolation_var_must_be_in_scope():
+    with pytest.raises(SemaError, match="GHOST.*not in scope"):
+        check("print hello $GHOST;")
+
+
+def test_print_literal_only_needs_no_scope():
+    check("print just a literal;")
+
+
+def test_print_interpolation_var_in_scope_ok():
+    check('text "hi" as S; print value $S;')
+
+
 def test_execute_undeclared_function_errors():
     with pytest.raises(SemaError, match="GHOST.*not declared"):
         check("import number 1 as V; ~ATH(V) { } EXECUTE(GHOST);")

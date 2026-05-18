@@ -252,9 +252,11 @@ def test_print_payload_basic():
 
 
 def test_print_payload_can_be_empty():
+    # An empty payload emits no literal part — just the keyword and ';'.
     toks = tokenize("print ;")
-    assert toks[1].kind is TokenKind.RAWTEXT
-    assert toks[1].value == ""
+    assert toks[0].kind is TokenKind.KW_PRINT
+    assert toks[1].kind is TokenKind.SEMI
+    assert not any(t.kind is TokenKind.RAWTEXT for t in toks)
 
 
 def test_print_payload_keeps_punctuation_verbatim():
@@ -292,6 +294,55 @@ def test_print_payload_unknown_escape_errors():
 def test_print_payload_trailing_backslash_errors():
     with pytest.raises(LexError, match="trailing backslash"):
         tokenize("print oops\\")
+
+
+def test_print_payload_interpolation_splits_into_parts():
+    toks = tokenize("print Hello $W done;")
+    # RAWTEXT("Hello ") PRINTVAR(W) RAWTEXT(" done") SEMI
+    kinds = [t.kind for t in toks[1:-1]]
+    assert kinds == [
+        TokenKind.RAWTEXT,
+        TokenKind.PRINTVAR,
+        TokenKind.RAWTEXT,
+        TokenKind.SEMI,
+    ]
+    assert toks[1].value == "Hello "
+    assert toks[2].value == "W"
+    assert toks[3].value == " done"
+
+
+def test_print_payload_adjacent_interpolations():
+    toks = tokenize("print $a$b;")
+    parts = [t for t in toks if t.kind is TokenKind.PRINTVAR]
+    assert [t.value for t in parts] == ["a", "b"]
+    # No empty literal run between adjacent vars.
+    assert not any(t.kind is TokenKind.RAWTEXT for t in toks)
+
+
+def test_print_payload_interpolation_stops_at_nonident():
+    # `$W.` — the name is just W; the '.' is literal text.
+    toks = tokenize("print $W.x;")
+    assert toks[1].kind is TokenKind.PRINTVAR
+    assert toks[1].value == "W"
+    assert toks[2].kind is TokenKind.RAWTEXT
+    assert toks[2].value == ".x"
+
+
+def test_print_payload_escaped_dollar_is_literal():
+    toks = tokenize(r"print cost \$5 and \$N;")
+    assert not any(t.kind is TokenKind.PRINTVAR for t in toks)
+    assert toks[1].kind is TokenKind.RAWTEXT
+    assert toks[1].value == "cost $5 and $N"
+
+
+def test_print_payload_bare_dollar_errors():
+    with pytest.raises(LexError, match=r"literal '\$' must be written"):
+        tokenize("print cost is $ 5;")
+
+
+def test_print_payload_dollar_before_semicolon_errors():
+    with pytest.raises(LexError, match=r"literal '\$' must be written"):
+        tokenize("print trailing $;")
 
 
 def test_print_without_semicolon_errors():

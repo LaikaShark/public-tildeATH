@@ -17,6 +17,7 @@ from athc.ast import (
     ImportStmt,
     InputStmt,
     Print2Stmt,
+    PrintPart,
     PrintStmt,
     Program,
     ReadStmt,
@@ -217,9 +218,23 @@ class Parser:
 
     def _parse_print(self) -> PrintStmt:
         kw = self._expect(TokenKind.KW_PRINT)
-        raw = self._expect(TokenKind.RAWTEXT)
+        # The lexer emits the payload as an alternating run of RAWTEXT
+        # (literal) and PRINTVAR (interpolation) tokens, terminated by ';'.
+        parts: list[PrintPart] = []
+        while True:
+            tok = self._peek()
+            if tok.kind is TokenKind.RAWTEXT:
+                self._advance()
+                parts.append(PrintPart(kind="lit", value=tok.value,
+                                       line=tok.line, col=tok.col))
+            elif tok.kind is TokenKind.PRINTVAR:
+                self._advance()
+                parts.append(PrintPart(kind="var", value=tok.value,
+                                       line=tok.line, col=tok.col))
+            else:
+                break
         self._expect(TokenKind.SEMI)
-        return PrintStmt(text=raw.value, line=kw.line, col=kw.col)
+        return PrintStmt(parts=parts, line=kw.line, col=kw.col)
 
     def _parse_input(self) -> InputStmt:
         kw = self._expect(TokenKind.KW_INPUT)

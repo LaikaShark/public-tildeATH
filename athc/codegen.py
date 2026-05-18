@@ -108,7 +108,12 @@ def _collect_names(stmts, names: set) -> None:
                 names.add(s.verdict)
         elif isinstance(s, CloseStmt):
             names.add(s.target)
-        # ImportFuncStmt and PrintStmt contribute no variable names.
+        elif isinstance(s, PrintStmt):
+            # Interpolated `$VAR` parts (§4.4.6) are reads; each needs a slot.
+            for part in s.parts:
+                if part.kind == "var":
+                    names.add(part.value)
+        # ImportFuncStmt contributes no variable names.
 
 
 class Codegen:
@@ -170,6 +175,13 @@ class Codegen:
             ir.FunctionType(ir.VoidType(), [self.i8.as_pointer(), self.size_t]),
             name="ath_print",
         )
+        # Newline-free primitives for the unified `print` statement: one
+        # `print` emits each part then a single trailing line feed (§4.4.6).
+        self.f_print_bytes = ir.Function(
+            self.module,
+            ir.FunctionType(ir.VoidType(), [self.i8.as_pointer(), self.size_t]),
+            name="ath_print_bytes",
+        )
         self.f_input = ir.Function(
             self.module,
             ir.FunctionType(self.obj_ptr, []),
@@ -179,6 +191,11 @@ class Codegen:
             self.module,
             ir.FunctionType(ir.VoidType(), [self.obj_ptr]),
             name="ath_print_obj",
+        )
+        self.f_print_obj_raw = ir.Function(
+            self.module,
+            ir.FunctionType(ir.VoidType(), [self.obj_ptr]),
+            name="ath_print_obj_raw",
         )
         self.f_alloc_from_library = ir.Function(
             self.module,
@@ -739,12 +756,25 @@ class FunctionEmitter:
             self._emit_return(builder)
 
     def _emit_print(self, builder: ir.IRBuilder, stmt: PrintStmt) -> None:
-        g, length = self.cg.make_string_global(stmt.text)
+        # Emit each part with a newline-free primitive, then exactly one
+        # trailing line feed for the whole statement (§4.4.6). A pure-literal
+        # print is thus byte-identical to the pre-interpolation behavior.
         zero = ir.Constant(self.cg.i32, 0)
-        ptr = builder.gep(g, [zero, zero], inbounds=True)
-        builder.call(
-            self.cg.f_print, [ptr, ir.Constant(self.cg.size_t, length)]
-        )
+
+        def emit_bytes(s: str) -> None:
+            g, length = self.cg.make_string_global(s)
+            ptr = builder.gep(g, [zero, zero], inbounds=True)
+            builder.call(
+                self.cg.f_print_bytes, [ptr, ir.Constant(self.cg.size_t, length)]
+            )
+
+        for part in stmt.parts:
+            if part.kind == "lit":
+                emit_bytes(part.value)
+            else:  # "var": interpolate the bound string, no trailing newline
+                val = self._read_var(builder, part.value)
+                builder.call(self.cg.f_print_obj_raw, [val])
+        emit_bytes("\n")
 
     def _emit_input(self, builder: ir.IRBuilder, stmt: InputStmt) -> None:
         result = builder.call(self.cg.f_input, [])

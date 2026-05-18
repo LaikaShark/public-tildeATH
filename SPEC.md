@@ -155,11 +155,18 @@ After the keyword `print`, the lexer enters a one-shot raw mode:
 1. Consume exactly one ASCII space (`U+0020`). It is an error if the next
    character is not a space.
 2. Capture every subsequent character (including newlines, brackets, anything)
-   into a `RAWTEXT` token, stopping immediately before an unescaped `;`.
-3. The captured text may be empty.
+   up to — but not including — the first unescaped `;`, splitting it into an
+   ordered run of **parts**:
+   - A maximal run of literal characters becomes a `RAWTEXT` part.
+   - A `$` immediately followed by an identifier start character
+     (`[A-Za-z_]`) begins an **interpolation part**: the lexer reads the
+     following `[A-Za-z_][A-Za-z0-9_]*` as a (case-sensitive) variable name
+     and emits a `PRINTVAR` part. At run time the named variable's current
+     binding is walked as a string (§4.6) and written in place; see §4.4.6.
+3. The payload may be empty (zero parts).
 4. The `;` is then consumed as a normal token.
 
-The capture decodes the following escape sequences:
+The literal runs decode the following escape sequences:
 
 | Source | Decoded |
 |--------|---------|
@@ -168,14 +175,17 @@ The capture decodes the following escape sequences:
 | `\n`   | line feed (U+000A) |
 | `\t`   | tab (U+0009) |
 | `\r`   | carriage return (U+000D) |
+| `\$`   | `$` (U+0024) |
 
 A backslash followed by any other character (including end-of-input)
 is a compile-time lexical error. The diagnostic reports the position
 of the backslash and the recognized set.
 
 A literal semicolon in the payload requires the `\;` escape; otherwise
-the unescaped `;` terminates the `RAWTEXT`. A literal backslash
-requires `\\`.
+the unescaped `;` terminates the payload. A literal backslash requires
+`\\`. A **literal `$`** requires `\$`: a `$` that is *not* followed by an
+identifier-start character is a compile-time lexical error (so the
+interpolation marker is never ambiguous).
 
 ---
 
@@ -577,12 +587,33 @@ hasn't happened yet.
 
 Killing an already-dead object is a no-op.
 
-#### 4.4.6 `print TEXT;`
+#### 4.4.6 `print PAYLOAD;`
 
-Write `TEXT` to standard output, followed by a single line feed (`U+000A`).
-`TEXT`'s escape sequences (`\;` `\\` `\n` `\t` `\r`) are decoded at lex
-time (§2.4), so by this point `TEXT` is the already-decoded byte string.
-No flushing guarantees beyond what the C runtime provides.
+Write the `PAYLOAD` to standard output, followed by **exactly one** line
+feed (`U+000A`) for the whole statement. The payload is the ordered run of
+parts produced by §2.4; each part is emitted in source order with no
+inter-part separator:
+
+- A **literal part** contributes its already-decoded bytes (its escape
+  sequences `\;` `\\` `\n` `\t` `\r` `\$` were resolved at lex time).
+- An **interpolation part** `$VAR` reads `VAR`'s current binding and walks
+  it as a string per §4.6 — exactly the walk formerly performed by
+  `PRINT2` (§4.4.8, removed): decompose each cell, write the recognized
+  character atom, stop on a dead object, `NULL`, or the first unrecognized
+  left half. A dead, `NULL`, or non-string `VAR` therefore contributes
+  nothing (or a truncated prefix); it never aborts the statement or
+  crashes (§6.2). To print a numeric payload, convert it with `TO_STRING`
+  first (§4.8.2).
+
+A payload with zero parts (`print ;`) writes just the trailing line feed.
+
+`$VAR` is a **read position**: an unbound interpolation variable is a
+compile-time error (§6.1), the same as any other read — unlike literal
+text, a mistyped `$NAME` is caught rather than printed verbatim.
+
+No flushing guarantees beyond what the C runtime provides. (A single
+`print` of N parts is byte-for-byte identical to emitting each part with
+no newline and then one final line feed.)
 
 #### 4.4.7 `INPUT VAR;`
 
@@ -1899,10 +1930,15 @@ void     ath_decompose(ath_obj *v, ath_obj **l_out, ath_obj **r_out);
 void     ath_die(ath_obj *v);
 int      ath_is_alive(ath_obj *v);
 
-/* I/O */
+/* I/O. The *_bytes / *_obj_raw forms write WITHOUT a trailing newline;
+ * ath_print / ath_print_obj are those plus one line feed. The unified
+ * `print` statement (§4.4.6) emits its parts via the raw forms and adds a
+ * single trailing newline for the whole statement. */
 void     ath_print(const char *text, size_t len);
+void     ath_print_bytes(const char *text, size_t len);
 ath_obj *ath_input_line(void);
 void     ath_print_obj(ath_obj *s);
+void     ath_print_obj_raw(ath_obj *s);
 ath_obj *ath_char_atom(int c);
 
 /* Literal-string + coercion helpers used by the `text` statement (§4.4.25). */

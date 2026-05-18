@@ -86,6 +86,14 @@ void     ath_die(ath_obj *v);
 int      ath_is_alive(ath_obj *v);
 void     ath_print(const char *text, size_t len);
 
+/* Newline-free print primitives for the unified `print` statement
+ * (SPEC §4.4.6): one `print` emits its parts then exactly one trailing
+ * line feed. ath_print_bytes writes `len` raw bytes; ath_print_obj_raw
+ * walks an object as a string (§4.6) — both WITHOUT a trailing newline.
+ * ath_print / ath_print_obj are these plus a line feed. */
+void     ath_print_bytes(const char *text, size_t len);
+void     ath_print_obj_raw(ath_obj *s);
+
 /* String I/O. Strings are cons-lists of character atoms per SPEC §4.6. */
 ath_obj *ath_input_line(void);
 void     ath_print_obj(ath_obj *s);

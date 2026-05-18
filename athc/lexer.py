@@ -42,6 +42,7 @@ class TokenKind(Enum):
     DOTDOT = auto()
     INT = auto()
     RAWTEXT = auto()
+    PRINTVAR = auto()
     RESERVED = auto()
     EOF = auto()
 
@@ -197,6 +198,7 @@ class Lexer:
         "n": "\n",
         "t": "\t",
         "r": "\r",
+        "$": "$",
     }
     _STRING_ESCAPES = {
         '"': '"',
@@ -214,6 +216,14 @@ class Lexer:
         self._advance()
         start_line, start_col = self.line, self.col
         buf: list[str] = []
+        lit_line, lit_col = start_line, start_col
+
+        def flush_literal() -> None:
+            # Emit the accumulated literal run, if any, as one RAWTEXT part.
+            if buf:
+                self._emit(TokenKind.RAWTEXT, "".join(buf), lit_line, lit_col)
+                buf.clear()
+
         while self.pos < len(self.src) and self._peek() != ";":
             c = self._peek()
             if c == "\\":
@@ -228,19 +238,37 @@ class Lexer:
                 if nxt not in self._PRINT_ESCAPES:
                     raise LexError(
                         f"unknown escape sequence '\\{nxt}' in 'print' payload "
-                        f"(recognized: \\; \\\\ \\n \\t \\r)",
+                        f"(recognized: \\; \\\\ \\n \\t \\r \\$)",
                         bs_line, bs_col,
                     )
+                if not buf:
+                    lit_line, lit_col = bs_line, bs_col
                 buf.append(self._PRINT_ESCAPES[nxt])
                 self._advance()
+            elif c == "$":
+                # `$NAME` interpolates the runtime string bound to NAME
+                # (§4.4.6). A `$` not before an identifier must be `\$`.
+                dollar_line, dollar_col = self.line, self.col
+                self._advance()
+                name = self._read_word()
+                if not name:
+                    raise LexError(
+                        "a literal '$' must be written '\\$'; otherwise '$' "
+                        "must be followed by an identifier to interpolate",
+                        dollar_line, dollar_col,
+                    )
+                flush_literal()
+                self._emit(TokenKind.PRINTVAR, name, dollar_line, dollar_col)
             else:
+                if not buf:
+                    lit_line, lit_col = self.line, self.col
                 buf.append(c)
                 self._advance()
         if self.pos >= len(self.src):
             raise LexError(
                 "unterminated 'print' statement (missing ';')", start_line, start_col
             )
-        self._emit(TokenKind.RAWTEXT, "".join(buf), start_line, start_col)
+        flush_literal()
 
     def tokenize(self) -> list[Token]:
         while True:

@@ -124,7 +124,9 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             if s.arg is not None:
                 _check_read(s.arg, defined, s)
         elif isinstance(s, PrintStmt):
-            pass
+            for part in s.parts:
+                if part.kind == "var":
+                    _check_read(part.value, defined, part)
         elif isinstance(s, InputStmt):
             _check_write(s.var, s)
             defined.add(s.var)

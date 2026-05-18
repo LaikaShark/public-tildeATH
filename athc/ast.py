@@ -69,8 +69,18 @@ class DieStmt:
 
 
 @dataclass
+class PrintPart:
+    # kind="lit": value is decoded literal bytes.
+    # kind="var": value is a variable name interpolated as a string (§4.4.6).
+    kind: str
+    value: str
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
 class PrintStmt:
-    text: str
+    parts: list  # list[PrintPart], in source order
     line: int
     col: int
 
