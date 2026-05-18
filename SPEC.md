@@ -29,8 +29,8 @@ language — they are **not** rejected. Each is specified in §4:
 
 - `V.DIE(ARG);` return form (§4.4.5), and `importf` plus the function-call
   forms `FN [A,B] C;` / `FN A [B,C];` (§4.4.9–4.4.11).
-- `INPUT V;` (§4.4.7), `PRINT2 V;` (§4.4.8), and the predefined name
-  `ARGS` in function bodies (§4.2).
+- `INPUT V;` (§4.4.7), `print` with `$VAR` interpolation (§4.4.6), and the
+  predefined name `ARGS` in function bodies (§4.2).
 - Homestuck-surface syntax: the `EXECUTE(F)` postfix (§4.4.4), lowercase
   `bifurcate`, `!VAR` loop inversion (§4.4.4), and multi-word concept
   names in `import` (§4.4.1).
@@ -57,7 +57,7 @@ Comments:
 
 ```
 KEYWORD     := 'import' | 'importf' | 'as' | 'watch' | 'BIFURCATE'
-              | 'print' | 'INPUT' | 'PRINT2' | 'EXECUTE'
+              | 'print' | 'INPUT' | 'EXECUTE'
               | 'BRANCH' | 'ELSE' | 'CLONE'
               | 'sleep' | 'TIMER'
               | 'read' | 'write' | 'append' | 'close'
@@ -106,7 +106,7 @@ variables.
 identifier):
 
 - Active: `import`, `importf`, `as`, `watch`, `BIFURCATE`, `print`,
-  `INPUT`, `PRINT2`, `EXECUTE`, `BRANCH`, `ELSE`, `CLONE`, `sleep`,
+  `INPUT`, `EXECUTE`, `BRANCH`, `ELSE`, `CLONE`, `sleep`,
   `TIMER`, `read`, `write`, `append`, `close`, `text`, `loop`, `every`.
 
 `THIS` and `NULL` are predefined *identifiers* (§4.2), not reserved words —
@@ -204,7 +204,6 @@ statement     = import-stmt
               | die-stmt
               | print-stmt
               | input-stmt
-              | print2-stmt
               | funcall-stmt
               | subscript-stmt
               | slice-stmt
@@ -273,11 +272,15 @@ ath-loop      = '~ATH' '(' [ '!' ] IDENT ')' '{' statement* '}'
 
 die-stmt      = IDENT '.DIE' '(' [ IDENT ] ')' ';' ;
 
-print-stmt    = 'print' RAWTEXT ';' ;
+print-stmt    = 'print' print-part* ';' ;
+print-part    = RAWTEXT | PRINTVAR ;
+                (* The lexer splits the raw payload (§2.4) into literal
+                   RAWTEXT parts and `$VAR` interpolation PRINTVAR parts.
+                   Each is emitted in order; the statement prints them with
+                   one trailing newline. Zero parts prints a blank line.
+                   See §4.4.6. *)
 
 input-stmt    = 'INPUT' IDENT ';' ;
-
-print2-stmt   = 'PRINT2' IDENT ';' ;
 
 funcall-stmt  = IDENT '[' IDENT ',' IDENT ']' IDENT ';'        (* compose-arg form *)
               | IDENT IDENT '[' IDENT ',' IDENT ']' ';' ;      (* decompose-result form *)
@@ -628,21 +631,14 @@ the implementation's input buffer (≥ 4096 bytes) are split: the first
 buffer-worth becomes the string returned by this call; the remainder is
 read by subsequent calls.
 
-#### 4.4.8 `PRINT2 VAR;`
+#### 4.4.8 `PRINT2 VAR;` (removed)
 
-1. Read `VAR`'s current binding, the object `o`.
-2. Walk `o` as a string per §4.6: at each cell, decompose to `(l, r)` per
-   §4.4.2, look up `l` in the canonical character-atom table, write the
-   matched character to standard output, then continue with `r`.
-3. The walk stops as soon as any of the following holds:
-   - the current object is dead (`ath_is_alive` returns 0), or
-   - the current object is `NULL`, or
-   - the left half is not a recognized character atom.
-4. After the walk, write a single line feed (`U+000A`).
-
-`PRINT2` reads `VAR` but never writes. If `o` is not a well-formed string
-(per §4.6) the output is implementation-defined garbage up to the first
-unrecognized atom, but `PRINT2` never crashes (per §6.2).
+The dedicated object-printing statement has been **removed**. Its sole
+behavior — walk `VAR` as a string (§4.6) and write it — is now expressed
+as a single-part interpolation, `print $VAR;` (§4.4.6). The string walk
+and its stop conditions (dead / `NULL` / non-character atom) are
+specified there. `PRINT2` is no longer a keyword; the bare word is an
+ordinary identifier.
 
 #### 4.4.9 `importf "PATH" as NAME;` and `importf <STEM> as NAME;`
 
@@ -848,7 +844,7 @@ value other expressions also hold, killing that character globally when
 numeric payload and character identity) and installs the dependencies
 on the clone, so the indexed result dies with `S` while leaving the
 shared atom untouched. The snapshot is still recognized as its
-character by `PRINT2` and `ORD`.
+character by `print $VAR` interpolation and `ORD`.
 
 The result is born dead if any of the following holds:
 
@@ -860,7 +856,7 @@ The result is born dead if any of the following holds:
 A born-dead failure result is a **fresh, payload-less, character-less
 dead object** — *not* the `NULL` singleton (§4.2). The distinction is
 observable: it exits a `~ATH(VAR)` guard like any dead object and carries
-no number or character for downstream arithmetic/`ORD`/`PRINT2`, but
+no number or character for downstream arithmetic/`ORD`/`print` interpolation, but
 because it is a real object rather than `NULL`, decomposing it with
 `BIFURCATE VAR[L,R];` yields two **fresh alive** halves (the dead-source
 rule of §4.4.2), not dead ones. Code that means to test "did the
@@ -1102,7 +1098,7 @@ the file.
 2. Walk `SRC`'s right-spine until reaching `NULL`, a dead cell, or a
    non-character left-half. Each character atom encountered is
    written verbatim. The walk follows the same termination rules as
-   `PRINT2` (§4.4.8).
+   `print $VAR` interpolation (§4.4.6).
 3. If the `as VERDICT` clause is present, bind `VERDICT` to a fresh
    object that is alive iff every step above succeeded (open, all
    writes, close). On any I/O failure `VERDICT` is born dead.
@@ -1229,7 +1225,7 @@ function call expression.
 
 ### 4.6 String encoding
 
-`INPUT` and `PRINT2` interpret objects as **strings**. A string is a
+`INPUT` and `print $VAR` interpolation interpret objects as **strings**. A string is a
 (possibly empty) sequence of characters, represented as a chain of objects:
 
 - The empty string is `NULL`.
@@ -1243,7 +1239,7 @@ character at any position share the same atom by pointer identity.
 Atoms have no observable internal structure: their `left`/`right` halves
 are initially unset. Decomposing an atom is permitted but yields freshly
 allocated halves that have no meaning as characters — the atom itself
-remains the canonical representative for PRINT2's reverse lookup.
+remains the canonical representative for the interpolation reverse lookup.
 
 The encoding is deliberately the same as drocta `~ATH`'s `getStrObj` /
 `getObjStr`, so strings round-trip across implementations.

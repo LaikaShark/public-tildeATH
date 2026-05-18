@@ -18,7 +18,6 @@ from athc.ast import (
     ImportNumberStmt,
     ImportStmt,
     InputStmt,
-    Print2Stmt,
     PrintStmt,
     Program,
     ReadStmt,
@@ -130,8 +129,6 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
         elif isinstance(s, InputStmt):
             _check_write(s.var, s)
             defined.add(s.var)
-        elif isinstance(s, Print2Stmt):
-            _check_read(s.var, defined, s)
         elif isinstance(s, ImportFuncStmt):
             pass
         elif isinstance(s, FuncCallComposeArg):

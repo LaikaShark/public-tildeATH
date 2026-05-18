@@ -20,7 +20,6 @@ from athc.ast import (
     ImportNumberStmt,
     ImportStmt,
     InputStmt,
-    Print2Stmt,
     PrintStmt,
     Program,
     ReadStmt,
@@ -129,17 +128,20 @@ def test_input_statement():
     assert s.var == "line"
 
 
-def test_print2_statement():
-    p = parse("PRINT2 line;")
+def test_print_single_interpolation_statement():
+    p = parse("print $line;")
     s = p.statements[0]
-    assert isinstance(s, Print2Stmt)
-    assert s.var == "line"
+    assert isinstance(s, PrintStmt)
+    assert len(s.parts) == 1
+    assert s.parts[0].kind == "var"
+    assert s.parts[0].value == "line"
 
 
-def test_input_print2_case_insensitive():
-    p = parse("input X; print2 X;")
+def test_input_then_print_interpolation():
+    p = parse("input X; print $X;")
     assert isinstance(p.statements[0], InputStmt)
-    assert isinstance(p.statements[1], Print2Stmt)
+    assert isinstance(p.statements[1], PrintStmt)
+    assert p.statements[1].parts[0].kind == "var"
 
 
 def test_ath_loop_with_body():

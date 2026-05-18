@@ -93,13 +93,6 @@ class InputStmt:
 
 
 @dataclass
-class Print2Stmt:
-    var: str
-    line: int
-    col: int
-
-
-@dataclass
 class ImportFuncStmt:
     path: str
     name: str
@@ -289,7 +282,6 @@ Stmt = Union[
     DieStmt,
     PrintStmt,
     InputStmt,
-    Print2Stmt,
     ImportFuncStmt,
     ImportBuiltinStmt,
     ImportNumberStmt,

@@ -13,24 +13,24 @@ importf <add> as ADD;
 
 // Primitive form: a single string literal becomes a string value.
 text "hello world" as GREETING;
-PRINT2 GREETING;
+print $GREETING;
 
 // Interpolation form: literals and identifiers interleave. Identifiers
 // carrying an int64 payload are coerced through TO_STRING; identifiers
 // already holding a string pass through unchanged.
 import number 42 as N;
 text "value: " N as MSG;
-PRINT2 MSG;
+print $MSG;
 
 import number 7 as X;
 import number 8 as Y;
 ADD [X, Y] S;
 
 text "x=" X as XLINE;
-PRINT2 XLINE;
+print $XLINE;
 text "y=" Y as YLINE;
-PRINT2 YLINE;
+print $YLINE;
 text "sum=" S as SLINE;
-PRINT2 SLINE;
+print $SLINE;
 
 THIS.DIE();

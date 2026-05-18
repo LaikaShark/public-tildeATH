@@ -28,7 +28,7 @@ FIND [HAY, NEEDLE] IDX;
 CLONE IDX as IDX_CHECK;
 BRANCH(IDX_CHECK) {
     TO_STRING [IDX, NULL] S;
-    PRINT2 S;
+    print $S;
 } ELSE {
     print not found;
 }
@@ -38,6 +38,6 @@ BRANCH(IDX_CHECK) {
 // result observes the death and becomes dead at the next observation.
 ENTANGLE [NEEDLE, REPL] PAIR;
 REPLACE_ALL [HAY, PAIR] R;
-PRINT2 R;
+print $R;
 
 THIS.DIE();

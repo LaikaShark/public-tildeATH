@@ -78,9 +78,10 @@ The program contains two statements.
 newline. The payload begins immediately after the one required space
 following the keyword `print` and ends at the next unescaped `;`.
 Bytes are copied through verbatim, including literal newlines in
-source.
+source. A `$VAR` marker in the payload **interpolates** the string
+object bound to `VAR` (covered in §13.1); everything else is literal.
 
-Five escape sequences are recognized in the payload (§2.4):
+Six escape sequences are recognized in the payload (§2.4):
 
 | Source | Output      |
 |--------|-------------|
@@ -89,11 +90,13 @@ Five escape sequences are recognized in the payload (§2.4):
 | `\n`   | line feed   |
 | `\t`   | tab         |
 | `\r`   | carriage return |
+| `\$`   | `$`         |
 
 A backslash followed by any other character is a compile-time
 lexical error. To emit a literal semicolon (which would otherwise
 terminate the payload), write `\;`. To emit a literal backslash,
-write `\\`.
+write `\\`. To emit a literal `$` (rather than start an
+interpolation), write `\$`.
 
 String literals `"..."` recognize `\"`, `\\`, `\n`, `\t`, `\r`
 (§2.3) — the same set as `print` minus `\;` (which is unnecessary
@@ -926,14 +929,14 @@ one per distinct byte value (0..255). Two strings sharing a character
 share the same atom by pointer identity.
 
 Strings enter a program through `INPUT`, `read`, `TO_STRING`, or the
-`text` statement (§13.3), and are written out through `PRINT2`,
-`write`, or `append`.
+`text` statement (§13.3), and are written out through `print $VAR`
+interpolation, `write`, or `append`.
 
-### 13.1 `INPUT` and `PRINT2`
+### 13.1 `INPUT` and `print $VAR`
 
 ```ath
 INPUT line;
-PRINT2 line;
+print $line;
 THIS.DIE();
 ```
 
@@ -944,15 +947,24 @@ end-of-file or read error, the line is treated as empty. Lines longer
 than the implementation's input buffer (at least 4096 bytes) are
 returned in successive `INPUT` calls.
 
-`PRINT2 VAR;` walks `VAR`'s right-spine, writing the byte represented
-by each left-half atom, and finally writes a single line feed
-(§4.4.8). The walk terminates at the first dead cell, the first
-`NULL`, or the first left half that is not a recognized character
-atom.
+`print` does double duty (§2, §4.4.6). Its payload is raw literal text,
+but a `$VAR` marker **interpolates** the string object bound to `VAR`:
+the runtime walks `VAR`'s right-spine, writing the byte represented by
+each left-half atom. The walk terminates at the first dead cell, the
+first `NULL`, or the first left half that is not a recognized character
+atom. A whole `print` emits one trailing line feed, no matter how many
+literal and interpolated parts it has.
 
-`print` (§2) is **not** the same statement. `print` writes a literal
-payload from the source text; `PRINT2` walks an object. Use `print`
-for static messages and `PRINT2` for dynamically constructed text.
+```ath
+INPUT name;
+print Hello, $name! Welcome.;
+```
+
+So `print static text;` prints a constant, `print $line;` prints a
+dynamically constructed string, and the two mix freely on one line.
+Write a literal dollar sign as `\$`. Because `$VAR` is a read, a
+mistyped interpolation variable is a compile error — unlike literal
+text, which prints verbatim.
 
 ### 13.2 String operations
 
@@ -1082,7 +1094,7 @@ printable single-character string:
 ```ath
 S[IDX] C;
 BIFURCATE [C, NULL] STR;
-PRINT2 STR;
+print $STR;
 ```
 
 #### 13.2.3 The compose-pair pattern
@@ -1143,7 +1155,7 @@ number and kinds of parts before `as`.
 
 ```ath
 text "hello world" as GREETING;
-PRINT2 GREETING;
+print $GREETING;
 ```
 
 `text "..." as VAR;` decodes the string literal (with the §2.3
@@ -1156,7 +1168,7 @@ either embed them directly or use the `\n` escape:
 
 ```ath
 text "first line\nsecond line" as TWO;
-PRINT2 TWO;
+print $TWO;
 ```
 
 #### 13.3.2 Interpolation form
@@ -1164,7 +1176,7 @@ PRINT2 TWO;
 ```ath
 import number 42 as N;
 text "value: " N " (end)" as MSG;
-PRINT2 MSG;
+print $MSG;
 ```
 
 A `text` statement may contain any sequence of STRING literals and
@@ -1202,9 +1214,10 @@ It is **not** the same as `print`:
 | `print TEXT;` | raw bytes up to `;`        | written to stdout immediately, no value bound |
 | `text "..." as V;` | a string literal      | a string-cons-list bound to V |
 
-To print a constructed string, use `text` + `PRINT2`. To emit a
-fixed literal that needs no value, use `print` directly. Use
-`PRINT2` over `print` whenever the content is dynamic.
+To print a constructed string, interpolate it: `print $V;`. To emit a
+fixed literal that needs no value, write the text directly: `print
+hello;`. A single `print` mixes both — `print Result: $V done;` — so
+reach for interpolation whenever any part of the line is dynamic.
 
 ### 13.4 Lists
 
@@ -1463,7 +1476,7 @@ only and was covered earlier.
 
 ```ath
 read "input.txt" as F;
-PRINT2 F;
+print $F;
 F.DIE();
 ```
 
@@ -1512,7 +1525,7 @@ write S to "out.txt";
 `write SRC to "PATH" [as VERDICT];` (§4.4.22) opens `PATH` for
 writing, truncating any existing file, walks `SRC`'s right-spine
 writing each character atom's byte, and closes the file. The walk
-follows the same termination rules as `PRINT2`: it stops at the
+follows the same termination rules as `print $VAR` interpolation: it stops at the
 first `NULL`, dead cell, or non-character left half.
 
 If `SRC` is `NULL` or dead at entry, the file is created and left
@@ -1569,7 +1582,7 @@ first (§14.2):
 read "config.txt" as F;
 CLONE F as FCHECK;
 BRANCH(FCHECK) {
-    PRINT2 F;
+    print $F;
 } ELSE {
     print no config;
 }

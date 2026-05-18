@@ -24,18 +24,18 @@ importf <join>  as JOIN;
 INPUT S;
 
 LOWER [S, NULL] LO;
-PRINT2 LO;
+print $LO;
 
 UPPER [S, NULL] UP;
-PRINT2 UP;
+print $UP;
 
 TRIM [S, NULL] TR;
-PRINT2 TR;
+print $TR;
 
 text "," as COMMA;
 text "-" as DASH;
 SPLIT [TR, COMMA] PARTS;
 JOIN [PARTS, DASH] REJOINED;
-PRINT2 REJOINED;
+print $REJOINED;
 
 THIS.DIE();

@@ -23,7 +23,7 @@ BRANCH(HAS) { print present; } ELSE { print absent; }
 
 COUNT [HAY, NEEDLE] N;
 TO_STRING [N, NULL] NS;
-PRINT2 NS;
+print $NS;
 
 // RFIND is born dead when the needle is absent; CLONE to test liveness
 // before consuming the value with a BRANCH.
@@ -31,7 +31,7 @@ RFIND [HAY, NEEDLE] R;
 CLONE R as RCHK;
 BRANCH(RCHK) {
     TO_STRING [R, NULL] RS;
-    PRINT2 RS;
+    print $RS;
 } ELSE {
     print no match;
 }

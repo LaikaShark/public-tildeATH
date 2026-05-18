@@ -16,6 +16,6 @@ import number 1 as LO;
 import number 7 as HI;        // exclusive — gives [1, 7) = 1..6
 RANDOM [LO, HI] ROLL;
 TO_STRING [ROLL, NULL] OUT;
-PRINT2 OUT;
+print $OUT;
 
 THIS.DIE();

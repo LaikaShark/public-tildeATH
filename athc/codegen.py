@@ -18,7 +18,6 @@ from athc.ast import (
     ImportNumberStmt,
     ImportStmt,
     InputStmt,
-    Print2Stmt,
     PrintStmt,
     Program,
     ReadStmt,
@@ -64,7 +63,7 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.var)
             if s.arg is not None:
                 names.add(s.arg)
-        elif isinstance(s, (InputStmt, Print2Stmt)):
+        elif isinstance(s, InputStmt):
             names.add(s.var)
         elif isinstance(s, WatchStmt):
             names.add(s.var)
@@ -526,8 +525,6 @@ class FunctionEmitter:
             self._emit_print(builder, stmt)
         elif isinstance(stmt, InputStmt):
             self._emit_input(builder, stmt)
-        elif isinstance(stmt, Print2Stmt):
-            self._emit_print2(builder, stmt)
         elif isinstance(stmt, ImportFuncStmt):
             pass  # compile-time only; loader has registered the function
         elif isinstance(stmt, FuncCallComposeArg):
@@ -779,10 +776,6 @@ class FunctionEmitter:
     def _emit_input(self, builder: ir.IRBuilder, stmt: InputStmt) -> None:
         result = builder.call(self.cg.f_input, [])
         self._write_var(builder, stmt.var, result)
-
-    def _emit_print2(self, builder: ir.IRBuilder, stmt: Print2Stmt) -> None:
-        val = self._read_var(builder, stmt.var)
-        builder.call(self.cg.f_print_obj, [val])
 
     def _emit_funcall_compose_arg(
         self, builder: ir.IRBuilder, stmt: FuncCallComposeArg

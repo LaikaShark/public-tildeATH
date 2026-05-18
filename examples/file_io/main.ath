@@ -25,8 +25,8 @@ read "/tmp/ath_example_io.txt" as CONTENT;
 
 LENGTH [CONTENT, NULL] N;
 TO_STRING [N, NULL] NS;
-PRINT2 NS;
-PRINT2 CONTENT;
+print $NS;
+print $CONTENT;
 
 // Release the file without deleting it.
 close CONTENT;

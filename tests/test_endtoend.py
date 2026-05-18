@@ -185,27 +185,27 @@ def test_decompose_of_unbound_variable_yields_NULL_halves(tmp_path):
 
 def test_echo_via_input_and_print2(tmp_path):
     src = tmp_path / "echo.ath"
-    src.write_text("INPUT s;\nPRINT2 s;\nTHIS.DIE();\n")
+    src.write_text("INPUT s;\nprint $s;\nTHIS.DIE();\n")
     assert _build_and_run(src, tmp_path, stdin_input="hello, ~ATH!\n") == "hello, ~ATH!\n"
 
 
 def test_print2_of_NULL_prints_blank_line(tmp_path):
     src = tmp_path / "blank.ath"
-    src.write_text("PRINT2 NULL;\nTHIS.DIE();\n")
+    src.write_text("print $NULL;\nTHIS.DIE();\n")
     assert _build_and_run(src, tmp_path) == "\n"
 
 
 def test_input_at_eof_yields_empty_string(tmp_path):
     src = tmp_path / "eof.ath"
-    src.write_text("INPUT s;\nPRINT2 s;\nprint after;\nTHIS.DIE();\n")
-    # Empty stdin -> input returns empty string -> PRINT2 emits one newline
+    src.write_text("INPUT s;\nprint $s;\nprint after;\nTHIS.DIE();\n")
+    # Empty stdin -> input returns empty string -> print $s emits one newline
     assert _build_and_run(src, tmp_path, stdin_input="") == "\nafter\n"
 
 
 def test_input_strips_trailing_newline(tmp_path):
     src = tmp_path / "strip.ath"
     src.write_text(
-        "INPUT a;\nINPUT b;\nPRINT2 a;\nPRINT2 b;\nTHIS.DIE();\n"
+        "INPUT a;\nINPUT b;\nprint $a;\nprint $b;\nTHIS.DIE();\n"
     )
     # Two lines; trailing \n on each should be stripped before encoding
     assert _build_and_run(src, tmp_path, stdin_input="first\nsecond\n") == "first\nsecond\n"
@@ -237,7 +237,7 @@ def test_function_returns_args_via_die(tmp_path):
         'importf "idfn.ath" as ID;\n'
         "INPUT s;\n"
         "ID s [H, T];\n"
-        "PRINT2 T;\n"  # T = tail of "hi" = "i"
+        "print $T;\n"  # T = tail of "hi" = "i"
         "print done;\n"
         "THIS.DIE();\n"
     )
@@ -252,7 +252,7 @@ def test_function_default_return_is_NULL(tmp_path):
         "import x A;\n"
         "import y B;\n"
         "NOOP [A, B] R;\n"
-        "PRINT2 R;\n"  # R = NULL -> blank line
+        "print $R;\n"  # R = NULL -> blank line
         "print after;\n"
         "THIS.DIE();\n"
     )
@@ -269,7 +269,7 @@ def test_die_with_arg_sets_return_then_falls_off_end(tmp_path):
         'importf "midret.ath" as F;\n'
         "INPUT s;\n"
         "F s [H, T];\n"
-        "PRINT2 T;\n"  # T = "ello"
+        "print $T;\n"  # T = "ello"
         "THIS.DIE();\n"
     )
     assert _build_and_run(main, tmp_path, stdin_input="hello\n") == "ello\n"

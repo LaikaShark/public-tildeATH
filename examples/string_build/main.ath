@@ -26,23 +26,23 @@ INPUT S;
 
 import number 3 as N3;
 REPEAT [S, N3] REP;
-PRINT2 REP;
+print $REP;
 
 REVERSE [S, NULL] REV;
-PRINT2 REV;
+print $REV;
 
 import number 5 as N5;
 PAD_LEFT [S, N5] PL;
-PRINT2 PL;
+print $PL;
 PAD_RIGHT [S, N5] PR;
-PRINT2 PR;
+print $PR;
 
 import number 0 as I0;
 S[I0] H;
 ORD [H, NULL] OC;
 TO_STRING [OC, NULL] OCS;
-PRINT2 OCS;
+print $OCS;
 CHR [OC, NULL] BACK;
-PRINT2 BACK;
+print $BACK;
 
 THIS.DIE();

@@ -21,7 +21,7 @@ INPUT MSG;
 write MSG to "/tmp/ath_owned_scratch.txt";
 
 read "/tmp/ath_owned_scratch.txt" as S;
-PRINT2 S;
+print $S;
 
 S.DIE();    // <-- this deletes /tmp/ath_owned_scratch.txt
 print scratch file is now gone;

@@ -16,7 +16,6 @@ from athc.ast import (
     ImportNumberStmt,
     ImportStmt,
     InputStmt,
-    Print2Stmt,
     PrintPart,
     PrintStmt,
     Program,
@@ -84,8 +83,6 @@ class Parser:
             return self._parse_print()
         if tok.kind is TokenKind.KW_INPUT:
             return self._parse_input()
-        if tok.kind is TokenKind.KW_PRINT2:
-            return self._parse_print2()
         if tok.kind is TokenKind.ATH:
             return self._parse_ath_loop()
         if tok.kind is TokenKind.KW_BRANCH:
@@ -241,12 +238,6 @@ class Parser:
         var = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
         return InputStmt(var=var.value, line=kw.line, col=kw.col)
-
-    def _parse_print2(self) -> Print2Stmt:
-        kw = self._expect(TokenKind.KW_PRINT2)
-        var = self._expect(TokenKind.IDENT)
-        self._expect(TokenKind.SEMI)
-        return Print2Stmt(var=var.value, line=kw.line, col=kw.col)
 
     def _parse_ath_loop(self) -> AthLoop:
         kw = self._expect(TokenKind.ATH)

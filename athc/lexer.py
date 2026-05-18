@@ -9,7 +9,6 @@ class TokenKind(Enum):
     KW_BIFURCATE = auto()
     KW_PRINT = auto()
     KW_INPUT = auto()
-    KW_PRINT2 = auto()
     KW_EXECUTE = auto()
     KW_WATCH = auto()
     KW_BRANCH = auto()
@@ -70,7 +69,6 @@ KEYWORDS = {
     "bifurcate": TokenKind.KW_BIFURCATE,
     "print": TokenKind.KW_PRINT,
     "input": TokenKind.KW_INPUT,
-    "print2": TokenKind.KW_PRINT2,
     "execute": TokenKind.KW_EXECUTE,
     "watch": TokenKind.KW_WATCH,
     "branch": TokenKind.KW_BRANCH,

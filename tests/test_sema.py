@@ -120,7 +120,7 @@ def test_looptest_sample_passes_sema():
 
 
 def test_input_introduces_variable():
-    check("INPUT line; PRINT2 line;")
+    check("INPUT line; print $line;")
 
 
 def test_input_to_NULL_rejected():
@@ -128,17 +128,17 @@ def test_input_to_NULL_rejected():
         check("INPUT NULL;")
 
 
-def test_print2_of_unbound_errors():
+def test_print_interp_of_unbound_errors():
     with pytest.raises(SemaError, match="missing.*not in scope|line.*not in scope"):
-        check("PRINT2 line;")
+        check("print $line;")
 
 
-def test_print2_of_predefined_NULL_ok():
-    check("PRINT2 NULL;")
+def test_print_interp_of_predefined_NULL_ok():
+    check("print $NULL;")
 
 
-def test_print2_of_THIS_ok():
-    check("PRINT2 THIS;")
+def test_print_interp_of_THIS_ok():
+    check("print $THIS;")
 
 
 # --- Function-call semantics ---

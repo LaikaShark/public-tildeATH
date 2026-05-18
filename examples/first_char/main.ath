@@ -1,10 +1,10 @@
 // Reads a line, calls FIRST to extract just the first character atom,
 // then prints what that single atom looks like as a "one-character string"
-// (compose with NULL terminator and PRINT2).
+// (compose with NULL terminator and print $interpolation).
 
 importf "first.ath" as FIRST;
 INPUT line;
 FIRST line [CH, REST];
 BIFURCATE [CH, NULL] single;
-PRINT2 single;
+print $single;
 THIS.DIE();

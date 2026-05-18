@@ -19,7 +19,7 @@ text "abc" as FIRST;
 FIRST[I0] A1;
 ORD [A1, NULL] C1;
 TO_STRING [C1, NULL] S1;
-PRINT2 S1;
+print $S1;
 
 // Kill the first string. Under the old code this killed the shared 'a'
 // atom for every string.
@@ -31,7 +31,7 @@ ORD [A2, NULL] C2;
 CLONE C2 as C2CHK;
 BRANCH(C2CHK) {
     TO_STRING [C2, NULL] S2;
-    PRINT2 S2;
+    print $S2;
 } ELSE {
     print poisoned;
 }

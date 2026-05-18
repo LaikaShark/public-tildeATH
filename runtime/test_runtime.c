@@ -119,26 +119,34 @@ int main(void) {
     /* Same code via differently-typed inputs gives same atom. */
     assert(ath_char_atom('A') == ath_char_atom(0x41));
 
-    /* PRINT2 round-trip: build "Hi" and verify it prints "Hi\n". */
+    /* ath_print_obj round-trip: build "Hi" and verify it prints "Hi\n". */
     ath_obj *str = ath_compose(
         ath_char_atom('H'),
         ath_compose(ath_char_atom('i'), ath_NULL));
     fputs("expect Hi: ", stdout);
     ath_print_obj(str);
 
-    /* PRINT2 of NULL emits just a newline. */
+    /* ath_print_obj of NULL emits just a newline. */
     fputs("expect blank: ", stdout);
     ath_print_obj(ath_NULL);
 
-    /* PRINT2 of a null pointer also emits just a newline (null-safety). */
+    /* ath_print_obj of a null pointer also emits just a newline (null-safety). */
     fputs("expect blank: ", stdout);
     ath_print_obj(NULL);
 
-    /* PRINT2 stops at the first unrecognized left half. */
+    /* ath_print_obj stops at the first unrecognized left half. */
     ath_obj *garbage = ath_compose(ath_char_atom('X'),
                                    ath_compose(ath_alloc_alive(), ath_NULL));
     fputs("expect X: ", stdout);
     ath_print_obj(garbage);
+
+    /* ath_print_obj_raw is the newline-free variant used by `print $var`
+     * interpolation: two raw writes share one line, the final \n is the
+     * caller's. */
+    fputs("expect HiHi: ", stdout);
+    ath_print_obj_raw(str);
+    ath_print_obj_raw(str);
+    ath_print_bytes("\n", 1);
 
     /* --- Library lookup --- */
     double lo, hi;
@@ -595,7 +603,7 @@ int main(void) {
     assert(fr->watch_path != NULL);
     assert(strcmp(fr->watch_path, rpath) == 0);
 
-    /* PRINT2 the content to confirm it reads "hello". */
+    /* Print the content to confirm it reads "hello". */
     fputs("expect hello: ", stdout);
     ath_print_obj(fr);
 

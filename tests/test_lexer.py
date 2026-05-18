@@ -149,10 +149,12 @@ def test_keyword_input_is_case_insensitive(spelling):
     assert toks[0].value == spelling
 
 
-@pytest.mark.parametrize("spelling", ["PRINT2", "print2", "Print2"])
-def test_keyword_print2_is_case_insensitive(spelling):
+@pytest.mark.parametrize("spelling", ["print2", "PRINT2", "Print2"])
+def test_print2_is_no_longer_a_keyword(spelling):
+    # PRINT2 was removed in favor of `print $var` interpolation; the word
+    # is now an ordinary identifier.
     toks = tokenize(spelling)
-    assert toks[0].kind is TokenKind.KW_PRINT2
+    assert toks[0].kind is TokenKind.IDENT
     assert toks[0].value == spelling
 
 
