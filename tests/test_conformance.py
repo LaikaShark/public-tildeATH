@@ -82,6 +82,12 @@ CASES = [
         id="echo",
     ),
     pytest.param(
+        "print_interpolation.ath",
+        None,
+        "Hello, world! N is 7.\nplain line\na $literal dollar and world again\n",
+        id="print_interpolation",
+    ),
+    pytest.param(
         "multi_word_import.ath",
         None,
         "speaking once before she dies\nsilence\n",

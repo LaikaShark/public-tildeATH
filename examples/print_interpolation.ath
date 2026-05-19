@@ -1,0 +1,20 @@
+// Demonstrates `print` with `$VAR` interpolation (§4.4.6): one statement
+// mixes literal text, interpolated string values, and escaped dollars.
+//
+//   athc examples/print_interpolation.ath -o pi
+//   ./pi
+//   # expected:
+//   # Hello, world! N is 7.
+//   # plain line
+//   # a $literal dollar and world again
+
+importf <to_string> as TO_STRING;
+
+import number 7 as N;
+TO_STRING [N, N] NS;
+text "world" as W;
+
+print Hello, $W! N is $NS.;
+print plain line;
+print a \$literal dollar and $W again;
+THIS.DIE();
