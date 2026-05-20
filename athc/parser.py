@@ -163,15 +163,31 @@ class Parser:
 
     def _parse_import_number(self, kw: Token) -> ImportNumberStmt:
         self._advance()  # consume 'number'
-        n_tok = self._expect(TokenKind.INT)
+        tok = self._peek()
+        if tok.kind is TokenKind.FLOAT:
+            self._advance()
+            value: int | float = float(tok.value)
+            is_float = True
+        elif tok.kind is TokenKind.INT:
+            self._advance()
+            value = int(tok.value)
+            is_float = False
+        else:
+            raise ParseError(
+                f"expected a number literal after 'import number', got "
+                f"{tok.kind.name}",
+                tok.line,
+                tok.col,
+            )
         self._expect(TokenKind.KW_AS)
         var = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
         return ImportNumberStmt(
-            value=int(n_tok.value),
+            value=value,
             var=var.value,
             line=kw.line,
             col=kw.col,
+            is_float=is_float,
         )
 
     def _parse_bifurcate(self):

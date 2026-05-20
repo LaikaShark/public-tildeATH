@@ -40,6 +40,7 @@ class TokenKind(Enum):
     BANG = auto()
     DOTDOT = auto()
     INT = auto()
+    FLOAT = auto()
     RAWTEXT = auto()
     PRINTVAR = auto()
     RESERVED = auto()
@@ -176,7 +177,45 @@ class Lexer:
             raise LexError("expected digits after '-'", line, col)
         while self.pos < len(self.src) and self._peek().isdigit():
             self._advance()
+
+        # Float forms (SPEC §4.8): a '.' *followed by a digit* opens a
+        # fractional part, and 'e'/'E' opens an exponent. A '.' followed by
+        # another '.' stays DOTDOT (slice, e.g. 1..3); a '.' followed by a
+        # non-digit stays a separate '.DIE' token (e.g. 3.die). Either part
+        # makes the literal a FLOAT.
+        is_float = False
+        if self._peek() == "." and self._peek(1).isdigit():
+            is_float = True
+            self._advance()  # consume '.'
+            while self.pos < len(self.src) and self._peek().isdigit():
+                self._advance()
+        if self._peek() in ("e", "E"):
+            # Exponent requires at least one digit (after an optional sign).
+            # Look ahead without consuming so `1exit` keeps `1` and `exit`
+            # separate (and doesn't drift line/col on rollback).
+            off = 1
+            if self._peek(off) in ("+", "-"):
+                off += 1
+            if self._peek(off).isdigit():
+                is_float = True
+                self._advance()  # 'e'/'E'
+                if self._peek() in ("+", "-"):
+                    self._advance()
+                while self.pos < len(self.src) and self._peek().isdigit():
+                    self._advance()
+
         text = self.src[start:self.pos]
+        if is_float:
+            try:
+                f = float(text)
+            except ValueError:
+                raise LexError(f"invalid float literal {text!r}", line, col)
+            if f != f or f in (float("inf"), float("-inf")):
+                raise LexError(
+                    f"float literal {text} is not finite", line, col
+                )
+            self._emit(TokenKind.FLOAT, text, line, col)
+            return
         try:
             n = int(text)
         except ValueError:

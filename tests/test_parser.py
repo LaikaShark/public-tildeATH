@@ -423,9 +423,25 @@ def test_import_number_marker_case_insensitive():
     assert isinstance(p.statements[0], ImportNumberStmt)
 
 
-def test_import_number_requires_int():
-    with pytest.raises(ParseError, match="expected INT"):
+def test_import_number_requires_number_literal():
+    with pytest.raises(ParseError, match="expected a number literal"):
         parse("import number foo as N;")
+
+
+def test_import_number_accepts_float():
+    p = parse("import number 3.14 as F;")
+    s = p.statements[0]
+    assert isinstance(s, ImportNumberStmt)
+    assert s.is_float is True
+    assert s.value == 3.14
+
+
+def test_import_number_int_is_not_float():
+    p = parse("import number 5 as N;")
+    s = p.statements[0]
+    assert isinstance(s, ImportNumberStmt)
+    assert s.is_float is False
+    assert s.value == 5
 
 
 def test_import_with_metadata_word_builtin_is_not_a_marker():

@@ -63,6 +63,48 @@ def test_int_literal_negative_overflow_rejected():
         tokenize("-99999999999999999999")
 
 
+@pytest.mark.parametrize("lit", ["3.14", "-0.5", "0.0", "10.25", "-12.0"])
+def test_float_literal_with_fraction(lit):
+    toks = tokenize(lit)
+    assert toks[0].kind is TokenKind.FLOAT
+    assert toks[0].value == lit
+
+
+@pytest.mark.parametrize("lit", ["1e10", "2.5e-3", "6E23", "-1.5e+4", "1E0"])
+def test_float_literal_with_exponent(lit):
+    toks = tokenize(lit)
+    assert toks[0].kind is TokenKind.FLOAT
+    assert toks[0].value == lit
+
+
+def test_float_literal_non_finite_rejected():
+    with pytest.raises(LexError, match="not finite"):
+        tokenize("1e999")
+
+
+def test_dot_disambiguation_slice_vs_float_vs_die():
+    # `1..3` is INT DOTDOT INT (a slice range), not a float.
+    toks = tokenize("1..3")
+    kinds = [t.kind for t in toks[:3]]
+    assert kinds == [TokenKind.INT, TokenKind.DOTDOT, TokenKind.INT]
+    # `3.14` is a single FLOAT.
+    assert tokenize("3.14")[0].kind is TokenKind.FLOAT
+    # `5.die` (a number then a non-digit after '.') is INT then a `.DIE`
+    # method token — the '.' does not start a fraction.
+    toks = tokenize("5.die")
+    assert toks[0].kind is TokenKind.INT
+    assert toks[1].kind is TokenKind.DIE
+
+
+def test_e_after_int_not_swallowed():
+    # `1exit` is INT(1) followed by identifier `exit`, not a bad exponent.
+    toks = tokenize("1exit")
+    assert toks[0].kind is TokenKind.INT
+    assert toks[0].value == "1"
+    assert toks[1].kind is TokenKind.IDENT
+    assert toks[1].value == "exit"
+
+
 def test_angle_brackets_are_punct():
     toks = tokenize("<add>")
     assert toks[0].kind is TokenKind.LANGLE

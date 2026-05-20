@@ -234,6 +234,11 @@ class Codegen:
             ir.FunctionType(self.obj_ptr, [self.i64]),
             name="ath_alloc_number",
         )
+        self.f_alloc_float = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [ir.DoubleType()]),
+            name="ath_alloc_float",
+        )
         self.f_inherit_lifetime = ir.Function(
             self.module,
             ir.FunctionType(
@@ -584,10 +589,16 @@ class FunctionEmitter:
             "==", cur, ir.Constant(self.cg.obj_ptr, None)
         )
         with builder.if_then(is_unbound):
-            fresh = builder.call(
-                self.cg.f_alloc_number,
-                [ir.Constant(self.cg.i64, stmt.value)],
-            )
+            if stmt.is_float:
+                fresh = builder.call(
+                    self.cg.f_alloc_float,
+                    [ir.Constant(ir.DoubleType(), float(stmt.value))],
+                )
+            else:
+                fresh = builder.call(
+                    self.cg.f_alloc_number,
+                    [ir.Constant(self.cg.i64, stmt.value)],
+                )
             builder.store(fresh, slot)
 
     def _emit_watch(self, builder: ir.IRBuilder, stmt: WatchStmt) -> None:
