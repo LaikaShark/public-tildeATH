@@ -4,6 +4,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* SPEC §4.8 numeric payload discriminant. NONE = no payload; INT selects
+ * num.i (int64); FLOAT selects num.f (IEEE-754 double); BIG is reserved for
+ * a future arbitrary-precision phase. */
+typedef enum {
+    ATH_NUM_NONE = 0,
+    ATH_NUM_INT,
+    ATH_NUM_FLOAT,
+    ATH_NUM_BIG /* reserved */
+} ath_num_kind;
+
 typedef struct ath_obj {
     int alive;
     struct ath_obj *left;
@@ -29,9 +39,11 @@ typedef struct ath_obj {
      * deaths via the other extensions do NOT trigger unlink. Not copied
      * by ath_clone; cleared by ath_close. */
     int owns_path;
-    /* SPEC §4.8 numeric payload. has_value is nonzero iff value is set. */
-    int has_value;
-    int64_t value;
+    /* SPEC §4.8 numeric payload (tagged). num_kind selects the active union
+     * member: ATH_NUM_NONE = no payload, ATH_NUM_INT = num.i (int64),
+     * ATH_NUM_FLOAT = num.f (double). Use ath_has_value() to test presence. */
+    ath_num_kind num_kind;
+    union { int64_t i; double f; } num;
     /* SPEC §4.8.1 dependency tracking. ath_is_alive returns 0 if any non-null
      * dep is dead. Installed by ath_inherit_lifetime; never written elsewhere. */
     struct ath_obj *dep1;
@@ -67,6 +79,12 @@ typedef struct ath_obj {
 
 #define ATH_DEP_AND 0
 #define ATH_DEP_OR  1
+
+/* True iff o carries a numeric payload (INT or FLOAT). Null-safe. Replaces
+ * the former `o->has_value` flag (SPEC §4.8). */
+static inline int ath_has_value(const ath_obj *o) {
+    return o != NULL && o->num_kind != ATH_NUM_NONE;
+}
 
 extern ath_obj *ath_NULL;
 
@@ -138,8 +156,9 @@ void     ath_register_lifetime(const char *name, double min_s, double max_s);
 /* Numeric payload and arithmetic (SPEC §4.8). All arithmetic helpers return
  * a fresh object that inherits the lifetimes of their operands via
  * ath_inherit_lifetime. On overflow, divide-by-zero, dead operand, or
- * missing payload the result is born dead (alive=0, has_value=0). */
-ath_obj *ath_alloc_number(int64_t v);
+ * missing payload the result is born dead (alive=0, num_kind=NONE). */
+ath_obj *ath_alloc_number(int64_t v);     /* ATH_NUM_INT payload   */
+ath_obj *ath_alloc_float(double v);       /* ATH_NUM_FLOAT payload */
 void     ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b);
 ath_obj *ath_add(ath_obj *x, ath_obj *y);
 ath_obj *ath_sub(ath_obj *x, ath_obj *y);

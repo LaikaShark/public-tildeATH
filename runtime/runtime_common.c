@@ -187,7 +187,7 @@ ath_obj *ath_coerce_string(ath_obj *v) {
     if (v == NULL || v == ath_NULL) return ath_NULL;
     /* Payload-bearing operands become their decimal representation. The
      * resulting string inherits v as a dep via ath_to_string. */
-    if (v->has_value) return ath_to_string(v, NULL);
+    if (ath_has_value(v)) return ath_to_string(v, NULL);
     /* Anything else — existing cons-lists, generic composites, char
      * atoms — is passed through unchanged. The text-statement codegen
      * will feed it to ath_concat alongside literal parts. */
@@ -478,12 +478,12 @@ ath_obj *ath_alloc_watching_file(const char *path) {
 
 ath_obj *ath_alloc_watching_pid(ath_obj *n) {
     ath_obj *o = ath_alloc_alive();
-    if (n == NULL || !ath_is_alive(n) || !n->has_value
-        || n->value <= 0 || n->value > INT_MAX) {
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)
+        || n->num.i <= 0 || n->num.i > INT_MAX) {
         o->alive = 0;
         return o;
     }
-    o->watch_pid = (int)n->value;
+    o->watch_pid = (int)n->num.i;
     /* Born dead if the process is already gone. */
     if (kill(o->watch_pid, 0) != 0 && errno == ESRCH) o->alive = 0;
     return o;
@@ -517,8 +517,15 @@ ath_obj *ath_alloc_watching_mtime(const char *path) {
 
 ath_obj *ath_alloc_number(int64_t v) {
     ath_obj *o = ath_alloc_alive();
-    o->has_value = 1;
-    o->value = v;
+    o->num_kind = ATH_NUM_INT;
+    o->num.i = v;
+    return o;
+}
+
+ath_obj *ath_alloc_float(double v) {
+    ath_obj *o = ath_alloc_alive();
+    o->num_kind = ATH_NUM_FLOAT;
+    o->num.f = v;
     return o;
 }
 
@@ -534,29 +541,29 @@ void ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b) {
     }
 }
 
-/* Born-dead result for failed arithmetic. has_value stays 0. */
+/* Born-dead result for failed arithmetic. num_kind stays NONE. */
 static ath_obj *ath_alloc_dead_number(void) {
     ath_obj *o = (ath_obj *)calloc(1, sizeof(ath_obj));
     if (!o) {
         fputs("ath: out of memory\n", stderr);
         exit(1);
     }
-    /* alive=0, has_value=0 are the calloc defaults. */
+    /* alive=0, num_kind=ATH_NUM_NONE are the calloc defaults. */
     return o;
 }
 
 /* Both operands must be (a) alive at call time and (b) carry a payload.
  * Returns 1 if usable, 0 if a born-dead result should be produced. */
 static int ath_operands_usable(ath_obj *x, ath_obj *y) {
-    if (x == NULL || !ath_is_alive(x) || !x->has_value) return 0;
-    if (y == NULL || !ath_is_alive(y) || !y->has_value) return 0;
+    if (x == NULL || !ath_is_alive(x) || !ath_has_value(x)) return 0;
+    if (y == NULL || !ath_is_alive(y) || !ath_has_value(y)) return 0;
     return 1;
 }
 
 ath_obj *ath_add(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
     int64_t r;
-    if (__builtin_add_overflow(x->value, y->value, &r)) {
+    if (__builtin_add_overflow(x->num.i, y->num.i, &r)) {
         return ath_alloc_dead_number();
     }
     ath_obj *out = ath_alloc_number(r);
@@ -567,7 +574,7 @@ ath_obj *ath_add(ath_obj *x, ath_obj *y) {
 ath_obj *ath_sub(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
     int64_t r;
-    if (__builtin_sub_overflow(x->value, y->value, &r)) {
+    if (__builtin_sub_overflow(x->num.i, y->num.i, &r)) {
         return ath_alloc_dead_number();
     }
     ath_obj *out = ath_alloc_number(r);
@@ -578,7 +585,7 @@ ath_obj *ath_sub(ath_obj *x, ath_obj *y) {
 ath_obj *ath_mul(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
     int64_t r;
-    if (__builtin_mul_overflow(x->value, y->value, &r)) {
+    if (__builtin_mul_overflow(x->num.i, y->num.i, &r)) {
         return ath_alloc_dead_number();
     }
     ath_obj *out = ath_alloc_number(r);
@@ -588,31 +595,31 @@ ath_obj *ath_mul(ath_obj *x, ath_obj *y) {
 
 ath_obj *ath_div(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (y->value == 0) return ath_alloc_dead_number();
+    if (y->num.i == 0) return ath_alloc_dead_number();
     /* INT64_MIN / -1 overflows two's-complement. */
-    if (x->value == INT64_MIN && y->value == -1) return ath_alloc_dead_number();
-    ath_obj *out = ath_alloc_number(x->value / y->value);
+    if (x->num.i == INT64_MIN && y->num.i == -1) return ath_alloc_dead_number();
+    ath_obj *out = ath_alloc_number(x->num.i / y->num.i);
     ath_inherit_lifetime(out, x, y);
     return out;
 }
 
 ath_obj *ath_mod(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (y->value == 0) return ath_alloc_dead_number();
-    if (x->value == INT64_MIN && y->value == -1) return ath_alloc_dead_number();
-    ath_obj *out = ath_alloc_number(x->value % y->value);
+    if (y->num.i == 0) return ath_alloc_dead_number();
+    if (x->num.i == INT64_MIN && y->num.i == -1) return ath_alloc_dead_number();
+    ath_obj *out = ath_alloc_number(x->num.i % y->num.i);
     ath_inherit_lifetime(out, x, y);
     return out;
 }
 
 ath_obj *ath_to_string(ath_obj *x, ath_obj *unused) {
     (void)unused;
-    if (x == NULL || !ath_is_alive(x) || !x->has_value) {
+    if (x == NULL || !ath_is_alive(x) || !ath_has_value(x)) {
         /* No payload → empty string. */
         return ath_NULL;
     }
     char buf[32];
-    int n = snprintf(buf, sizeof(buf), "%lld", (long long)x->value);
+    int n = snprintf(buf, sizeof(buf), "%lld", (long long)x->num.i);
     if (n <= 0) return ath_NULL;
     ath_obj *acc = ath_NULL;
     for (int i = n; i > 0; i--) {
@@ -660,32 +667,32 @@ static ath_obj *ath_verdict_false(void) {
 
 ath_obj *ath_lt(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->value < y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+    return x->num.i < y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
 }
 
 ath_obj *ath_eq(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->value == y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+    return x->num.i == y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
 }
 
 ath_obj *ath_gt(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->value > y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+    return x->num.i > y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
 }
 
 ath_obj *ath_le(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->value <= y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+    return x->num.i <= y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
 }
 
 ath_obj *ath_ge(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->value >= y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+    return x->num.i >= y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
 }
 
 ath_obj *ath_ne(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->value != y->value ? ath_verdict_true(x, y) : ath_verdict_false();
+    return x->num.i != y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
 }
 
 /* --- Logical combinators over verdicts (SPEC §4.8.3) ------------------- */
@@ -859,9 +866,9 @@ ath_obj *ath_concat(ath_obj *a, ath_obj *b) {
 
 ath_obj *ath_index(ath_obj *s, ath_obj *n) {
     if (s == NULL || !ath_is_alive(s)) return ath_alloc_dead();
-    if (n == NULL || !ath_is_alive(n) || !n->has_value) return ath_alloc_dead();
-    if (n->value < 0) return ath_alloc_dead();
-    int64_t target = n->value;
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
+    if (n->num.i < 0) return ath_alloc_dead();
+    int64_t target = n->num.i;
     int64_t i = 0;
     ath_obj *cur = s;
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
@@ -892,12 +899,12 @@ ath_obj *ath_slice(ath_obj *s, ath_obj *range) {
         return ath_alloc_dead();
     ath_obj *i_obj, *j_obj;
     ath_decompose(range, &i_obj, &j_obj);
-    if (i_obj == NULL || !ath_is_alive(i_obj) || !i_obj->has_value)
+    if (i_obj == NULL || !ath_is_alive(i_obj) || !ath_has_value(i_obj))
         return ath_alloc_dead();
-    if (j_obj == NULL || !ath_is_alive(j_obj) || !j_obj->has_value)
+    if (j_obj == NULL || !ath_is_alive(j_obj) || !ath_has_value(j_obj))
         return ath_alloc_dead();
-    int64_t i = i_obj->value;
-    int64_t j = j_obj->value;
+    int64_t i = i_obj->num.i;
+    int64_t j = j_obj->num.i;
     if (i < 0 || j < 0 || i > j) return ath_alloc_dead();
 
     /* Walk to position i. */
@@ -974,8 +981,8 @@ ath_obj *ath_clone(ath_obj *v) {
     w->mtime_path = v->mtime_path;
     w->mtime_sec = v->mtime_sec;
     w->mtime_nsec = v->mtime_nsec;
-    w->has_value = v->has_value;
-    w->value = v->value;
+    w->num_kind = v->num_kind;
+    w->num = v->num;
     w->dep_mode = v->dep_mode;
     w->is_char = v->is_char;
     w->char_code = v->char_code;
@@ -995,23 +1002,23 @@ static int64_t ath_now_ms(void) {
 }
 
 void ath_sleep_ms(ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !n->has_value) return;
-    if (n->value <= 0) return;
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return;
+    if (n->num.i <= 0) return;
     struct timespec ts;
-    ts.tv_sec = (time_t)(n->value / 1000);
-    ts.tv_nsec = (long)((n->value % 1000) * 1000000);
+    ts.tv_sec = (time_t)(n->num.i / 1000);
+    ts.tv_nsec = (long)((n->num.i % 1000) * 1000000);
     nanosleep(&ts, NULL);
 }
 
 ath_obj *ath_alloc_timer_ms(ath_obj *n) {
     /* Bad duration → born dead. */
-    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value <= 0) {
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i <= 0) {
         ath_obj *dead = (ath_obj *)calloc(1, sizeof(ath_obj));
         if (!dead) { fputs("ath: out of memory\n", stderr); exit(1); }
         return dead;
     }
     ath_obj *o = ath_alloc_alive();
-    double deadline = ath_now_s() + (double)n->value / 1000.0;
+    double deadline = ath_now_s() + (double)n->num.i / 1000.0;
     if (!(deadline > 0.0) || deadline >= 1.0e308) deadline = 1.0e308;
     o->deadline_s = deadline;
     return o;
@@ -1023,17 +1030,17 @@ ath_obj *ath_now(ath_obj *a, ath_obj *b) {
 }
 
 ath_obj *ath_random_range(ath_obj *lo, ath_obj *hi) {
-    if (lo == NULL || !ath_is_alive(lo) || !lo->has_value) goto dead;
-    if (hi == NULL || !ath_is_alive(hi) || !hi->has_value) goto dead;
-    if (lo->value >= hi->value) goto dead;
+    if (lo == NULL || !ath_is_alive(lo) || !ath_has_value(lo)) goto dead;
+    if (hi == NULL || !ath_is_alive(hi) || !ath_has_value(hi)) goto dead;
+    if (lo->num.i >= hi->num.i) goto dead;
 
     /* Combine two rand() calls for ~62 bits of entropy, more than enough
      * for any practical span. Modulo bias is negligible for spans well
      * below 2^62. */
     uint64_t r = ((uint64_t)(rand() & 0x7fffffff) << 31)
                | (uint64_t)(rand() & 0x7fffffff);
-    uint64_t span = (uint64_t)(hi->value - lo->value);
-    int64_t result = lo->value + (int64_t)(r % span);
+    uint64_t span = (uint64_t)(hi->num.i - lo->num.i);
+    int64_t result = lo->num.i + (int64_t)(r % span);
     return ath_alloc_number(result);
 
 dead: {
@@ -1753,24 +1760,24 @@ ath_obj *ath_rfind(ath_obj *hay, ath_obj *needle) {
  * number payload; N == 0 → empty (NULL); N < 0 or no payload → dead.
  * S dead/malformed → dead. */
 ath_obj *ath_repeat(ath_obj *s, ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !n->has_value) return ath_alloc_dead();
-    if (n->value < 0) return ath_alloc_dead();
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
+    if (n->num.i < 0) return ath_alloc_dead();
     int s_empty = (s == NULL || s == ath_NULL);
     if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
-    if (n->value == 0 || s_empty) return ath_NULL;
+    if (n->num.i == 0 || s_empty) return ath_NULL;
 
     char *buf = NULL;
     size_t len = 0;
     if (ath_string_slurp(s, &buf, &len) != 0) return ath_alloc_dead();
     if (len == 0) { free(buf); return ath_NULL; }
-    if ((size_t)n->value > ((size_t)-1) / len) {  /* overflow guard */
+    if ((size_t)n->num.i > ((size_t)-1) / len) {  /* overflow guard */
         free(buf);
         return ath_alloc_dead();
     }
-    size_t total = len * (size_t)n->value;
+    size_t total = len * (size_t)n->num.i;
     char *out = (char *)malloc(total);
     if (!out) { free(buf); fputs("ath: out of memory\n", stderr); exit(1); }
-    for (int64_t k = 0; k < n->value; k++) {
+    for (int64_t k = 0; k < n->num.i; k++) {
         memcpy(out + (size_t)k * len, buf, len);
     }
     free(buf);
@@ -1804,15 +1811,15 @@ ath_obj *ath_reverse(ath_obj *s, ath_obj *unused) {
  * a number payload; N < 0 or no payload → dead. S dead/malformed →
  * dead. */
 static ath_obj *ath_pad_impl(ath_obj *s, ath_obj *n, int on_left) {
-    if (n == NULL || !ath_is_alive(n) || !n->has_value) return ath_alloc_dead();
-    if (n->value < 0) return ath_alloc_dead();
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
+    if (n->num.i < 0) return ath_alloc_dead();
     int s_empty = (s == NULL || s == ath_NULL);
     if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
 
     char *buf = NULL;
     size_t len = 0;
     if (!s_empty && ath_string_slurp(s, &buf, &len) != 0) return ath_alloc_dead();
-    size_t width = (size_t)n->value;
+    size_t width = (size_t)n->num.i;
     size_t pad = (len >= width) ? 0 : (width - len);
     size_t total = len + pad;
     if (total == 0) { free(buf); return ath_NULL; }
@@ -1852,9 +1859,9 @@ ath_obj *ath_ord(ath_obj *a, ath_obj *unused) {
  * of range, lacking a payload, or dead → dead. Inverse of ORD. */
 ath_obj *ath_chr(ath_obj *n, ath_obj *unused) {
     (void)unused;
-    if (n == NULL || !ath_is_alive(n) || !n->has_value) return ath_alloc_dead();
-    if (n->value < 0 || n->value > 255) return ath_alloc_dead();
-    ath_obj *atom = ath_char_atom((int)n->value);
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
+    if (n->num.i < 0 || n->num.i > 255) return ath_alloc_dead();
+    ath_obj *atom = ath_char_atom((int)n->num.i);
     ath_obj *result = ath_cons_fresh(atom, ath_NULL);
     ath_inherit_lifetime(result, n, NULL);
     return result;
@@ -1864,15 +1871,15 @@ ath_obj *ath_chr(ath_obj *n, ath_obj *unused) {
 
 /* Single number operand is usable iff alive and payload-bearing. */
 static int ath_num_usable(ath_obj *x) {
-    return x != NULL && ath_is_alive(x) && x->has_value;
+    return x != NULL && ath_is_alive(x) && ath_has_value(x);
 }
 
 /* POW: X raised to Y. Y must be >= 0 (integer exponents only). Overflow
  * or a negative exponent is born dead. 0^0 == 1. */
 ath_obj *ath_pow(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (y->value < 0) return ath_alloc_dead_number();
-    int64_t base = x->value, exp = y->value, result = 1;
+    if (y->num.i < 0) return ath_alloc_dead_number();
+    int64_t base = x->num.i, exp = y->num.i, result = 1;
     while (exp > 0) {
         if (exp & 1) {
             if (__builtin_mul_overflow(result, base, &result))
@@ -1891,8 +1898,8 @@ ath_obj *ath_pow(ath_obj *x, ath_obj *y) {
 ath_obj *ath_abs(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
-    if (x->value == INT64_MIN) return ath_alloc_dead_number();
-    int64_t v = x->value < 0 ? -x->value : x->value;
+    if (x->num.i == INT64_MIN) return ath_alloc_dead_number();
+    int64_t v = x->num.i < 0 ? -x->num.i : x->num.i;
     ath_obj *r = ath_alloc_number(v);
     ath_inherit_lifetime(r, x, NULL);
     return r;
@@ -1902,8 +1909,8 @@ ath_obj *ath_abs(ath_obj *x, ath_obj *unused) {
 ath_obj *ath_neg(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
-    if (x->value == INT64_MIN) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(-x->value);
+    if (x->num.i == INT64_MIN) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(-x->num.i);
     ath_inherit_lifetime(r, x, NULL);
     return r;
 }
@@ -1911,13 +1918,13 @@ ath_obj *ath_neg(ath_obj *x, ath_obj *unused) {
 /* MIN / MAX of two payloads. */
 ath_obj *ath_min(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(x->value < y->value ? x->value : y->value);
+    ath_obj *r = ath_alloc_number(x->num.i < y->num.i ? x->num.i : y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_max(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(x->value > y->value ? x->value : y->value);
+    ath_obj *r = ath_alloc_number(x->num.i > y->num.i ? x->num.i : y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
@@ -1926,7 +1933,7 @@ ath_obj *ath_max(ath_obj *x, ath_obj *y) {
  * its magnitude is unrepresentable. */
 ath_obj *ath_gcd(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    int64_t a = x->value, b = y->value;
+    int64_t a = x->num.i, b = y->num.i;
     if (a == INT64_MIN || b == INT64_MIN) return ath_alloc_dead_number();
     if (a < 0) a = -a;
     if (b < 0) b = -b;
@@ -1940,7 +1947,7 @@ ath_obj *ath_gcd(ath_obj *x, ath_obj *y) {
 ath_obj *ath_sign(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
-    int64_t s = (x->value > 0) - (x->value < 0);
+    int64_t s = (x->num.i > 0) - (x->num.i < 0);
     ath_obj *r = ath_alloc_number(s);
     ath_inherit_lifetime(r, x, NULL);
     return r;
@@ -1949,26 +1956,26 @@ ath_obj *ath_sign(ath_obj *x, ath_obj *unused) {
 /* Bitwise ops over the two's-complement int64 payload. */
 ath_obj *ath_band(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(x->value & y->value);
+    ath_obj *r = ath_alloc_number(x->num.i & y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_bor(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(x->value | y->value);
+    ath_obj *r = ath_alloc_number(x->num.i | y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_bxor(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(x->value ^ y->value);
+    ath_obj *r = ath_alloc_number(x->num.i ^ y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_bnot(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(~x->value);
+    ath_obj *r = ath_alloc_number(~x->num.i);
     ath_inherit_lifetime(r, x, NULL);
     return r;
 }
@@ -1978,15 +1985,15 @@ ath_obj *ath_bnot(ath_obj *x, ath_obj *unused) {
  * (sign-extending) right shift. */
 ath_obj *ath_shl(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (y->value < 0 || y->value > 63) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number((int64_t)((uint64_t)x->value << y->value));
+    if (y->num.i < 0 || y->num.i > 63) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number((int64_t)((uint64_t)x->num.i << y->num.i));
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_shr(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (y->value < 0 || y->value > 63) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(x->value >> y->value);
+    if (y->num.i < 0 || y->num.i > 63) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_number(x->num.i >> y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
@@ -2000,10 +2007,10 @@ ath_obj *ath_clamp(ath_obj *x, ath_obj *pair) {
     ath_obj *lo, *hi;
     ath_decompose(pair, &lo, &hi);
     if (!ath_num_usable(lo) || !ath_num_usable(hi)) return ath_alloc_dead_number();
-    if (lo->value > hi->value) return ath_alloc_dead_number();
-    int64_t v = x->value;
-    if (v < lo->value) v = lo->value;
-    else if (v > hi->value) v = hi->value;
+    if (lo->num.i > hi->num.i) return ath_alloc_dead_number();
+    int64_t v = x->num.i;
+    if (v < lo->num.i) v = lo->num.i;
+    else if (v > hi->num.i) v = hi->num.i;
     ath_obj *r = ath_alloc_number(v);
     ath_inherit_lifetime(r, x, pair);
     return r;
@@ -2028,15 +2035,15 @@ ath_obj *ath_compare(ath_obj *a, ath_obj *b) {
  * the bare atom). Born dead if N is negative, lacks a payload, or is out
  * of range, or S is dead/malformed. */
 ath_obj *ath_char_at(ath_obj *s, ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value < 0)
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i < 0)
         return ath_alloc_dead();
     int s_empty = (s == NULL || s == ath_NULL);
     if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
     char *buf = NULL;
     size_t len = 0;
     if (ath_string_slurp(s, &buf, &len) != 0) return ath_alloc_dead();
-    if ((size_t)n->value >= len) { free(buf); return ath_alloc_dead(); }
-    ath_obj *atom = ath_char_atom((unsigned char)buf[n->value]);
+    if ((size_t)n->num.i >= len) { free(buf); return ath_alloc_dead(); }
+    ath_obj *atom = ath_char_atom((unsigned char)buf[n->num.i]);
     free(buf);
     ath_obj *result = ath_cons_fresh(atom, ath_NULL);
     ath_inherit_lifetime(result, s, n);
@@ -2053,9 +2060,9 @@ ath_obj *ath_find_from(ath_obj *s, ath_obj *pair) {
         return ath_alloc_dead_number();
     ath_obj *needle, *start_obj;
     ath_decompose(pair, &needle, &start_obj);
-    if (start_obj == NULL || !ath_is_alive(start_obj) || !start_obj->has_value)
+    if (start_obj == NULL || !ath_is_alive(start_obj) || !ath_has_value(start_obj))
         return ath_alloc_dead_number();
-    int64_t start = start_obj->value;
+    int64_t start = start_obj->num.i;
     if (start < 0) return ath_alloc_dead_number();
 
     char *hbuf = NULL, *nbuf = NULL;
@@ -2171,9 +2178,9 @@ static ath_obj *ath_pad_with_impl(ath_obj *s, ath_obj *pair, int on_left) {
     if (pair == NULL || pair == ath_NULL || !ath_is_alive(pair)) return ath_alloc_dead();
     ath_obj *width_obj, *fill_obj;
     ath_decompose(pair, &width_obj, &fill_obj);
-    if (width_obj == NULL || !ath_is_alive(width_obj) || !width_obj->has_value)
+    if (width_obj == NULL || !ath_is_alive(width_obj) || !ath_has_value(width_obj))
         return ath_alloc_dead();
-    if (width_obj->value < 0) return ath_alloc_dead();
+    if (width_obj->num.i < 0) return ath_alloc_dead();
 
     char *fbuf = NULL;
     size_t flen = 0;
@@ -2185,7 +2192,7 @@ static ath_obj *ath_pad_with_impl(ath_obj *s, ath_obj *pair, int on_left) {
     char *buf = NULL;
     size_t len = 0;
     if (!s_empty && ath_string_slurp(s, &buf, &len) != 0) return ath_alloc_dead();
-    size_t width = (size_t)width_obj->value;
+    size_t width = (size_t)width_obj->num.i;
     size_t pad = (len >= width) ? 0 : (width - len);
     size_t total = len + pad;
     if (total == 0) { free(buf); return ath_NULL; }
@@ -2221,13 +2228,13 @@ static ath_obj *ath_fold_num(ath_obj *list, int is_product) {
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
-        if (l == NULL || !ath_is_alive(l) || !l->has_value)
+        if (l == NULL || !ath_is_alive(l) || !ath_has_value(l))
             return ath_alloc_dead_number();
         if (is_product) {
-            if (__builtin_mul_overflow(acc, l->value, &acc))
+            if (__builtin_mul_overflow(acc, l->num.i, &acc))
                 return ath_alloc_dead_number();
         } else {
-            if (__builtin_add_overflow(acc, l->value, &acc))
+            if (__builtin_add_overflow(acc, l->num.i, &acc))
                 return ath_alloc_dead_number();
         }
         cur = r;
@@ -2249,10 +2256,10 @@ static ath_obj *ath_extremum(ath_obj *list, int is_max) {
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
-        if (l == NULL || !ath_is_alive(l) || !l->has_value)
+        if (l == NULL || !ath_is_alive(l) || !ath_has_value(l))
             return ath_alloc_dead_number();
-        if (!seen) { best = l->value; seen = 1; }
-        else if (is_max ? (l->value > best) : (l->value < best)) best = l->value;
+        if (!seen) { best = l->num.i; seen = 1; }
+        else if (is_max ? (l->num.i > best) : (l->num.i < best)) best = l->num.i;
         cur = r;
     }
     if (!seen) return ath_alloc_dead_number();
@@ -2268,12 +2275,12 @@ ath_obj *ath_minimum(ath_obj *list, ath_obj *unused) { (void)unused; return ath_
  * to X's. X must have a payload (else born dead). Non-payload elements are
  * skipped. */
 ath_obj *ath_member(ath_obj *list, ath_obj *x) {
-    if (x == NULL || !ath_is_alive(x) || !x->has_value) return ath_verdict_false();
+    if (x == NULL || !ath_is_alive(x) || !ath_has_value(x)) return ath_verdict_false();
     ath_obj *cur = list;
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
-        if (l != NULL && ath_is_alive(l) && l->has_value && l->value == x->value)
+        if (l != NULL && ath_is_alive(l) && ath_has_value(l) && l->num.i == x->num.i)
             return ath_verdict_true(list, x);
         cur = r;
     }
@@ -2283,16 +2290,16 @@ ath_obj *ath_member(ath_obj *list, ath_obj *x) {
 /* TAKE: a fresh list of the first N elements (all of LIST when N >= its
  * length). N < 0 or no payload → dead; N == 0 → NULL; dead LIST → dead. */
 ath_obj *ath_take(ath_obj *list, ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value < 0)
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i < 0)
         return ath_alloc_dead();
     if (list != NULL && list != ath_NULL && !ath_is_alive(list)) return ath_alloc_dead();
-    if (n->value == 0) return ath_NULL;
+    if (n->num.i == 0) return ath_NULL;
     int64_t len = ath_spine_length(list);
     if (len == 0) return ath_NULL;
     ath_obj **buf = (ath_obj **)calloc((size_t)len, sizeof(ath_obj *));
     if (!buf) { fputs("ath: out of memory\n", stderr); exit(1); }
     int64_t got = ath_collect_spine(list, buf, len);
-    int64_t take = n->value < got ? n->value : got;
+    int64_t take = n->num.i < got ? n->num.i : got;
     ath_obj *out = ath_build_spine(buf, take);
     free(buf);
     ath_inherit_lifetime(out, list, n);
@@ -2302,15 +2309,15 @@ ath_obj *ath_take(ath_obj *list, ath_obj *n) {
 /* DROP: a fresh list of all but the first N elements. N < 0 or no payload
  * → dead; N >= length → NULL; dead LIST → dead. */
 ath_obj *ath_drop(ath_obj *list, ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value < 0)
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i < 0)
         return ath_alloc_dead();
     if (list != NULL && list != ath_NULL && !ath_is_alive(list)) return ath_alloc_dead();
     int64_t len = ath_spine_length(list);
-    if (n->value >= len) return ath_NULL;
+    if (n->num.i >= len) return ath_NULL;
     ath_obj **buf = (ath_obj **)calloc((size_t)len, sizeof(ath_obj *));
     if (!buf) { fputs("ath: out of memory\n", stderr); exit(1); }
     int64_t got = ath_collect_spine(list, buf, len);
-    ath_obj *out = ath_build_spine(buf + n->value, got - n->value);
+    ath_obj *out = ath_build_spine(buf + n->num.i, got - n->num.i);
     free(buf);
     ath_inherit_lifetime(out, list, n);
     return out;
@@ -2357,8 +2364,8 @@ ath_obj *ath_any_of(ath_obj *list, ath_obj *unused) {
  * if N is alive, payload-bearing, and non-negative; otherwise 0 (the loop
  * body runs zero times). */
 int64_t ath_count_of(ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !n->has_value || n->value < 0) return 0;
-    return n->value;
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i < 0) return 0;
+    return n->num.i;
 }
 
 _Noreturn void ath_halt(void) {

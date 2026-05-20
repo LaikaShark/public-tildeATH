@@ -279,31 +279,36 @@ int main(void) {
     ath_obj *n3 = ath_alloc_number(3);
     ath_obj *n4 = ath_alloc_number(4);
     assert(ath_is_alive(n3));
-    assert(n3->has_value && n3->value == 3);
-    assert(n4->has_value && n4->value == 4);
+    assert(ath_has_value(n3) && n3->num_kind == ATH_NUM_INT && n3->num.i == 3);
+    assert(ath_has_value(n4) && n4->num.i == 4);
+
+    /* Float payload allocator stores a double under the FLOAT tag (§4.8). */
+    ath_obj *f25 = ath_alloc_float(2.5);
+    assert(ath_is_alive(f25));
+    assert(ath_has_value(f25) && f25->num_kind == ATH_NUM_FLOAT && f25->num.f == 2.5);
 
     ath_obj *sum = ath_add(n3, n4);
     assert(ath_is_alive(sum));
-    assert(sum->has_value && sum->value == 7);
+    assert(ath_has_value(sum) && sum->num.i == 7);
 
     ath_obj *diff = ath_sub(n3, n4);
     assert(ath_is_alive(diff));
-    assert(diff->value == -1);
+    assert(diff->num.i == -1);
 
     ath_obj *prod = ath_mul(n3, n4);
-    assert(prod->value == 12);
+    assert(prod->num.i == 12);
 
     ath_obj *quot = ath_div(ath_alloc_number(20), ath_alloc_number(6));
-    assert(quot->value == 3);
+    assert(quot->num.i == 3);
 
     ath_obj *rem = ath_mod(ath_alloc_number(20), ath_alloc_number(6));
-    assert(rem->value == 2);
+    assert(rem->num.i == 2);
 
     /* Overflow → born dead. */
     ath_obj *big = ath_alloc_number(INT64_MAX);
     ath_obj *overflow = ath_add(big, ath_alloc_number(1));
     assert(!ath_is_alive(overflow));
-    assert(!overflow->has_value);
+    assert(!ath_has_value(overflow));
 
     /* Multiplication overflow. */
     ath_obj *mulover = ath_mul(big, ath_alloc_number(2));
@@ -342,7 +347,7 @@ int main(void) {
     ath_obj *ab = ath_add(an, bn);
     ath_obj *abc = ath_add(ab, cn2);
     assert(ath_is_alive(abc));
-    assert(abc->value == 6);
+    assert(abc->num.i == 6);
     ath_die(bn);   /* bn is a transitive dep via ab */
     assert(!ath_is_alive(abc));
 
@@ -361,7 +366,7 @@ int main(void) {
                           ath_compose(ath_char_atom('2'), ath_NULL));
     ath_obj *parsed = ath_parse(parse_src, ath_NULL);
     assert(ath_is_alive(parsed));
-    assert(parsed->has_value && parsed->value == 42);
+    assert(ath_has_value(parsed) && parsed->num.i == 42);
 
     /* Malformed string → born dead. */
     ath_obj *bad_src = ath_compose(ath_char_atom('4'),
@@ -374,7 +379,7 @@ int main(void) {
                         ath_compose(ath_char_atom('7'), ath_NULL));
     ath_obj *neg_parsed = ath_parse(neg_src, ath_NULL);
     assert(ath_is_alive(neg_parsed));
-    assert(neg_parsed->value == -7);
+    assert(neg_parsed->num.i == -7);
 
     /* --- Comparisons (SPEC §4.8.3) --- */
 
@@ -384,7 +389,7 @@ int main(void) {
     /* True verdict: alive, no payload. */
     ath_obj *v_lt = ath_lt(five, seven);
     assert(ath_is_alive(v_lt));
-    assert(!v_lt->has_value);
+    assert(!ath_has_value(v_lt));
 
     /* False verdict: dead. */
     ath_obj *v_lt_false = ath_lt(seven, five);
@@ -445,12 +450,12 @@ int main(void) {
     /* LENGTH */
     ath_obj *len_hi = ath_length(s_hi, ath_NULL);
     assert(ath_is_alive(len_hi));
-    assert(len_hi->has_value && len_hi->value == 2);
+    assert(ath_has_value(len_hi) && len_hi->num.i == 2);
 
     /* LENGTH(NULL) = 0 (empty string is real). */
     ath_obj *len_empty = ath_length(ath_NULL, ath_NULL);
     assert(ath_is_alive(len_empty));
-    assert(len_empty->value == 0);
+    assert(len_empty->num.i == 0);
 
     /* INDEX returns a fresh snapshot carrying the character's identity
      * (not the canonical atom pointer — see ath_index), so identity is
@@ -479,7 +484,7 @@ int main(void) {
     ath_obj *hi_bang = ath_concat(s_hi, world);
     fputs("expect Hi!: ", stdout);
     ath_print_obj(hi_bang);
-    assert(ath_length(hi_bang, ath_NULL)->value == 3);
+    assert(ath_length(hi_bang, ath_NULL)->num.i == 3);
 
     /* CONCAT with empty operand. */
     ath_obj *just_hi = ath_concat(s_hi, ath_NULL);
@@ -505,7 +510,7 @@ int main(void) {
     ath_obj *ell = ath_slice(hello, range_1_4);
     fputs("expect ell: ", stdout);
     ath_print_obj(ell);
-    assert(ath_length(ell, ath_NULL)->value == 3);
+    assert(ath_length(ell, ath_NULL)->num.i == 3);
 
     /* Slice [0..5] should be the whole string. */
     ath_obj *range_0_5 = ath_compose(ath_alloc_number(0), ath_alloc_number(5));
@@ -551,13 +556,13 @@ int main(void) {
     ath_obj *copy = ath_clone(orig);
     assert(copy != orig);                  /* independent identity */
     assert(ath_is_alive(copy));
-    assert(copy->has_value && copy->value == 99);
+    assert(ath_has_value(copy) && copy->num.i == 99);
 
     /* Killing the clone does not kill the original. */
     ath_die(copy);
     assert(!ath_is_alive(copy));
     assert(ath_is_alive(orig));
-    assert(orig->value == 99);
+    assert(orig->num.i == 99);
 
     /* Killing the original does not kill a clone made before the kill. */
     ath_obj *copy2 = ath_clone(orig);
@@ -573,7 +578,7 @@ int main(void) {
     /* Cloning NULL yields a dead, payload-less object. */
     ath_obj *null_clone = ath_clone(ath_NULL);
     assert(!ath_is_alive(null_clone));
-    assert(!null_clone->has_value);
+    assert(!ath_has_value(null_clone));
 
     /* Lifetime extensions are preserved. */
     ath_obj *oneshot = ath_alloc_oneshot();
@@ -690,7 +695,7 @@ int main(void) {
         /* FIND match → number at position 6. */
         ath_obj *idx = ath_find(hay, needle);
         assert(ath_is_alive(idx));
-        assert(idx->has_value && idx->value == 6);
+        assert(ath_has_value(idx) && idx->num.i == 6);
 
         /* FIND no-match → dead. */
         ath_obj *miss = ath_compose(ath_char_atom('z'), ath_NULL);
@@ -700,7 +705,7 @@ int main(void) {
         /* FIND with empty needle → 0 (empty is a prefix of everything). */
         ath_obj *idx_empty = ath_find(hay, ath_NULL);
         assert(ath_is_alive(idx_empty));
-        assert(idx_empty->value == 0);
+        assert(idx_empty->num.i == 0);
 
         /* FIND with empty haystack and non-empty needle → dead. */
         ath_obj *idx_e = ath_find(ath_NULL, needle);
@@ -781,7 +786,7 @@ int main(void) {
     ath_obj *sum_ab = ath_add(a_num, b_num);     /* sum has deps on a, b */
     ath_obj *sum_clone = ath_clone(sum_ab);      /* clone is independent */
     assert(ath_is_alive(sum_clone));
-    assert(sum_clone->value == 7);
+    assert(sum_clone->num.i == 7);
     /* Killing the original sum's operand kills sum_ab via deps, but the
      * clone is unaffected. */
     ath_die(a_num);
@@ -793,17 +798,17 @@ int main(void) {
     /* NOW returns a fresh number-payload object. */
     ath_obj *t0 = ath_now(ath_NULL, ath_NULL);
     assert(ath_is_alive(t0));
-    assert(t0->has_value && t0->value >= 0);
+    assert(ath_has_value(t0) && t0->num.i >= 0);
 
     /* NOW is monotonic — a later reading is >= an earlier one. */
     ath_obj *t1 = ath_now(ath_NULL, ath_NULL);
-    assert(t1->value >= t0->value);
+    assert(t1->num.i >= t0->num.i);
 
     /* sleep advances NOW by approximately the requested interval. */
     ath_obj *fifty = ath_alloc_number(50);  /* 50 ms */
-    int64_t before = ath_now(ath_NULL, ath_NULL)->value;
+    int64_t before = ath_now(ath_NULL, ath_NULL)->num.i;
     ath_sleep_ms(fifty);
-    int64_t after = ath_now(ath_NULL, ath_NULL)->value;
+    int64_t after = ath_now(ath_NULL, ath_NULL)->num.i;
     assert(after - before >= 40);  /* allow a bit of slack below */
     assert(after - before <= 200); /* and a bit of slack above */
 
@@ -841,8 +846,8 @@ int main(void) {
     for (int i = 0; i < 100; i++) {
         ath_obj *r = ath_random_range(r_lo, r_hi);
         assert(ath_is_alive(r));
-        assert(r->has_value);
-        assert(r->value >= 10 && r->value < 20);
+        assert(ath_has_value(r));
+        assert(r->num.i >= 10 && r->num.i < 20);
     }
 
     /* RANDOM with LO >= HI → dead. */
@@ -913,11 +918,11 @@ int main(void) {
         /* SPLIT: element count via LENGTH, element value via INDEX+STREQ. */
         ath_obj *parts = ath_split(MKS("a,b,c"), MKS(","));
         assert(ath_is_alive(parts));
-        assert(ath_length(parts, ath_NULL)->value == 3);
+        assert(ath_length(parts, ath_NULL)->num.i == 3);
         ath_obj *p0 = ath_index(parts, ath_alloc_number(0));
         assert(ath_is_alive(ath_streq(p0, MKS("a"))));
         ath_obj *trailing = ath_split(MKS("a,b,"), MKS(","));  /* trailing sep */
-        assert(ath_length(trailing, ath_NULL)->value == 3);
+        assert(ath_length(trailing, ath_NULL)->num.i == 3);
         assert(!ath_is_alive(ath_split(MKS("abc"), ath_NULL)));  /* empty sep born dead */
 
         /* JOIN: inverse of SPLIT when sep is absent from elements. */
@@ -943,16 +948,16 @@ int main(void) {
         assert(!ath_is_alive(ath_contains(ath_NULL, MKS("x"))));
 
         /* COUNT: non-overlapping; 0 matches is a live 0; empty needle dead. */
-        assert(ath_count(MKS("abracadabra"), MKS("a"))->value == 5);
-        assert(ath_count(MKS("aaaa"), MKS("aa"))->value == 2);          /* non-overlapping */
+        assert(ath_count(MKS("abracadabra"), MKS("a"))->num.i == 5);
+        assert(ath_count(MKS("aaaa"), MKS("aa"))->num.i == 2);          /* non-overlapping */
         ath_obj *zero = ath_count(MKS("hello"), MKS("q"));
-        assert(ath_is_alive(zero) && zero->value == 0);
+        assert(ath_is_alive(zero) && zero->num.i == 0);
         assert(!ath_is_alive(ath_count(MKS("hello"), ath_NULL)));       /* empty needle */
 
         /* RFIND: last index; empty needle → len; absent → dead. */
-        assert(ath_rfind(MKS("abracadabra"), MKS("a"))->value == 10);
-        assert(ath_rfind(MKS("hello"), MKS("l"))->value == 3);
-        assert(ath_rfind(MKS("hello"), ath_NULL)->value == 5);         /* empty → len */
+        assert(ath_rfind(MKS("abracadabra"), MKS("a"))->num.i == 10);
+        assert(ath_rfind(MKS("hello"), MKS("l"))->num.i == 3);
+        assert(ath_rfind(MKS("hello"), ath_NULL)->num.i == 5);         /* empty → len */
         assert(!ath_is_alive(ath_rfind(MKS("hello"), MKS("q"))));       /* absent */
 
         /* REPEAT: S x N; N==0 → empty; N<0 / no payload → dead. */
@@ -972,12 +977,12 @@ int main(void) {
         assert(!ath_is_alive(ath_pad_left(MKS("ab"), ath_alloc_number(-1))));
 
         /* ORD / CHR: round-trip the byte code of a character atom. */
-        assert(ath_ord(ath_char_atom('Q'), ath_NULL)->value == 'Q');
+        assert(ath_ord(ath_char_atom('Q'), ath_NULL)->num.i == 'Q');
         assert(ath_is_alive(ath_streq(ath_chr(ath_alloc_number('Q'), ath_NULL), MKS("Q"))));
         /* chr('q') → "q"; its first head is the atom; ord → 'q'. */
         ath_obj *q_str = ath_chr(ath_alloc_number('q'), ath_NULL);
         ath_obj *q_atom = ath_index(q_str, ath_alloc_number(0));
-        assert(ath_ord(q_atom, ath_NULL)->value == 'q');
+        assert(ath_ord(q_atom, ath_NULL)->num.i == 'q');
         assert(!ath_is_alive(ath_chr(ath_alloc_number(256), ath_NULL)));  /* out of range */
         assert(!ath_is_alive(ath_chr(ath_alloc_number(-1), ath_NULL)));
         assert(!ath_is_alive(ath_ord(MKS("ab"), ath_NULL)));  /* not a single atom */
@@ -989,45 +994,45 @@ int main(void) {
     {
         #define N(v) ath_alloc_number(v)
 
-        assert(ath_pow(N(2), N(10))->value == 1024);
-        assert(ath_pow(N(2), N(0))->value == 1);
-        assert(ath_pow(N(0), N(0))->value == 1);
-        assert(ath_pow(N(7), N(1))->value == 7);
+        assert(ath_pow(N(2), N(10))->num.i == 1024);
+        assert(ath_pow(N(2), N(0))->num.i == 1);
+        assert(ath_pow(N(0), N(0))->num.i == 1);
+        assert(ath_pow(N(7), N(1))->num.i == 7);
         assert(!ath_is_alive(ath_pow(N(2), N(-1))));        /* negative exponent */
         assert(!ath_is_alive(ath_pow(N(2), N(63))));        /* overflow */
 
-        assert(ath_abs(N(-5), ath_NULL)->value == 5);
-        assert(ath_abs(N(5), ath_NULL)->value == 5);
+        assert(ath_abs(N(-5), ath_NULL)->num.i == 5);
+        assert(ath_abs(N(5), ath_NULL)->num.i == 5);
         assert(!ath_is_alive(ath_abs(N(INT64_MIN), ath_NULL)));
-        assert(ath_neg(N(5), ath_NULL)->value == -5);
+        assert(ath_neg(N(5), ath_NULL)->num.i == -5);
         assert(!ath_is_alive(ath_neg(N(INT64_MIN), ath_NULL)));
 
-        assert(ath_min(N(3), N(7))->value == 3);
-        assert(ath_max(N(3), N(7))->value == 7);
+        assert(ath_min(N(3), N(7))->num.i == 3);
+        assert(ath_max(N(3), N(7))->num.i == 7);
 
-        assert(ath_gcd(N(12), N(18))->value == 6);
-        assert(ath_gcd(N(0), N(0))->value == 0);
-        assert(ath_gcd(N(-12), N(18))->value == 6);
+        assert(ath_gcd(N(12), N(18))->num.i == 6);
+        assert(ath_gcd(N(0), N(0))->num.i == 0);
+        assert(ath_gcd(N(-12), N(18))->num.i == 6);
 
-        assert(ath_sign(N(-3), ath_NULL)->value == -1);
-        assert(ath_sign(N(0), ath_NULL)->value == 0);
-        assert(ath_sign(N(9), ath_NULL)->value == 1);
+        assert(ath_sign(N(-3), ath_NULL)->num.i == -1);
+        assert(ath_sign(N(0), ath_NULL)->num.i == 0);
+        assert(ath_sign(N(9), ath_NULL)->num.i == 1);
 
-        assert(ath_band(N(12), N(18))->value == 0);
-        assert(ath_bor(N(12), N(18))->value == 30);
-        assert(ath_bxor(N(12), N(10))->value == 6);
-        assert(ath_bnot(N(0), ath_NULL)->value == -1);
-        assert(ath_shl(N(3), N(2))->value == 12);
-        assert(ath_shr(N(12), N(2))->value == 3);
-        assert(ath_shr(N(-8), N(1))->value == -4);          /* arithmetic shift */
+        assert(ath_band(N(12), N(18))->num.i == 0);
+        assert(ath_bor(N(12), N(18))->num.i == 30);
+        assert(ath_bxor(N(12), N(10))->num.i == 6);
+        assert(ath_bnot(N(0), ath_NULL)->num.i == -1);
+        assert(ath_shl(N(3), N(2))->num.i == 12);
+        assert(ath_shr(N(12), N(2))->num.i == 3);
+        assert(ath_shr(N(-8), N(1))->num.i == -4);          /* arithmetic shift */
         assert(!ath_is_alive(ath_shl(N(1), N(64))));        /* shift out of range */
         assert(!ath_is_alive(ath_shr(N(1), N(-1))));
 
         /* CLAMP with the (LO, HI) pair. */
         ath_obj *lohi = ath_compose(N(0), N(18));
-        assert(ath_clamp(N(100), lohi)->value == 18);
-        assert(ath_clamp(N(-5), lohi)->value == 0);
-        assert(ath_clamp(N(9), lohi)->value == 9);
+        assert(ath_clamp(N(100), lohi)->num.i == 18);
+        assert(ath_clamp(N(-5), lohi)->num.i == 0);
+        assert(ath_clamp(N(9), lohi)->num.i == 9);
         assert(!ath_is_alive(ath_clamp(N(5), ath_compose(N(18), N(0)))));  /* lo > hi */
 
         /* Dead / no-payload operand → dead. */
@@ -1044,10 +1049,10 @@ int main(void) {
         #define MKS(lit) ath_string_from_bytes(lit, sizeof(lit) - 1)
 
         /* COMPARE: -1/0/1 by byte order. */
-        assert(ath_compare(MKS("abc"), MKS("abc"))->value == 0);
-        assert(ath_compare(MKS("abc"), MKS("abd"))->value == -1);
-        assert(ath_compare(MKS("abd"), MKS("abc"))->value == 1);
-        assert(ath_compare(MKS("ab"), MKS("abc"))->value == -1);  /* prefix < longer */
+        assert(ath_compare(MKS("abc"), MKS("abc"))->num.i == 0);
+        assert(ath_compare(MKS("abc"), MKS("abd"))->num.i == -1);
+        assert(ath_compare(MKS("abd"), MKS("abc"))->num.i == 1);
+        assert(ath_compare(MKS("ab"), MKS("abc"))->num.i == -1);  /* prefix < longer */
 
         /* CHAR_AT: length-1 string; out-of-range / negative → dead. */
         assert(ath_is_alive(ath_streq(ath_char_at(MKS("hello"), ath_alloc_number(1)), MKS("e"))));
@@ -1055,10 +1060,10 @@ int main(void) {
         assert(!ath_is_alive(ath_char_at(MKS("hello"), ath_alloc_number(-1))));
 
         /* FIND_FROM: (NEEDLE, START) pair. */
-        assert(ath_find_from(MKS("abracadabra"), ath_compose(MKS("a"), ath_alloc_number(1)))->value == 3);
-        assert(ath_find_from(MKS("abracadabra"), ath_compose(MKS("a"), ath_alloc_number(0)))->value == 0);
+        assert(ath_find_from(MKS("abracadabra"), ath_compose(MKS("a"), ath_alloc_number(1)))->num.i == 3);
+        assert(ath_find_from(MKS("abracadabra"), ath_compose(MKS("a"), ath_alloc_number(0)))->num.i == 0);
         assert(!ath_is_alive(ath_find_from(MKS("hello"), ath_compose(MKS("q"), ath_alloc_number(0)))));  /* absent ('q' untouched) */
-        assert(ath_find_from(MKS("hello"), ath_compose(ath_NULL, ath_alloc_number(2)))->value == 2);  /* empty needle */
+        assert(ath_find_from(MKS("hello"), ath_compose(ath_NULL, ath_alloc_number(2)))->num.i == 2);  /* empty needle */
 
         /* CAPITALIZE / TITLE. */
         assert(ath_is_alive(ath_streq(ath_capitalize(MKS("hELLO"), ath_NULL), MKS("Hello"))));
@@ -1088,14 +1093,14 @@ int main(void) {
         /* Build the number list [4, 3, 8]. */
         ath_obj *list = ath_compose(N(4), ath_compose(N(3), ath_compose(N(8), ath_NULL)));
 
-        assert(ath_sum(list, ath_NULL)->value == 15);
-        assert(ath_product(list, ath_NULL)->value == 96);
-        assert(ath_maximum(list, ath_NULL)->value == 8);
-        assert(ath_minimum(list, ath_NULL)->value == 3);
+        assert(ath_sum(list, ath_NULL)->num.i == 15);
+        assert(ath_product(list, ath_NULL)->num.i == 96);
+        assert(ath_maximum(list, ath_NULL)->num.i == 8);
+        assert(ath_minimum(list, ath_NULL)->num.i == 3);
 
         /* Empty list: sum 0, product 1, extremum dead. */
-        assert(ath_sum(ath_NULL, ath_NULL)->value == 0);
-        assert(ath_product(ath_NULL, ath_NULL)->value == 1);
+        assert(ath_sum(ath_NULL, ath_NULL)->num.i == 0);
+        assert(ath_product(ath_NULL, ath_NULL)->num.i == 1);
         assert(!ath_is_alive(ath_maximum(ath_NULL, ath_NULL)));
 
         /* A string is not a number list: its elements are char atoms. */
@@ -1108,17 +1113,17 @@ int main(void) {
 
         /* TAKE / DROP build fresh sublists. */
         ath_obj *t2 = ath_take(list, N(2));            /* [4, 3] */
-        assert(ath_length(t2, ath_NULL)->value == 2);
-        assert(ath_sum(t2, ath_NULL)->value == 7);
+        assert(ath_length(t2, ath_NULL)->num.i == 2);
+        assert(ath_sum(t2, ath_NULL)->num.i == 7);
         assert(ath_take(list, N(0)) == ath_NULL);
-        assert(ath_length(ath_take(list, N(99)), ath_NULL)->value == 3);  /* N >= len → all */
+        assert(ath_length(ath_take(list, N(99)), ath_NULL)->num.i == 3);  /* N >= len → all */
         assert(!ath_is_alive(ath_take(list, N(-1))));
 
         ath_obj *d2 = ath_drop(list, N(2));            /* [8] */
-        assert(ath_sum(d2, ath_NULL)->value == 8);
-        assert(ath_length(d2, ath_NULL)->value == 1);
+        assert(ath_sum(d2, ath_NULL)->num.i == 8);
+        assert(ath_length(d2, ath_NULL)->num.i == 1);
         assert(ath_drop(list, N(3)) == ath_NULL);      /* N >= len → empty */
-        assert(ath_length(ath_drop(list, N(0)), ath_NULL)->value == 3);   /* whole copy */
+        assert(ath_length(ath_drop(list, N(0)), ath_NULL)->num.i == 3);   /* whole copy */
 
         /* n-ary lifetime combinators ALL_OF / ANY_OF. */
         ath_obj *x = ath_alloc_alive();
