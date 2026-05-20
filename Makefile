@@ -24,10 +24,10 @@ $(RUNTIME)/compose_intern.o: $(RUNTIME)/compose_intern.c $(RUNTIME)/ath_runtime.
 	$(CC) $(CFLAGS) -I$(RUNTIME) -c $< -o $@
 
 $(RUNTIME)/test_runtime_fresh: $(RUNTIME)/test_runtime.c $(RUNTIME)/libath_fresh.a
-	$(CC) $(CFLAGS) -I$(RUNTIME) $< $(RUNTIME)/libath_fresh.a -o $@
+	$(CC) $(CFLAGS) -I$(RUNTIME) $< $(RUNTIME)/libath_fresh.a -lm -o $@
 
 $(RUNTIME)/test_runtime_intern: $(RUNTIME)/test_runtime.c $(RUNTIME)/libath_intern.a
-	$(CC) $(CFLAGS) -DATH_INTERN_MODE -I$(RUNTIME) $< $(RUNTIME)/libath_intern.a -o $@
+	$(CC) $(CFLAGS) -DATH_INTERN_MODE -I$(RUNTIME) $< $(RUNTIME)/libath_intern.a -lm -o $@
 
 test-runtime: $(RUNTIME)/test_runtime_fresh $(RUNTIME)/test_runtime_intern
 	@echo "--- fresh ---"

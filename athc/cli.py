@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         obj_path = f.name
     try:
         result = subprocess.run(
-            [args.cc, obj_path, str(runtime), "-o", args.output],
+            [args.cc, obj_path, str(runtime), "-lm", "-o", args.output],
             capture_output=True,
             text=True,
         )

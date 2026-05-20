@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -560,54 +561,98 @@ static int ath_operands_usable(ath_obj *x, ath_obj *y) {
     return 1;
 }
 
+/* Numeric-tower helpers (SPEC §4.8.2). A binary op runs in the int64 path
+ * when both operands are INT, else promotes both to double and yields a
+ * FLOAT. ath_as_double reads either representation. */
+static double ath_as_double(const ath_obj *o) {
+    return o->num_kind == ATH_NUM_FLOAT ? o->num.f : (double)o->num.i;
+}
+
+static int ath_either_float(const ath_obj *x, const ath_obj *y) {
+    return x->num_kind == ATH_NUM_FLOAT || y->num_kind == ATH_NUM_FLOAT;
+}
+
+/* True iff o is FLOAT — used by int-only ops (bitwise, gcd) that born-die
+ * rather than promote. */
+static int ath_is_float(const ath_obj *o) {
+    return o != NULL && o->num_kind == ATH_NUM_FLOAT;
+}
+
 ath_obj *ath_add(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    int64_t r;
-    if (__builtin_add_overflow(x->num.i, y->num.i, &r)) {
-        return ath_alloc_dead_number();
+    ath_obj *out;
+    if (ath_either_float(x, y)) {
+        out = ath_alloc_float(ath_as_double(x) + ath_as_double(y));
+    } else {
+        int64_t r;
+        if (__builtin_add_overflow(x->num.i, y->num.i, &r))
+            return ath_alloc_dead_number();
+        out = ath_alloc_number(r);
     }
-    ath_obj *out = ath_alloc_number(r);
     ath_inherit_lifetime(out, x, y);
     return out;
 }
 
 ath_obj *ath_sub(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    int64_t r;
-    if (__builtin_sub_overflow(x->num.i, y->num.i, &r)) {
-        return ath_alloc_dead_number();
+    ath_obj *out;
+    if (ath_either_float(x, y)) {
+        out = ath_alloc_float(ath_as_double(x) - ath_as_double(y));
+    } else {
+        int64_t r;
+        if (__builtin_sub_overflow(x->num.i, y->num.i, &r))
+            return ath_alloc_dead_number();
+        out = ath_alloc_number(r);
     }
-    ath_obj *out = ath_alloc_number(r);
     ath_inherit_lifetime(out, x, y);
     return out;
 }
 
 ath_obj *ath_mul(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    int64_t r;
-    if (__builtin_mul_overflow(x->num.i, y->num.i, &r)) {
-        return ath_alloc_dead_number();
+    ath_obj *out;
+    if (ath_either_float(x, y)) {
+        out = ath_alloc_float(ath_as_double(x) * ath_as_double(y));
+    } else {
+        int64_t r;
+        if (__builtin_mul_overflow(x->num.i, y->num.i, &r))
+            return ath_alloc_dead_number();
+        out = ath_alloc_number(r);
     }
-    ath_obj *out = ath_alloc_number(r);
     ath_inherit_lifetime(out, x, y);
     return out;
 }
 
 ath_obj *ath_div(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (y->num.i == 0) return ath_alloc_dead_number();
-    /* INT64_MIN / -1 overflows two's-complement. */
-    if (x->num.i == INT64_MIN && y->num.i == -1) return ath_alloc_dead_number();
-    ath_obj *out = ath_alloc_number(x->num.i / y->num.i);
+    ath_obj *out;
+    if (ath_either_float(x, y)) {
+        /* True division. x/0.0 yields ±inf or nan, which are live values
+         * (SPEC §4.8.2): division produced a number, just not a finite one. */
+        out = ath_alloc_float(ath_as_double(x) / ath_as_double(y));
+    } else {
+        if (y->num.i == 0) return ath_alloc_dead_number();
+        /* INT64_MIN / -1 overflows two's-complement. */
+        if (x->num.i == INT64_MIN && y->num.i == -1)
+            return ath_alloc_dead_number();
+        out = ath_alloc_number(x->num.i / y->num.i);
+    }
     ath_inherit_lifetime(out, x, y);
     return out;
 }
 
 ath_obj *ath_mod(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (y->num.i == 0) return ath_alloc_dead_number();
-    if (x->num.i == INT64_MIN && y->num.i == -1) return ath_alloc_dead_number();
-    ath_obj *out = ath_alloc_number(x->num.i % y->num.i);
+    ath_obj *out;
+    if (ath_either_float(x, y)) {
+        /* fmod; fmod(x, 0.0) is nan, a live value (§4.8.2). */
+        out = ath_alloc_float(fmod(ath_as_double(x), ath_as_double(y)));
+    } else {
+        if (y->num.i == 0) return ath_alloc_dead_number();
+        if (x->num.i == INT64_MIN && y->num.i == -1)
+            return ath_alloc_dead_number();
+        out = ath_alloc_number(x->num.i % y->num.i);
+    }
     ath_inherit_lifetime(out, x, y);
     return out;
 }
@@ -665,35 +710,25 @@ static ath_obj *ath_verdict_false(void) {
     return v;
 }
 
-ath_obj *ath_lt(ath_obj *x, ath_obj *y) {
-    if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->num.i < y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
-}
-
-ath_obj *ath_eq(ath_obj *x, ath_obj *y) {
-    if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->num.i == y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
-}
-
-ath_obj *ath_gt(ath_obj *x, ath_obj *y) {
-    if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->num.i > y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
-}
-
-ath_obj *ath_le(ath_obj *x, ath_obj *y) {
-    if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->num.i <= y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
-}
-
-ath_obj *ath_ge(ath_obj *x, ath_obj *y) {
-    if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->num.i >= y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
-}
-
-ath_obj *ath_ne(ath_obj *x, ath_obj *y) {
-    if (!ath_operands_usable(x, y)) return ath_verdict_false();
-    return x->num.i != y->num.i ? ath_verdict_true(x, y) : ath_verdict_false();
-}
+/* Numeric comparisons (SPEC §4.8.3). Promote to double when either operand
+ * is FLOAT, else compare as int64 (so large int64s past 2^53 stay exact).
+ * Across kinds this makes 2 == 2.0 true. NaN compares per IEEE: every
+ * ordered test is false, != is true. */
+#define ATH_CMP(name, op)                                                   \
+    ath_obj *name(ath_obj *x, ath_obj *y) {                                 \
+        if (!ath_operands_usable(x, y)) return ath_verdict_false();         \
+        int res = ath_either_float(x, y)                                    \
+                      ? (ath_as_double(x) op ath_as_double(y))              \
+                      : (x->num.i op y->num.i);                             \
+        return res ? ath_verdict_true(x, y) : ath_verdict_false();          \
+    }
+ATH_CMP(ath_lt, <)
+ATH_CMP(ath_eq, ==)
+ATH_CMP(ath_gt, >)
+ATH_CMP(ath_le, <=)
+ATH_CMP(ath_ge, >=)
+ATH_CMP(ath_ne, !=)
+#undef ATH_CMP
 
 /* --- Logical combinators over verdicts (SPEC §4.8.3) ------------------- */
 
@@ -1878,61 +1913,93 @@ static int ath_num_usable(ath_obj *x) {
  * or a negative exponent is born dead. 0^0 == 1. */
 ath_obj *ath_pow(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (y->num.i < 0) return ath_alloc_dead_number();
-    int64_t base = x->num.i, exp = y->num.i, result = 1;
-    while (exp > 0) {
-        if (exp & 1) {
-            if (__builtin_mul_overflow(result, base, &result))
+    ath_obj *r;
+    if (ath_either_float(x, y)) {
+        /* Float pow handles negative/fractional exponents; out-of-domain
+         * cases (e.g. neg base ^ frac) yield nan, a live value (§4.8.2). */
+        r = ath_alloc_float(pow(ath_as_double(x), ath_as_double(y)));
+    } else {
+        if (y->num.i < 0) return ath_alloc_dead_number();
+        int64_t base = x->num.i, exp = y->num.i, result = 1;
+        while (exp > 0) {
+            if (exp & 1) {
+                if (__builtin_mul_overflow(result, base, &result))
+                    return ath_alloc_dead_number();
+            }
+            exp >>= 1;
+            if (exp > 0 && __builtin_mul_overflow(base, base, &base))
                 return ath_alloc_dead_number();
         }
-        exp >>= 1;
-        if (exp > 0 && __builtin_mul_overflow(base, base, &base))
-            return ath_alloc_dead_number();
+        r = ath_alloc_number(result);
     }
-    ath_obj *r = ath_alloc_number(result);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 
-/* ABS: magnitude of X. INT64_MIN has no positive representation → dead. */
+/* ABS: magnitude of X. For INT, INT64_MIN has no positive representation
+ * → dead; FLOAT promotes through fabs. */
 ath_obj *ath_abs(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
-    if (x->num.i == INT64_MIN) return ath_alloc_dead_number();
-    int64_t v = x->num.i < 0 ? -x->num.i : x->num.i;
-    ath_obj *r = ath_alloc_number(v);
+    ath_obj *r;
+    if (ath_is_float(x)) {
+        r = ath_alloc_float(fabs(x->num.f));
+    } else {
+        if (x->num.i == INT64_MIN) return ath_alloc_dead_number();
+        r = ath_alloc_number(x->num.i < 0 ? -x->num.i : x->num.i);
+    }
     ath_inherit_lifetime(r, x, NULL);
     return r;
 }
 
-/* NEG: arithmetic negation. INT64_MIN overflows → dead. */
+/* NEG: arithmetic negation. INT64_MIN overflows the int path → dead;
+ * FLOAT negates directly. */
 ath_obj *ath_neg(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
-    if (x->num.i == INT64_MIN) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(-x->num.i);
+    ath_obj *r;
+    if (ath_is_float(x)) {
+        r = ath_alloc_float(-x->num.f);
+    } else {
+        if (x->num.i == INT64_MIN) return ath_alloc_dead_number();
+        r = ath_alloc_number(-x->num.i);
+    }
     ath_inherit_lifetime(r, x, NULL);
     return r;
 }
 
-/* MIN / MAX of two payloads. */
+/* MIN / MAX of two payloads; promote to FLOAT if either operand is FLOAT. */
 ath_obj *ath_min(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(x->num.i < y->num.i ? x->num.i : y->num.i);
+    ath_obj *r;
+    if (ath_either_float(x, y)) {
+        double a = ath_as_double(x), b = ath_as_double(y);
+        r = ath_alloc_float(a < b ? a : b);
+    } else {
+        r = ath_alloc_number(x->num.i < y->num.i ? x->num.i : y->num.i);
+    }
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_max(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    ath_obj *r = ath_alloc_number(x->num.i > y->num.i ? x->num.i : y->num.i);
+    ath_obj *r;
+    if (ath_either_float(x, y)) {
+        double a = ath_as_double(x), b = ath_as_double(y);
+        r = ath_alloc_float(a > b ? a : b);
+    } else {
+        r = ath_alloc_number(x->num.i > y->num.i ? x->num.i : y->num.i);
+    }
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 
 /* GCD of the magnitudes (Euclid). gcd(0,0) == 0. INT64_MIN → dead, as
- * its magnitude is unrepresentable. */
+ * its magnitude is unrepresentable. Integer-only: a FLOAT operand is born
+ * dead (no gcd over reals). */
 ath_obj *ath_gcd(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
     int64_t a = x->num.i, b = y->num.i;
     if (a == INT64_MIN || b == INT64_MIN) return ath_alloc_dead_number();
     if (a < 0) a = -a;
@@ -1943,31 +2010,40 @@ ath_obj *ath_gcd(ath_obj *x, ath_obj *y) {
     return r;
 }
 
-/* SIGN: -1, 0, or +1. */
+/* SIGN: -1, 0, or +1; FLOAT input yields a FLOAT -1.0/0.0/1.0 (nan → 0). */
 ath_obj *ath_sign(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
-    int64_t s = (x->num.i > 0) - (x->num.i < 0);
-    ath_obj *r = ath_alloc_number(s);
+    ath_obj *r;
+    if (ath_is_float(x)) {
+        double v = x->num.f;
+        r = ath_alloc_float((double)((v > 0) - (v < 0)));
+    } else {
+        r = ath_alloc_number((x->num.i > 0) - (x->num.i < 0));
+    }
     ath_inherit_lifetime(r, x, NULL);
     return r;
 }
 
-/* Bitwise ops over the two's-complement int64 payload. */
+/* Bitwise ops over the two's-complement int64 payload. Integer-only: any
+ * FLOAT operand is born dead (no bit pattern is exposed for doubles). */
 ath_obj *ath_band(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(x->num.i & y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_bor(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(x->num.i | y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_bxor(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(x->num.i ^ y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
@@ -1975,6 +2051,7 @@ ath_obj *ath_bxor(ath_obj *x, ath_obj *y) {
 ath_obj *ath_bnot(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    if (ath_is_float(x)) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(~x->num.i);
     ath_inherit_lifetime(r, x, NULL);
     return r;
@@ -1982,9 +2059,10 @@ ath_obj *ath_bnot(ath_obj *x, ath_obj *unused) {
 
 /* SHL / SHR: shift by 0..63. Out-of-range shift is born dead. SHL uses an
  * unsigned shift to avoid signed-overflow UB; SHR is an arithmetic
- * (sign-extending) right shift. */
+ * (sign-extending) right shift. Integer-only: a FLOAT operand is born dead. */
 ath_obj *ath_shl(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
     if (y->num.i < 0 || y->num.i > 63) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number((int64_t)((uint64_t)x->num.i << y->num.i));
     ath_inherit_lifetime(r, x, y);
@@ -1992,6 +2070,7 @@ ath_obj *ath_shl(ath_obj *x, ath_obj *y) {
 }
 ath_obj *ath_shr(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
+    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
     if (y->num.i < 0 || y->num.i > 63) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(x->num.i >> y->num.i);
     ath_inherit_lifetime(r, x, y);
@@ -1999,7 +2078,8 @@ ath_obj *ath_shr(ath_obj *x, ath_obj *y) {
 }
 
 /* CLAMP: confine X to [LO, HI], packed as the pair (LO, HI). Born dead if
- * X or the pair is unusable, or LO > HI. */
+ * X or the pair is unusable, or LO > HI. Promotes to FLOAT if any of X,
+ * LO, HI is FLOAT. */
 ath_obj *ath_clamp(ath_obj *x, ath_obj *pair) {
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
     if (pair == NULL || pair == ath_NULL || !ath_is_alive(pair))
@@ -2007,11 +2087,20 @@ ath_obj *ath_clamp(ath_obj *x, ath_obj *pair) {
     ath_obj *lo, *hi;
     ath_decompose(pair, &lo, &hi);
     if (!ath_num_usable(lo) || !ath_num_usable(hi)) return ath_alloc_dead_number();
-    if (lo->num.i > hi->num.i) return ath_alloc_dead_number();
-    int64_t v = x->num.i;
-    if (v < lo->num.i) v = lo->num.i;
-    else if (v > hi->num.i) v = hi->num.i;
-    ath_obj *r = ath_alloc_number(v);
+    ath_obj *r;
+    if (ath_is_float(x) || ath_is_float(lo) || ath_is_float(hi)) {
+        double v = ath_as_double(x);
+        double lo_d = ath_as_double(lo), hi_d = ath_as_double(hi);
+        if (lo_d > hi_d) return ath_alloc_dead_number();
+        if (v < lo_d) v = lo_d; else if (v > hi_d) v = hi_d;
+        r = ath_alloc_float(v);
+    } else {
+        if (lo->num.i > hi->num.i) return ath_alloc_dead_number();
+        int64_t v = x->num.i;
+        if (v < lo->num.i) v = lo->num.i;
+        else if (v > hi->num.i) v = hi->num.i;
+        r = ath_alloc_number(v);
+    }
     ath_inherit_lifetime(r, x, pair);
     return r;
 }
@@ -2223,23 +2312,35 @@ ath_obj *ath_pad_right_with(ath_obj *s, ath_obj *pair) { return ath_pad_with_imp
  * character atoms) dies. The identity is 0 for sum, 1 for product; an
  * empty list yields the identity. Overflow is born dead. */
 static ath_obj *ath_fold_num(ath_obj *list, int is_product) {
-    int64_t acc = is_product ? 1 : 0;
+    /* Accumulate in int64 (overflow-checked) until a FLOAT element appears,
+     * then promote the running total to double and continue there. An
+     * empty/all-int list keeps the int identity (0/1). */
+    int is_float = 0;
+    int64_t acc_i = is_product ? 1 : 0;
+    double acc_f = is_product ? 1.0 : 0.0;
     ath_obj *cur = list;
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
         if (l == NULL || !ath_is_alive(l) || !ath_has_value(l))
             return ath_alloc_dead_number();
-        if (is_product) {
-            if (__builtin_mul_overflow(acc, l->num.i, &acc))
+        if (!is_float && l->num_kind == ATH_NUM_FLOAT) {
+            acc_f = (double)acc_i;
+            is_float = 1;
+        }
+        if (is_float) {
+            double v = ath_as_double(l);
+            acc_f = is_product ? acc_f * v : acc_f + v;
+        } else if (is_product) {
+            if (__builtin_mul_overflow(acc_i, l->num.i, &acc_i))
                 return ath_alloc_dead_number();
         } else {
-            if (__builtin_add_overflow(acc, l->num.i, &acc))
+            if (__builtin_add_overflow(acc_i, l->num.i, &acc_i))
                 return ath_alloc_dead_number();
         }
         cur = r;
     }
-    ath_obj *out = ath_alloc_number(acc);
+    ath_obj *out = is_float ? ath_alloc_float(acc_f) : ath_alloc_number(acc_i);
     ath_inherit_lifetime(out, list, NULL);
     return out;
 }
@@ -2250,20 +2351,32 @@ ath_obj *ath_product(ath_obj *list, ath_obj *unused) { (void)unused; return ath_
 /* MAXIMUM / MINIMUM element payload. An empty list is born dead (no
  * extremum); a non-payload or dead element is born dead. */
 static ath_obj *ath_extremum(ath_obj *list, int is_max) {
-    int seen = 0;
-    int64_t best = 0;
+    int seen = 0, is_float = 0;
+    int64_t best_i = 0;
+    double best_f = 0.0;
     ath_obj *cur = list;
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
         if (l == NULL || !ath_is_alive(l) || !ath_has_value(l))
             return ath_alloc_dead_number();
-        if (!seen) { best = l->num.i; seen = 1; }
-        else if (is_max ? (l->num.i > best) : (l->num.i < best)) best = l->num.i;
+        if (!is_float && l->num_kind == ATH_NUM_FLOAT) {
+            best_f = (double)best_i;
+            is_float = 1;
+        }
+        if (is_float) {
+            double v = ath_as_double(l);
+            if (!seen) { best_f = v; seen = 1; }
+            else if (is_max ? (v > best_f) : (v < best_f)) best_f = v;
+        } else {
+            int64_t v = l->num.i;
+            if (!seen) { best_i = v; seen = 1; }
+            else if (is_max ? (v > best_i) : (v < best_i)) best_i = v;
+        }
         cur = r;
     }
     if (!seen) return ath_alloc_dead_number();
-    ath_obj *out = ath_alloc_number(best);
+    ath_obj *out = is_float ? ath_alloc_float(best_f) : ath_alloc_number(best_i);
     ath_inherit_lifetime(out, list, NULL);
     return out;
 }

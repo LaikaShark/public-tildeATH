@@ -1044,6 +1044,67 @@ int main(void) {
         #undef N
     }
 
+    /* --- Float payloads and the numeric tower (SPEC §4.8.2) ----------- */
+    {
+        #define I(v) ath_alloc_number(v)
+        #define F(v) ath_alloc_float(v)
+        #define IS_F(o) ((o)->num_kind == ATH_NUM_FLOAT)
+
+        /* Mixed int/float promotes to float; int/int stays int. */
+        ath_obj *s1 = ath_add(I(2), F(1.5));
+        assert(ath_is_alive(s1) && IS_F(s1) && s1->num.f == 3.5);
+        ath_obj *s2 = ath_add(F(1.5), I(2));
+        assert(IS_F(s2) && s2->num.f == 3.5);
+        ath_obj *s3 = ath_add(I(2), I(3));
+        assert(s3->num_kind == ATH_NUM_INT && s3->num.i == 5);
+        assert(ath_mul(F(2.0), F(2.5))->num.f == 5.0);
+        assert(ath_sub(F(1.0), I(3))->num.f == -2.0);
+
+        /* div: float is TRUE division; mod is fmod. */
+        assert(ath_div(I(7), F(2.0))->num.f == 3.5);
+        assert(ath_div(I(7), I(2))->num.i == 3);            /* int trunc unchanged */
+        assert(ath_mod(F(5.5), F(2.0))->num.f == 1.5);
+
+        /* nan / inf are LIVE values (§4.8.2). */
+        ath_obj *inf = ath_div(F(1.0), F(0.0));
+        assert(ath_is_alive(inf) && IS_F(inf) && isinf(inf->num.f));
+        ath_obj *nan_ = ath_mod(F(1.0), F(0.0));
+        assert(ath_is_alive(nan_) && isnan(nan_->num.f));
+
+        /* Comparisons promote across kinds: 2 == 2.0, 2.5 < 3. */
+        assert(ath_is_alive(ath_eq(I(2), F(2.0))));
+        assert(!ath_is_alive(ath_eq(I(2), F(2.5))));
+        assert(ath_is_alive(ath_lt(F(2.5), I(3))));
+        assert(ath_is_alive(ath_gt(I(3), F(2.5))));
+
+        /* Tower unary/binary ops. */
+        assert(ath_abs(F(-2.5), ath_NULL)->num.f == 2.5);
+        assert(ath_neg(F(2.5), ath_NULL)->num.f == -2.5);
+        assert(ath_min(F(1.5), I(2))->num.f == 1.5);
+        assert(ath_max(F(1.5), I(2))->num.f == 2.0);
+        assert(ath_sign(F(-9.0), ath_NULL)->num.f == -1.0);
+        assert(ath_pow(F(9.0), F(0.5))->num.f == 3.0);
+        ath_obj *cl = ath_clamp(F(5.5), ath_compose(F(0.0), F(2.0)));
+        assert(IS_F(cl) && cl->num.f == 2.0);
+
+        /* Integer-only ops born-die on a FLOAT operand. */
+        assert(!ath_is_alive(ath_band(F(1.0), I(2))));
+        assert(!ath_is_alive(ath_gcd(F(4.0), I(6))));
+        assert(!ath_is_alive(ath_shl(F(1.0), I(2))));
+        assert(!ath_is_alive(ath_bnot(F(1.0), ath_NULL)));
+
+        /* List folds promote when any element is float. */
+        ath_obj *mixed = ath_compose(I(1), ath_compose(F(2.5), ath_compose(I(3), ath_NULL)));
+        ath_obj *ms = ath_sum(mixed, ath_NULL);
+        assert(IS_F(ms) && ms->num.f == 6.5);
+        ath_obj *allint = ath_compose(I(1), ath_compose(I(2), ath_NULL));
+        assert(ath_sum(allint, ath_NULL)->num_kind == ATH_NUM_INT);  /* stays int */
+
+        #undef I
+        #undef F
+        #undef IS_F
+    }
+
     /* --- String polish builtins (SPEC §4.8.4 extensions) -------------- */
     {
         #define MKS(lit) ath_string_from_bytes(lit, sizeof(lit) - 1)
