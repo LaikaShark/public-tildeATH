@@ -1,0 +1,31 @@
+// Demonstrates float payloads and the numeric tower (§4.8, §10.2).
+//
+//   athc examples/float_arithmetic.ath -o fa
+//   ./fa
+//   # expected:
+//   # pi = 3.14
+//   # 3.14 + 7 = 10.14
+//   # 7 / 2.0 = 3.5
+//   # floor(3.14) = 3.0
+//   # trunc(3.14) = 3
+//   # parse 2.5e3 = 2.5e+03
+
+importf <to_string> as TO_STRING;
+importf <add> as ADD;
+importf <div> as DIV;
+importf <floor> as FLOOR;
+importf <float_to_int> as FLOAT_TO_INT;
+importf <parse> as PARSE;
+
+import number 3.14 as PI;
+import number 7 as SEVEN;
+import number 2.0 as TWO;
+
+TO_STRING [PI, PI] PS;                     print pi = $PS;
+ADD [PI, SEVEN] SUM;  TO_STRING [SUM, SUM] SUMS;    print 3.14 + 7 = $SUMS;
+DIV [SEVEN, TWO] HALF; TO_STRING [HALF, HALF] HS;   print 7 / 2.0 = $HS;
+FLOOR [PI, PI] FL;    TO_STRING [FL, FL] FLS;       print floor(3.14) = $FLS;
+FLOAT_TO_INT [PI, PI] TI; TO_STRING [TI, TI] TIS;   print trunc(3.14) = $TIS;
+text "2.5e3" as STR; PARSE [STR, STR] P; TO_STRING [P, P] PPS; print parse 2.5e3 = $PPS;
+
+THIS.DIE();

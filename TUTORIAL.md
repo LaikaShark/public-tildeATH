@@ -537,22 +537,23 @@ independently of the runtime ABI.
 
 ## 10. Numbers
 
-`~ATH` has no number literal in the grammar. A number is an object
-that carries an integer payload in addition to its `alive` bit. Two
-fields hold the payload (§4.8):
-
-- `has_value` — nonzero iff a payload is set.
-- `value` — signed 64-bit integer.
+A number is an object that carries a numeric payload in addition to its
+`alive` bit. The payload is **tagged** (§4.8): `num_kind` says whether it
+is absent, an `int64`, or an IEEE-754 `double`, and a union holds the
+value. "Has a payload" means `num_kind` is not `NONE`.
 
 A new number object is introduced with:
 
 ```ath
-import number 42 as N;
+import number 42 as N;       // int64 payload
+import number 3.14 as PI;    // double payload
 ```
 
-This allocates a fresh object with `has_value = 1`, `value = 42`,
-and binds `N` to it (§4.4.14). The literal must fit signed 64-bit
-range; otherwise the program fails to compile.
+A bare integer literal gives an INT payload; a literal with a `.` or an
+exponent (`3.14`, `1e6`, `2.5e-3`) gives a FLOAT payload (§4.8). The
+object is bound to the name (§4.4.14). An integer literal must fit
+signed 64-bit range and a float literal must be finite; otherwise the
+program fails to compile.
 
 A number object is **eternal-alive** by default — it has no deadline,
 no watch path, no awaited signal. It outlives the program. To give a
@@ -575,13 +576,16 @@ Seven arithmetic functions are shipped as stdlib shims (§4.8.2):
 
 | Surface call            | Result                                |
 |-------------------------|---------------------------------------|
-| `ADD [X, Y] R;`         | `X.value + Y.value`                   |
-| `SUB [X, Y] R;`         | `X.value - Y.value`                   |
-| `MUL [X, Y] R;`         | `X.value * Y.value`                   |
-| `DIV [X, Y] R;`         | `X.value / Y.value` (toward zero)     |
-| `MOD [X, Y] R;`         | `X.value % Y.value`                   |
-| `TO_STRING [N, _] S;`   | string encoding of `N.value` (§13)    |
-| `PARSE [S, _] N;`       | int64 parsed from the string `S`      |
+| `ADD [X, Y] R;`         | `X + Y`                               |
+| `SUB [X, Y] R;`         | `X - Y`                               |
+| `MUL [X, Y] R;`         | `X * Y`                               |
+| `DIV [X, Y] R;`         | `X / Y` (int: toward zero; float: true division) |
+| `MOD [X, Y] R;`         | `X % Y` (float: `fmod`)               |
+| `TO_STRING [N, _] S;`   | decimal string of `N` (§13)           |
+| `PARSE [S, _] N;`       | number parsed from the string `S`     |
+
+These promote per the tower (§10.2): the result is an int for int⊕int,
+a float if either operand is a float.
 
 A numeric **second wave** adds the usual maths and bit-twiddling
 (§4.8.2):
@@ -600,8 +604,11 @@ A numeric **second wave** adds the usual maths and bit-twiddling
 | `CLAMP [X, PAIR] R;`    | `X` confined to `[LO, HI]`            |
 
 `CLAMP` packs its bounds with `ENTANGLE [LO, HI] PAIR;` (the compose-pair
-pattern, §13.2.3). `POW` rejects negative exponents; `ABS`/`NEG`/`GCD`
-reject `INT64_MIN`; shifts require a count of 0..63.
+pattern, §13.2.3). For integers, `POW` rejects negative exponents and
+`ABS`/`NEG`/`GCD` reject `INT64_MIN`; shifts require a count of 0..63.
+The arithmetic ops (`POW`/`ABS`/`NEG`/`MIN`/`MAX`/`SIGN`/`CLAMP`) promote
+to float per §10.2; the bitwise group and `GCD` are integer-only and
+born-die on a float operand.
 
 All are brought in by name:
 
@@ -617,16 +624,49 @@ dead** on failure. Failure conditions (§4.8.2) include:
 - Integer overflow (detected via the compiler's overflow intrinsics).
 - Division or modulo by zero, or `INT64_MIN / -1` and `INT64_MIN % -1`
   (which wrap in two's complement).
-- `PARSE` of a string with non-digit characters, or a value outside
-  signed 64-bit range.
-- `TO_STRING` of a number whose `has_value` is zero.
+- `PARSE` of a malformed string, or a value outside the representable
+  range.
+- `TO_STRING` of a number with no payload.
 
-Born-dead objects have `alive = 0`, `has_value = 0`, and `value = 0`.
+Born-dead objects have `alive = 0` and no payload.
 
 The unary builtins `TO_STRING` and `PARSE` take two operands because
 the C ABI is fixed at two `ath_obj *` arguments. The second operand
 is read and discarded; convention is to pass any in-scope identifier
 (traditionally `NULL` or a one-letter placeholder).
+
+### 10.2 Floats and the numeric tower
+
+Arithmetic mixes integers and floats by **promotion**: when both
+operands are integers the op stays in int64 (with the overflow-to-dead
+rules above); when either operand is a float, both are read as `double`
+and the result is a float. So `2` and `2.0` compare equal, `7 / 2` is
+the integer `3` but `7 / 2.0` is the float `3.5`, and `SUM` over a list
+containing any float yields a float.
+
+```ath
+import number 7 as SEVEN;
+import number 2.0 as TWO;
+DIV [SEVEN, TWO] HALF;        // 3.5 (float: true division)
+TO_STRING [HALF, _] HS;
+print 7 / 2.0 = $HS;          // => 7 / 2.0 = 3.5
+```
+
+`TO_STRING` of a float prints the shortest decimal that round-trips,
+always with a `.` or exponent so it reads as a float (`3.0`, `3.14`,
+`2.5e+03`); `nan`, `inf`, and `-inf` print by name. `PARSE` returns a
+float when the text contains a `.` or exponent, else an integer.
+
+Float division (and `MOD`, via `fmod`) by zero does **not** born-die —
+it yields a live `inf` or `nan`, since those are still numbers.
+Integer-only operations — the bitwise group and `GCD` — instead born-die
+on any float operand. Helpers convert and round explicitly:
+
+| Surface call            | Result                                       |
+|-------------------------|----------------------------------------------|
+| `INT_TO_FLOAT [X, _] R;`| `X` as a float                               |
+| `FLOAT_TO_INT [X, _] R;`| `X` truncated toward zero to an int (nan/overflow → dead) |
+| `FLOOR`/`CEIL`/`ROUND`  | round a float down / up / to nearest (still a float) |
 
 ---
 
@@ -1320,7 +1360,7 @@ from `V`'s current binding at clone time (§4.4.18):
   upstream operands have died since `V` was last directly observed —
   the clone captures the dep-walk result rather than `V`'s stale bit.
 - `left`, `right` — pointer-copied; the deeper structure is shared.
-- `has_value`, `value` — full payload copy.
+- `num_kind`, `num` — full numeric payload copy.
 - `deadline_s`, `watch_path`, `is_oneshot`, `awaiting_signal`,
   `dep_mode` — every intrinsic lifetime extension and the
   dep-evaluation mode are copied. A clone of a one-shot is itself a

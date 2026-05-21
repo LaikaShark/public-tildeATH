@@ -2477,8 +2477,15 @@ ath_obj *ath_member(ath_obj *list, ath_obj *x) {
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
-        if (l != NULL && ath_is_alive(l) && ath_has_value(l) && l->num.i == x->num.i)
-            return ath_verdict_true(list, x);
+        if (l != NULL && ath_is_alive(l) && ath_has_value(l)) {
+            /* Compare numerically with tower promotion (§4.8): a FLOAT
+             * element equals an INT key of the same value. Stay exact in
+             * int64 when neither side is float. */
+            int eq = ath_either_float(l, x)
+                         ? (ath_as_double(l) == ath_as_double(x))
+                         : (l->num.i == x->num.i);
+            if (eq) return ath_verdict_true(list, x);
+        }
         cur = r;
     }
     return ath_verdict_false();

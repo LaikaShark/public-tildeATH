@@ -66,6 +66,9 @@ LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensiti
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
 INT         := '-'? [0-9]+                     [signed int64 literal, §4.8]
+FLOAT       := '-'? [0-9]+ ('.' [0-9]+)? ([eE] [+-]? [0-9]+)?
+                                               [IEEE-754 double; must have a
+                                                fraction or exponent, §4.8]
 STRING      := '"' (any char except '"')* '"'  [escapes \" \\ \n \t \r, §2.3]
 PUNCT       := '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | ',' | ';' | '!'
 ```
@@ -93,6 +96,15 @@ operator: `..` (DOTDOT, §4.4.16). When the lexer sees `.`, it looks at
 the next character: another `.` produces `DOTDOT`; otherwise the
 single `.` begins a `.DIE` method token (§2.2 DIE). A lone `.` followed
 by anything other than `die` or `.` is a lexical error.
+
+A `.` **inside a number** is disambiguated by one character of
+lookahead: while scanning digits, a `.` followed by a digit opens a
+FLOAT's fractional part, but a `.` followed by another `.` ends the
+number (so `1..3` is `INT DOTDOT INT`, a slice) and a `.` followed by a
+non-digit also ends it (so `3.die` is `INT` then `.DIE`). An `e`/`E` is
+taken as an exponent only when a digit (after an optional sign) follows;
+otherwise it starts the next identifier (so `1exit` is `INT` then
+`exit`).
 
 **Case sensitivity.** Keywords, the `~ATH` loop-start token, the `.DIE`
 method token, and (in v1+) function names match **case-insensitively**:
@@ -239,9 +251,10 @@ import-builtin
                    name in the ~ATH function registry (case-insensitive).
                    See §4.4.13. *)
 
-import-number = 'import' 'number' INT 'as' IDENT ';' ;
-                (* allocates an eternal-alive object carrying the int64
-                   payload. See §4.4.14. *)
+import-number = 'import' 'number' (INT | FLOAT) 'as' IDENT ';' ;
+                (* allocates an eternal-alive object carrying the literal's
+                   payload — an INT literal gives an int64 payload, a FLOAT
+                   literal a double. See §4.4.14. *)
 
 importf-stmt  = 'importf' STRING 'as' IDENT ';'
               | 'importf' '<' IDENT '>' 'as' IDENT ';' ;
@@ -794,16 +807,19 @@ error, not as an athc diagnostic.
 
 #### 4.4.14 `import number N as VAR;`
 
-A **runtime operation** that allocates a fresh object carrying an
-int64 payload.
+A **runtime operation** that allocates a fresh object carrying a
+numeric payload.
 
-1. `N` is an `INT` token (§2.2), parsed as a signed 64-bit integer.
-   Out-of-range literals (e.g., `999999999999999999999`) are a
-   compile-time error.
+1. `N` is an `INT` or `FLOAT` token (§2.2). An `INT` is parsed as a
+   signed 64-bit integer — out-of-range literals (e.g.,
+   `999999999999999999999`) are a compile-time error. A `FLOAT` is
+   parsed as an IEEE-754 double; a non-finite literal (e.g. `1e999`)
+   is a compile-time error.
 2. If `VAR` is already bound: no-op (matches §4.4.1's idempotence).
-3. Otherwise: allocate a fresh **eternal-alive** object with
-   `has_value = 1` and `value = N`. The object has no deadline,
-   no watch path, no awaited signal, no one-shot flag.
+3. Otherwise: allocate a fresh **eternal-alive** object whose payload is
+   the literal's value — `num_kind = ATH_NUM_INT` (`num.i = N`) for an
+   integer, `ATH_NUM_FLOAT` (`num.f = N`) for a float. The object has no
+   deadline, no watch path, no awaited signal, no one-shot flag.
 4. Bind `VAR` to that object.
 
 Eternal-alive means the object outlives the program by default —
@@ -849,7 +865,7 @@ character by `print $VAR` interpolation and `ORD`.
 The result is born dead if any of the following holds:
 
 - `S` is dead, `NULL`, or unbound.
-- `N` is dead, lacks `has_value`, or holds a negative value.
+- `N` is dead, lacks a payload, or holds a negative value.
 - The walk encounters `NULL` or a dead object before reaching position
   `n` (out-of-range).
 
@@ -891,7 +907,7 @@ terminated with `NULL`.
 The result is born dead if:
 
 - `S` is dead, `NULL`, or unbound.
-- `I` or `J` is dead, lacks `has_value`, or is negative.
+- `I` or `J` is dead, lacks a payload, or is negative.
 - `I > J` (empty-or-invalid range — empty slice is also dead, by
   design, to keep failure-as-death uniform).
 - The walk encounters `NULL` or a dead object before reaching
@@ -974,7 +990,7 @@ has no effect on the other.
   observed yet clones to a fresh, unfired one-shot.
 - `left`, `right` — pointer-copied (shared with `V`'s halves; the
   cons-list structure beneath is not deep-copied).
-- `has_value`, `value` — full int64 payload copy.
+- `num_kind`, `num` — full numeric payload copy (INT or FLOAT).
 - `deadline_s`, `watch_path`, `is_oneshot`, `awaiting_signal`,
   `dep_mode` — all lifetime extensions and the dep-evaluation mode
   are copied, so the clone has the same intrinsic mortality as the
@@ -1007,7 +1023,7 @@ object (alive=0, no payload, no halves).
 Block the current activation for `N.value` milliseconds, then continue.
 
 1. Read `N`.
-2. If `N` is `NULL`, dead, lacks `has_value`, or carries a non-positive
+2. If `N` is `NULL`, dead, lacks a payload, or carries a non-positive
    value, return immediately (no-op).
 3. Otherwise, sleep for `N.value` milliseconds using a monotonic clock.
    The implementation uses POSIX `nanosleep`; interrupted sleeps may
@@ -1024,7 +1040,7 @@ to `N`'s binding do not affect the in-progress sleep.
 Bind `T` to a fresh alive object that becomes observably dead after
 `N.value` milliseconds.
 
-1. Read `N`. If `N` is `NULL`, dead, lacks `has_value`, or carries a
+1. Read `N`. If `N` is `NULL`, dead, lacks a payload, or carries a
    non-positive value, allocate `T` born dead and return.
 2. Otherwise, allocate a fresh alive object with
    `deadline_s = ath_now_s() + N.value / 1000.0` (§4.7 deadline).
@@ -1149,7 +1165,7 @@ folded left to right with `ath_concat` (§4.8.4):
    `ath_string_from_bytes`. An empty STRING (`""`) contributes
    `NULL` (the empty string).
 2. **IDENT part** — the variable is read from the current scope and
-   passed through `ath_coerce_string`. Operands with `has_value`
+   passed through `ath_coerce_string`. Operands with a numeric payload
    set (numbers) are routed through `ath_to_string` to their decimal
    representation. Operands without a payload (existing cons-lists,
    generic composites, `NULL`, character atoms) pass through
@@ -1342,18 +1358,35 @@ first (§4.4.18) — clones never carry `owns_path`.
 
 ### 4.8 Numeric payload and built-in arithmetic
 
-An object may carry an int64 **payload** in addition to its alive bit
-and halves. Two struct fields hold it:
+An object may carry a numeric **payload** in addition to its alive bit
+and halves. The payload is **tagged**: a discriminant selects which kind
+of number, if any, is present:
 
-- `has_value` — nonzero iff a payload is set. Zero by default.
-- `value` — signed 64-bit integer. Only meaningful when `has_value` is
-  nonzero.
+- `num_kind` — `ATH_NUM_NONE` (no payload, the default), `ATH_NUM_INT`
+  (a signed 64-bit integer), or `ATH_NUM_FLOAT` (an IEEE-754 `double`).
+  `ATH_NUM_BIG` is reserved for a future arbitrary-precision phase.
+- `num` — a union holding either the `int64` (`num.i`) or the `double`
+  (`num.f`), selected by `num_kind`.
 
-`import number N as VAR;` (§4.4.14) is the only surface form that
-allocates with a payload. The runtime built-ins `ath_add` ... `ath_parse`
-(§5.2) propagate payloads. The character atoms used by string
-encoding (§4.6) do **not** set `has_value` — they are pointer-identified,
-not value-identified.
+"Has a payload" means `num_kind != ATH_NUM_NONE` (the runtime exposes the
+null-safe `ath_has_value()` for this test). `import number N as VAR;`
+(§4.4.14) is the only surface form that allocates with a payload — an
+integer literal yields an INT payload, a float literal (§2.4, §4.8) a
+FLOAT one. The runtime built-ins (§5.2) propagate payloads. The character
+atoms used by string encoding (§4.6) carry **no** numeric payload — they
+are pointer-identified, not value-identified.
+
+**The numeric tower.** Binary arithmetic and comparisons promote: when
+both operands are INT the operation runs in int64 (with the existing
+overflow-to-dead rules); when either operand is FLOAT both are read as
+`double` and the result is FLOAT. So `2` and `2.0` compare equal, and
+`2 + 1.5` is the float `3.5`. The bitwise operators and `gcd` are
+integer-only and are **born dead** on any FLOAT operand. Float results
+are never "born dead from overflow": an operation that produces `±inf`
+or `nan` (e.g. float division by zero) yields a **live** float carrying
+that IEEE value — born-death is reserved for operations that cannot
+produce a number at all (dead/absent operand, integer overflow, integer
+÷0).
 
 #### 4.8.1 Lifetime inheritance
 
@@ -1379,25 +1412,41 @@ installs deps, and only the built-in C functions call it.
 
 #### 4.8.2 Arithmetic built-ins
 
-The runtime exports seven C functions, brought into a program via
+The runtime exports these C functions, brought into a program via
 `importf <NAME> as NAME;` referencing the corresponding `stdlib/NAME.ath`
-shim (§4.4.13).
+shim (§4.4.13). All promote per the numeric tower (§4.8): the result is
+INT for int⊕int and FLOAT if either operand is FLOAT.
 
-| Name | Surface call | Result `value` | Born dead when |
+| Name | Surface call | Result | Born dead when |
 |---|---|---|---|
-| `add` | `ADD [X, Y] R;` | `X.value + Y.value` | overflow; either operand dead at call |
-| `sub` | `SUB [X, Y] R;` | `X.value - Y.value` | overflow; either operand dead |
-| `mul` | `MUL [X, Y] R;` | `X.value * Y.value` | overflow; either operand dead |
-| `div` | `DIV [X, Y] R;` | `X.value / Y.value` (trunc toward zero) | `Y.value == 0`; `INT64_MIN / -1`; either operand dead |
-| `mod` | `MOD [X, Y] R;` | `X.value % Y.value` | `Y.value == 0`; `INT64_MIN % -1`; either operand dead |
-| `to_string` | `TO_STRING [N, _] S;` | (string encoding §4.6 of `N.value`) | `N` dead or `has_value == 0` |
-| `parse` | `PARSE [S, _] N;` | (int64 parsed from string) | `S` dead, malformed digits, or overflow |
+| `add` | `ADD [X, Y] R;` | `X + Y` | int overflow; either operand dead at call |
+| `sub` | `SUB [X, Y] R;` | `X - Y` | int overflow; either operand dead |
+| `mul` | `MUL [X, Y] R;` | `X * Y` | int overflow; either operand dead |
+| `div` | `DIV [X, Y] R;` | int: `X / Y` trunc toward zero; float: true division | int `Y == 0`; int `INT64_MIN / -1`; either operand dead. **Float ÷0 is live `±inf`/`nan`** |
+| `mod` | `MOD [X, Y] R;` | int: `X % Y`; float: `fmod(X, Y)` | int `Y == 0`; int `INT64_MIN % -1`; either operand dead. **Float `fmod(_,0)` is live `nan`** |
+| `to_string` | `TO_STRING [N, _] S;` | decimal string (§4.6) of `N` | `N` dead or has no payload |
+| `parse` | `PARSE [S, _] N;` | number parsed from string (FLOAT if it contains `.`/`e`/`E`, else INT) | `S` dead, malformed, or out of range |
 
-All seven call `ath_inherit_lifetime(R, X, Y)` on success (with `_` =
-NULL for unary ops, which records only `X` as a dependency).
+All call `ath_inherit_lifetime(R, X, Y)` on success (with `_` = NULL for
+unary ops, which records only `X` as a dependency).
 
-"Born dead" objects have `alive = 0`, `has_value = 0`, `value = 0`.
-Subsequent arithmetic on a born-dead object propagates death.
+`to_string` of a FLOAT renders the **shortest decimal that round-trips**
+(fewest significant digits whose re-parse recovers the same `double`),
+always including a `.` or exponent so a float reads distinctly from an
+integer (e.g. `3.0`, `3.14`, `2.5e+03`); `nan`, `inf`, and `-inf` print
+as those names. `to_string` of an INT is the canonical signed decimal.
+
+"Born dead" objects have `alive = 0` and `num_kind = NONE`. Subsequent
+arithmetic on a born-dead object propagates death.
+
+**Conversions and rounding** (each `[X, _] R;`, promoting/​born-dead by
+the same rules):
+
+| Name | Result |
+|---|---|
+| `int_to_float` | `X` as a FLOAT (a FLOAT passes through) |
+| `float_to_int` | `X` truncated toward zero to an INT (an INT passes through); a `nan` or out-of-int64-range float is born dead |
+| `floor` / `ceil` / `round` | a FLOAT `X` rounded down / up / to-nearest-half-away-from-zero (still a FLOAT); an INT passes through unchanged |
 
 The second operand of `to_string` and `parse` is conventionally `NULL`
 but any value is accepted and ignored. Using `_` as a placeholder
@@ -1416,38 +1465,42 @@ thousands separators.
 
 ##### Numeric second wave
 
-A further group of `stdlib/` shims over the same int64-payload ABI. Each
-installs its operands as deps and is born dead on a dead or
-non-payload operand.
+A further group of `stdlib/` shims. Each installs its operands as deps
+and is born dead on a dead or non-payload operand. The **arithmetic**
+ops (`pow`, `abs`, `neg`, `min`, `max`, `sign`, `clamp`) promote per the
+tower (§4.8) — FLOAT in, FLOAT out; the **integer-only** ops (`gcd` and
+the whole bitwise/shift group) are **born dead** on any FLOAT operand.
 
-| Name | Surface call | Result `value` | Born dead when |
+| Name | Surface call | Result | Born dead when |
 |---|---|---|---|
-| `pow` | `POW [X, Y] R;` | `X` raised to `Y` | `Y < 0` (integer exponents only); overflow |
-| `abs` | `ABS [X, _] R;` | magnitude of `X` | `X == INT64_MIN` (no positive rep) |
-| `neg` | `NEG [X, _] R;` | `-X` | `X == INT64_MIN` (overflow) |
+| `pow` | `POW [X, Y] R;` | `X` raised to `Y` | int: `Y < 0` or overflow. Float: never (out-of-domain → live `nan`) |
+| `abs` | `ABS [X, _] R;` | magnitude of `X` | int `X == INT64_MIN` (no positive rep) |
+| `neg` | `NEG [X, _] R;` | `-X` | int `X == INT64_MIN` (overflow) |
 | `min` | `MIN [X, Y] R;` | lesser of `X`, `Y` | — |
 | `max` | `MAX [X, Y] R;` | greater of `X`, `Y` | — |
-| `gcd` | `GCD [X, Y] R;` | gcd of `\|X\|`, `\|Y\|` (gcd(0,0)=0) | `X` or `Y` is `INT64_MIN` |
-| `sign` | `SIGN [X, _] R;` | `-1`, `0`, or `1` | — |
-| `band` | `BAND [X, Y] R;` | `X & Y` | — |
-| `bor` | `BOR [X, Y] R;` | `X \| Y` | — |
-| `bxor` | `BXOR [X, Y] R;` | `X ^ Y` | — |
-| `bnot` | `BNOT [X, _] R;` | `~X` (one's complement) | — |
-| `shl` | `SHL [X, Y] R;` | `X << Y` (logical) | `Y < 0` or `Y > 63` |
-| `shr` | `SHR [X, Y] R;` | `X >> Y` (arithmetic) | `Y < 0` or `Y > 63` |
+| `gcd` | `GCD [X, Y] R;` | gcd of `\|X\|`, `\|Y\|` (gcd(0,0)=0) | `X` or `Y` is `INT64_MIN`; **any FLOAT operand** |
+| `sign` | `SIGN [X, _] R;` | `-1`, `0`, or `1` (FLOAT in → `-1.0`/`0.0`/`1.0`) | — |
+| `band` | `BAND [X, Y] R;` | `X & Y` | any FLOAT operand |
+| `bor` | `BOR [X, Y] R;` | `X \| Y` | any FLOAT operand |
+| `bxor` | `BXOR [X, Y] R;` | `X ^ Y` | any FLOAT operand |
+| `bnot` | `BNOT [X, _] R;` | `~X` (one's complement) | a FLOAT operand |
+| `shl` | `SHL [X, Y] R;` | `X << Y` (logical) | `Y < 0` or `Y > 63`; any FLOAT operand |
+| `shr` | `SHR [X, Y] R;` | `X >> Y` (arithmetic) | `Y < 0` or `Y > 63`; any FLOAT operand |
 | `clamp` | `CLAMP [X, PAIR] R;` | `X` confined to `[LO, HI]` | `LO > HI`; `X`/`LO`/`HI` unusable |
 
 `POW` uses exponentiation by squaring with overflow checks at every
-multiply; `0^0 == 1`. `SHL` shifts an unsigned copy to avoid
-signed-overflow UB; `SHR` is sign-extending. `CLAMP` packs its bounds
-`(LO, HI)` into a single composite, exactly like the compose-pair
-pattern of §4.8.4 — pass `ENTANGLE [LO, HI] PAIR;` for dep propagation.
+multiply for the int path (`0^0 == 1`), and `pow(3)` for the float path
+(supporting fractional/negative exponents). `SHL` shifts an unsigned
+copy to avoid signed-overflow UB; `SHR` is sign-extending. `CLAMP` packs
+its bounds `(LO, HI)` into a single composite, exactly like the
+compose-pair pattern of §4.8.4 — pass `ENTANGLE [LO, HI] PAIR;` for dep
+propagation.
 
 #### 4.8.3 Comparisons as verdicts
 
 A **verdict** is an object whose alive bit carries the truth of a
 comparison: alive iff true, dead iff false. Verdicts carry no payload
-(`has_value == 0`) — they are observed only through `ath_is_alive`,
+(no numeric payload) — they are observed only through `ath_is_alive`,
 typically in a `~ATH` loop header:
 
 ```
@@ -1480,7 +1533,7 @@ the comparison, `V` becomes dead at the next observation. A false
 verdict is allocated dead from the start, and its dependencies are
 not recorded (dead objects do not become alive again).
 
-Comparison of objects without `has_value` set — strings, generic
+Comparison of objects without a numeric payload — strings, generic
 composites, `NULL` — always yields a born-dead verdict. Object-identity
 comparison ("is X the same object as Y") is a deliberately separate
 question and is not in scope for v2; the verdict primitives compare
@@ -1793,8 +1846,11 @@ with `BIFURCATE`: `BIFURCATE [HEAD, REST] LIST;`.
 
 `SUM`/`PRODUCT` use the empty-list **identity** (0 and 1), mirroring
 `LENGTH`'s "empty is real" rule (§4.8.4); `MAXIMUM`/`MINIMUM` instead
-born-die on an empty list, since there is no extremum. `MEMBER`
-compares by payload, so it finds numbers, not arbitrary sub-objects.
+born-die on an empty list, since there is no extremum. All four folds
+promote per the numeric tower (§4.8): the result is FLOAT if any element
+is FLOAT, else INT — and an empty `SUM`/`PRODUCT` keeps the **integer**
+identity. `MEMBER` compares by payload, so it finds numbers, not
+arbitrary sub-objects (a FLOAT element equals an INT of the same value).
 `TAKE`/`DROP` allocate fresh cons cells (like `CONCAT`/`SLICE`) and
 inherit `LIST` and `N` as deps. There is no `map`/`filter`/`reduce`:
 ~ATH has no first-class functions to pass, so transformation stays at
@@ -1863,6 +1919,10 @@ that let us evolve semantics without touching the frontend.
 ### 5.1 Types
 
 ```c
+typedef enum {
+    ATH_NUM_NONE = 0, ATH_NUM_INT, ATH_NUM_FLOAT, ATH_NUM_BIG /* reserved */
+} ath_num_kind;
+
 typedef struct ath_obj {
     int            alive;       /* nonzero = alive */
     struct ath_obj *left;       /* NULL = UNSET    */
@@ -1875,9 +1935,11 @@ typedef struct ath_obj {
     int            awaiting_signal;
     int            owns_path;   /* §4.7 ext 5; only set by read */
 
-    /* §4.8 numeric payload */
-    int            has_value;
-    int64_t        value;
+    /* §4.8 numeric payload (tagged). num_kind ∈ {NONE, INT, FLOAT, BIG};
+     * num.i holds the int64 when INT, num.f the double when FLOAT. Test
+     * presence with ath_has_value() (num_kind != NONE). */
+    ath_num_kind   num_kind;
+    union { int64_t i; double f; } num;
 
     /* §4.8.1 dependency tracking */
     struct ath_obj *dep1;       /* NULL = no dep */
@@ -1956,7 +2018,8 @@ int      ath_library_lookup(const char *name, double *min_out, double *max_out);
 void     ath_register_lifetime(const char *name, double min_s, double max_s);
 
 /* Numeric payload + arithmetic (§4.8) */
-ath_obj *ath_alloc_number(int64_t v);
+ath_obj *ath_alloc_number(int64_t v);     /* ATH_NUM_INT payload   */
+ath_obj *ath_alloc_float(double v);       /* ATH_NUM_FLOAT payload */
 void     ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b);
 ath_obj *ath_add(ath_obj *x, ath_obj *y);
 ath_obj *ath_sub(ath_obj *x, ath_obj *y);
@@ -1989,6 +2052,17 @@ ath_obj *ath_bnot(ath_obj *x, ath_obj *unused);
 ath_obj *ath_shl(ath_obj *x, ath_obj *y);
 ath_obj *ath_shr(ath_obj *x, ath_obj *y);
 ath_obj *ath_clamp(ath_obj *x, ath_obj *pair);
+
+/* Float conversions and rounding (§4.8.2). */
+ath_obj *ath_int_to_float(ath_obj *x, ath_obj *unused);
+ath_obj *ath_float_to_int(ath_obj *x, ath_obj *unused);
+ath_obj *ath_floor(ath_obj *x, ath_obj *unused);
+ath_obj *ath_ceil(ath_obj *x, ath_obj *unused);
+ath_obj *ath_round(ath_obj *x, ath_obj *unused);
+
+/* Null-safe payload-presence test (num_kind != NONE), provided as a
+ * static inline in the header. */
+int      ath_has_value(const ath_obj *o);
 
 /* Logical combinators over verdicts (§4.8.3). NOT is not provided —
  * see the §4.8.3 commentary. */
@@ -2273,7 +2347,8 @@ v0 errors fall into two classes:
   search-path form (§4.4.9), "not found" means no `ATH_PATH` entry and
   no compiler-adjacent `stdlib/` contains `STEM.ath`.
 - An `INT` literal in `import number` (§4.4.14) that does not fit
-  signed 64-bit range.
+  signed 64-bit range, or a `FLOAT` literal that is not finite
+  (overflows `double`, e.g. `1e999`).
 - `watch` paths are *not* validated at compile time; missing files cause
   the watching object to be born dead at runtime, never a compile error.
 - Missing C symbols declared by `import builtin` (§4.4.13) surface as
