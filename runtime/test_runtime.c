@@ -1100,6 +1100,36 @@ int main(void) {
         ath_obj *allint = ath_compose(I(1), ath_compose(I(2), ath_NULL));
         assert(ath_sum(allint, ath_NULL)->num_kind == ATH_NUM_INT);  /* stays int */
 
+        /* to_string: shortest round-trip, forced .0, nan/inf names. */
+        #define SEQ(o, lit) \
+            ath_is_alive(ath_streq((o), ath_string_from_bytes(lit, sizeof(lit) - 1)))
+        assert(SEQ(ath_to_string(F(3.5), ath_NULL), "3.5"));
+        assert(SEQ(ath_to_string(F(3.0), ath_NULL), "3.0"));   /* forced .0 */
+        assert(SEQ(ath_to_string(I(42), ath_NULL), "42"));     /* int unchanged */
+        assert(SEQ(ath_to_string(ath_div(F(1.0), F(0.0)), ath_NULL), "inf"));
+        assert(SEQ(ath_to_string(ath_neg(ath_div(F(1.0), F(0.0)), ath_NULL), ath_NULL), "-inf"));
+        assert(SEQ(ath_to_string(ath_mod(F(1.0), F(0.0)), ath_NULL), "nan"));
+
+        /* parse: float syntax → float, plain digits → int. */
+        ath_obj *pf = ath_parse(ath_string_from_bytes("2.5", 3), ath_NULL);
+        assert(IS_F(pf) && pf->num.f == 2.5);
+        ath_obj *pintv = ath_parse(ath_string_from_bytes("42", 2), ath_NULL);
+        assert(pintv->num_kind == ATH_NUM_INT && pintv->num.i == 42);
+
+        /* conversions: int_to_float, float_to_int (trunc), floor/ceil/round. */
+        assert(ath_int_to_float(I(5), ath_NULL)->num.f == 5.0);
+        assert(ath_float_to_int(F(3.9), ath_NULL)->num.i == 3);
+        assert(ath_float_to_int(F(-3.9), ath_NULL)->num.i == -3);
+        assert(ath_floor(F(3.9), ath_NULL)->num.f == 3.0);
+        assert(ath_ceil(F(3.1), ath_NULL)->num.f == 4.0);
+        assert(ath_round(F(2.5), ath_NULL)->num.f == 3.0);
+        assert(!ath_is_alive(ath_float_to_int(ath_div(F(1.0), F(0.0)), ath_NULL)));
+
+        /* count_of floors a FLOAT toward an int64 count. */
+        assert(ath_count_of(F(3.9)) == 3);
+        assert(ath_count_of(F(-1.0)) == 0);
+        #undef SEQ
+
         #undef I
         #undef F
         #undef IS_F

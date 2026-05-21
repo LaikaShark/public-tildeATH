@@ -657,14 +657,40 @@ ath_obj *ath_mod(ath_obj *x, ath_obj *y) {
     return out;
 }
 
+/* Render a double as the shortest decimal that round-trips (SPEC §4.8.2):
+ * nan/inf print as "nan"/"inf"/"-inf"; finite values get the fewest
+ * significant digits whose strtod recovers the same double, and a forced
+ * ".0" when otherwise integer-looking so a float is visually distinct from
+ * an int. Returns the written length. */
+static int ath_format_double(char *buf, size_t cap, double v) {
+    if (isnan(v)) return snprintf(buf, cap, "nan");
+    if (isinf(v)) return snprintf(buf, cap, v < 0 ? "-inf" : "inf");
+    for (int p = 1; p <= 17; p++) {
+        snprintf(buf, cap, "%.*g", p, v);
+        if (strtod(buf, NULL) == v) break;
+    }
+    if (!strpbrk(buf, ".eE")) {
+        size_t len = strlen(buf);
+        if (len + 2 < cap) {
+            buf[len] = '.'; buf[len + 1] = '0'; buf[len + 2] = '\0';
+        }
+    }
+    return (int)strlen(buf);
+}
+
 ath_obj *ath_to_string(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (x == NULL || !ath_is_alive(x) || !ath_has_value(x)) {
         /* No payload → empty string. */
         return ath_NULL;
     }
-    char buf[32];
-    int n = snprintf(buf, sizeof(buf), "%lld", (long long)x->num.i);
+    char buf[64];
+    int n;
+    if (x->num_kind == ATH_NUM_FLOAT) {
+        n = ath_format_double(buf, sizeof(buf), x->num.f);
+    } else {
+        n = snprintf(buf, sizeof(buf), "%lld", (long long)x->num.i);
+    }
     if (n <= 0) return ath_NULL;
     ath_obj *acc = ath_NULL;
     for (int i = n; i > 0; i--) {
@@ -785,10 +811,19 @@ ath_obj *ath_parse(ath_obj *s, ath_obj *unused) {
     if (n <= 0) return ath_alloc_dead_number();
     char *end;
     errno = 0;
-    long long v = strtoll(buf, &end, 10);
-    if (end == buf || *end != '\0') return ath_alloc_dead_number();
-    if (errno == ERANGE) return ath_alloc_dead_number();
-    ath_obj *out = ath_alloc_number((int64_t)v);
+    ath_obj *out;
+    if (strpbrk(buf, ".eE") != NULL) {
+        /* Float syntax (a '.', 'e', or 'E') → parse as double (§4.8.2). */
+        double d = strtod(buf, &end);
+        if (end == buf || *end != '\0') return ath_alloc_dead_number();
+        if (errno == ERANGE) return ath_alloc_dead_number();
+        out = ath_alloc_float(d);
+    } else {
+        long long v = strtoll(buf, &end, 10);
+        if (end == buf || *end != '\0') return ath_alloc_dead_number();
+        if (errno == ERANGE) return ath_alloc_dead_number();
+        out = ath_alloc_number((int64_t)v);
+    }
     ath_inherit_lifetime(out, s, NULL);
     return out;
 }
@@ -1895,6 +1930,8 @@ ath_obj *ath_ord(ath_obj *a, ath_obj *unused) {
 ath_obj *ath_chr(ath_obj *n, ath_obj *unused) {
     (void)unused;
     if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
+    /* Character codes are integral: a FLOAT code is born dead (§4.8.2). */
+    if (n->num_kind == ATH_NUM_FLOAT) return ath_alloc_dead();
     if (n->num.i < 0 || n->num.i > 255) return ath_alloc_dead();
     ath_obj *atom = ath_char_atom((int)n->num.i);
     ath_obj *result = ath_cons_fresh(atom, ath_NULL);
@@ -2104,6 +2141,53 @@ ath_obj *ath_clamp(ath_obj *x, ath_obj *pair) {
     ath_inherit_lifetime(r, x, pair);
     return r;
 }
+
+/* --- Float conversions and rounding (SPEC §4.8.2) -------------------- */
+
+/* INT_TO_FLOAT: reinterpret the payload as a FLOAT (an already-float value
+ * passes through). Born dead on a dead/missing operand. */
+ath_obj *ath_int_to_float(ath_obj *x, ath_obj *unused) {
+    (void)unused;
+    if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    ath_obj *r = ath_alloc_float(ath_as_double(x));
+    ath_inherit_lifetime(r, x, NULL);
+    return r;
+}
+
+/* FLOAT_TO_INT: truncate toward zero to an int64 (an int passes through).
+ * A nan or an out-of-int64-range magnitude is born dead. */
+ath_obj *ath_float_to_int(ath_obj *x, ath_obj *unused) {
+    (void)unused;
+    if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    ath_obj *r;
+    if (x->num_kind == ATH_NUM_FLOAT) {
+        double v = trunc(x->num.f);
+        if (isnan(v) || v < -9.2233720368547758e18 || v >= 9.2233720368547758e18)
+            return ath_alloc_dead_number();
+        r = ath_alloc_number((int64_t)v);
+    } else {
+        r = ath_alloc_number(x->num.i);
+    }
+    ath_inherit_lifetime(r, x, NULL);
+    return r;
+}
+
+/* FLOOR / CEIL / ROUND: round a FLOAT to a whole-valued FLOAT (an int
+ * passes through unchanged). ROUND is round-half-away-from-zero (C round). */
+#define ATH_ROUNDOP(name, fn)                                               \
+    ath_obj *name(ath_obj *x, ath_obj *unused) {                            \
+        (void)unused;                                                       \
+        if (!ath_num_usable(x)) return ath_alloc_dead_number();             \
+        ath_obj *r = (x->num_kind == ATH_NUM_FLOAT)                         \
+                         ? ath_alloc_float(fn(x->num.f))                    \
+                         : ath_alloc_number(x->num.i);                      \
+        ath_inherit_lifetime(r, x, NULL);                                   \
+        return r;                                                           \
+    }
+ATH_ROUNDOP(ath_floor, floor)
+ATH_ROUNDOP(ath_ceil, ceil)
+ATH_ROUNDOP(ath_round, round)
+#undef ATH_ROUNDOP
 
 /* --- String polish builtins (SPEC §4.8.4 extensions) ----------------- */
 
@@ -2473,11 +2557,18 @@ ath_obj *ath_any_of(ath_obj *list, ath_obj *unused) {
     return acc;
 }
 
-/* Iteration count for the `repeat` loop (SPEC §4.4.26): N's int64 payload
- * if N is alive, payload-bearing, and non-negative; otherwise 0 (the loop
- * body runs zero times). */
+/* Iteration count for the `loop`/`every` loops (SPEC §4.4.26): N's count if
+ * N is alive, payload-bearing, and non-negative; otherwise 0 (the loop body
+ * runs zero times). A FLOAT payload is floored toward zero (§4.8.2). */
 int64_t ath_count_of(ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i < 0) return 0;
+    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return 0;
+    if (n->num_kind == ATH_NUM_FLOAT) {
+        double v = floor(n->num.f);
+        if (!(v >= 0.0)) return 0;            /* negative or nan → 0 */
+        if (v >= 9.2e18) return INT64_MAX;    /* clamp beyond int64 range */
+        return (int64_t)v;
+    }
+    if (n->num.i < 0) return 0;
     return n->num.i;
 }
 

@@ -279,6 +279,13 @@ ath_obj *ath_shl(ath_obj *x, ath_obj *y);
 ath_obj *ath_shr(ath_obj *x, ath_obj *y);
 ath_obj *ath_clamp(ath_obj *x, ath_obj *pair);
 
+/* Float conversions and rounding (§4.8.2). */
+ath_obj *ath_int_to_float(ath_obj *x, ath_obj *unused);
+ath_obj *ath_float_to_int(ath_obj *x, ath_obj *unused);
+ath_obj *ath_floor(ath_obj *x, ath_obj *unused);
+ath_obj *ath_ceil(ath_obj *x, ath_obj *unused);
+ath_obj *ath_round(ath_obj *x, ath_obj *unused);
+
 /* String polish builtins (SPEC §4.8.4 extensions). COMPARE is the
  * three-way (-1/0/1) form of the string verdicts. CHAR_AT returns a
  * length-1 string (vs S[N]'s bare atom). FIND_FROM packs (NEEDLE, START).

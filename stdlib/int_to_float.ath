@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — int payload reinterpreted as float. INT_TO_FLOAT [X, _] R;
+import builtin ath_int_to_float as INT_TO_FLOAT;
+BIFURCATE ARGS [X, Y];
+INT_TO_FLOAT [X, Y] R;
+THIS.DIE(R);

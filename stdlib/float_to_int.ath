@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — float truncated toward zero to int. FLOAT_TO_INT [X, _] R;
+import builtin ath_float_to_int as FLOAT_TO_INT;
+BIFURCATE ARGS [X, Y];
+FLOAT_TO_INT [X, Y] R;
+THIS.DIE(R);

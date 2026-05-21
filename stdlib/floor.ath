@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — round a float down to a whole-valued float. FLOOR [X, _] R;
+import builtin ath_floor as FLOOR;
+BIFURCATE ARGS [X, Y];
+FLOOR [X, Y] R;
+THIS.DIE(R);
