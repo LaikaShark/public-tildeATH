@@ -2209,6 +2209,45 @@ ATH_ROUNDOP(ath_ceil, ceil)
 ATH_ROUNDOP(ath_round, round)
 #undef ATH_ROUNDOP
 
+/* --- Float transcendentals (SPEC §4.8.2) ----------------------------- */
+
+/* Each reads its operand(s) as double (an INT promotes) and returns a
+ * FLOAT. Born dead only on a dead/absent operand; out-of-domain inputs
+ * (e.g. sqrt(-1), log(0)) produce the live IEEE result (nan / -inf),
+ * matching the nan/inf-are-live rule (§4.8.2). */
+#define ATH_FLOATFN1(name, fn)                                              \
+    ath_obj *name(ath_obj *x, ath_obj *unused) {                            \
+        (void)unused;                                                       \
+        if (!ath_num_usable(x)) return ath_alloc_dead_number();             \
+        ath_obj *r = ath_alloc_float(fn(ath_as_double(x)));                 \
+        ath_inherit_lifetime(r, x, NULL);                                   \
+        return r;                                                           \
+    }
+ATH_FLOATFN1(ath_sqrt, sqrt)
+ATH_FLOATFN1(ath_cbrt, cbrt)
+ATH_FLOATFN1(ath_exp, exp)
+ATH_FLOATFN1(ath_log, log)
+ATH_FLOATFN1(ath_log2, log2)
+ATH_FLOATFN1(ath_log10, log10)
+ATH_FLOATFN1(ath_sin, sin)
+ATH_FLOATFN1(ath_cos, cos)
+ATH_FLOATFN1(ath_tan, tan)
+ATH_FLOATFN1(ath_asin, asin)
+ATH_FLOATFN1(ath_acos, acos)
+ATH_FLOATFN1(ath_atan, atan)
+#undef ATH_FLOATFN1
+
+#define ATH_FLOATFN2(name, fn)                                              \
+    ath_obj *name(ath_obj *x, ath_obj *y) {                                 \
+        if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();     \
+        ath_obj *r = ath_alloc_float(fn(ath_as_double(x), ath_as_double(y)));\
+        ath_inherit_lifetime(r, x, y);                                      \
+        return r;                                                           \
+    }
+ATH_FLOATFN2(ath_atan2, atan2)
+ATH_FLOATFN2(ath_hypot, hypot)
+#undef ATH_FLOATFN2
+
 /* --- String polish builtins (SPEC §4.8.4 extensions) ----------------- */
 
 /* COMPARE: int64 -1/0/1 by byte-lexicographic order (the three-way form

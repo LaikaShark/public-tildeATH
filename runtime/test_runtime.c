@@ -1136,6 +1136,31 @@ int main(void) {
         /* count_of floors a FLOAT toward an int64 count. */
         assert(ath_count_of(F(3.9)) == 3);
         assert(ath_count_of(F(-1.0)) == 0);
+
+        /* Transcendentals: FLOAT result; INT operands promote. Use a small
+         * tolerance for results libm need not round exactly. */
+        #define NEAR(o, want) (IS_F(o) && fabs((o)->num.f - (want)) < 1e-9)
+        assert(ath_sqrt(F(16.0), ath_NULL)->num.f == 4.0);   /* sqrt exact here */
+        assert(NEAR(ath_sqrt(I(16), ath_NULL), 4.0));        /* INT promotes */
+        assert(NEAR(ath_cbrt(F(27.0), ath_NULL), 3.0));
+        assert(NEAR(ath_exp(F(0.0), ath_NULL), 1.0));
+        assert(NEAR(ath_log(F(1.0), ath_NULL), 0.0));
+        assert(NEAR(ath_log2(F(8.0), ath_NULL), 3.0));
+        assert(NEAR(ath_log10(F(1000.0), ath_NULL), 3.0));
+        assert(NEAR(ath_sin(F(0.0), ath_NULL), 0.0));
+        assert(NEAR(ath_cos(F(0.0), ath_NULL), 1.0));
+        assert(NEAR(ath_atan(F(0.0), ath_NULL), 0.0));
+        assert(NEAR(ath_hypot(I(3), I(4)), 5.0));
+        assert(NEAR(ath_atan2(F(0.0), F(1.0)), 0.0));
+        #undef NEAR
+        /* Out-of-domain inputs are live nan/inf, not born dead. */
+        ath_obj *snan = ath_sqrt(F(-1.0), ath_NULL);
+        assert(ath_is_alive(snan) && isnan(snan->num.f));
+        ath_obj *lninf = ath_log(F(0.0), ath_NULL);
+        assert(ath_is_alive(lninf) && isinf(lninf->num.f) && lninf->num.f < 0);
+        /* Dead/absent operand → born dead. */
+        ath_obj *dx = F(1.0); ath_die(dx);
+        assert(!ath_is_alive(ath_sqrt(dx, ath_NULL)));
         #undef SEQ
 
         #undef I

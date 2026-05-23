@@ -286,6 +286,23 @@ ath_obj *ath_floor(ath_obj *x, ath_obj *unused);
 ath_obj *ath_ceil(ath_obj *x, ath_obj *unused);
 ath_obj *ath_round(ath_obj *x, ath_obj *unused);
 
+/* Float transcendentals (§4.8.2). Each returns a FLOAT; out-of-domain
+ * inputs yield live nan/inf. */
+ath_obj *ath_sqrt(ath_obj *x, ath_obj *unused);
+ath_obj *ath_cbrt(ath_obj *x, ath_obj *unused);
+ath_obj *ath_exp(ath_obj *x, ath_obj *unused);
+ath_obj *ath_log(ath_obj *x, ath_obj *unused);
+ath_obj *ath_log2(ath_obj *x, ath_obj *unused);
+ath_obj *ath_log10(ath_obj *x, ath_obj *unused);
+ath_obj *ath_sin(ath_obj *x, ath_obj *unused);
+ath_obj *ath_cos(ath_obj *x, ath_obj *unused);
+ath_obj *ath_tan(ath_obj *x, ath_obj *unused);
+ath_obj *ath_asin(ath_obj *x, ath_obj *unused);
+ath_obj *ath_acos(ath_obj *x, ath_obj *unused);
+ath_obj *ath_atan(ath_obj *x, ath_obj *unused);
+ath_obj *ath_atan2(ath_obj *y, ath_obj *x);
+ath_obj *ath_hypot(ath_obj *x, ath_obj *y);
+
 /* String polish builtins (SPEC §4.8.4 extensions). COMPARE is the
  * three-way (-1/0/1) form of the string verdicts. CHAR_AT returns a
  * length-1 string (vs S[N]'s bare atom). FIND_FROM packs (NEEDLE, START).

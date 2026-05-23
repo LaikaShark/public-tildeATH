@@ -1,0 +1,28 @@
+// Demonstrates the float transcendental builtins (§4.8.2). Only exactly
+// representable results are printed so the output is platform-stable.
+//
+//   athc examples/float_transcendentals.ath -o ft
+//   ./ft
+//   # expected:
+//   # sqrt(16) = 4.0
+//   # sqrt(2.25) = 1.5
+//   # hypot(3, 4) = 5.0
+//   # exp(0) = 1.0
+//   # log(1) = 0.0
+//   # cos(0) = 1.0
+
+importf <to_string> as TS;
+importf <sqrt> as SQRT;
+importf <hypot> as HYPOT;
+importf <exp> as EXP;
+importf <log> as LOG;
+importf <cos> as COS;
+
+import number 16 as N16;    SQRT [N16, N16] A;   TS [A, A] AST;  print sqrt(16) = $AST;
+import number 2.25 as Q;    SQRT [Q, Q] B;       TS [B, B] BS;   print sqrt(2.25) = $BS;
+import number 3.0 as X3; import number 4.0 as X4; HYPOT [X3, X4] C; TS [C, C] CS; print hypot(3, 4) = $CS;
+import number 0.0 as Z;     EXP [Z, Z] D;        TS [D, D] DS;   print exp(0) = $DS;
+import number 1.0 as ONE;   LOG [ONE, ONE] E;    TS [E, E] ES;   print log(1) = $ES;
+COS [Z, Z] G;               TS [G, G] GS;        print cos(0) = $GS;
+
+THIS.DIE();

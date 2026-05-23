@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — base-10 log (float). LOG10 [X, _] R;
+import builtin ath_log10 as LOG10;
+BIFURCATE ARGS [X, Y];
+LOG10 [X, Y] R;
+THIS.DIE(R);

@@ -1451,6 +1451,21 @@ the same rules):
 | `float_to_int` | `X` truncated toward zero to an INT (an INT passes through); a `nan` or out-of-int64-range float is born dead |
 | `floor` / `ceil` / `round` | a FLOAT `X` rounded down / up / to-nearest-half-away-from-zero (still a FLOAT); an INT passes through unchanged |
 
+**Transcendentals** always return a FLOAT (an INT operand promotes), and
+are born dead only on a dead/absent operand — an out-of-domain input
+(e.g. `SQRT` of a negative, `LOG` of `0`) produces the live IEEE result
+(`nan` or `-inf`), per the nan/inf-are-live rule above:
+
+| Name | Result |
+|---|---|
+| `sqrt` / `cbrt` | square / cube root of `X` |
+| `exp` | `e` raised to `X` |
+| `log` / `log2` / `log10` | natural / base-2 / base-10 logarithm |
+| `sin` / `cos` / `tan` | trig functions of `X` (radians) |
+| `asin` / `acos` / `atan` | inverse trig functions |
+| `atan2` | `ATAN2 [Y, X] R;` — angle of `(X, Y)`, both signs |
+| `hypot` | `HYPOT [X, Y] R;` — `sqrt(X*X + Y*Y)` without overflow |
+
 The second operand of `to_string` and `parse` is conventionally `NULL`
 but any value is accepted and ignored. Using `_` as a placeholder
 identifier is a stylistic convention; sema enforces the same in-scope
@@ -2062,6 +2077,22 @@ ath_obj *ath_float_to_int(ath_obj *x, ath_obj *unused);
 ath_obj *ath_floor(ath_obj *x, ath_obj *unused);
 ath_obj *ath_ceil(ath_obj *x, ath_obj *unused);
 ath_obj *ath_round(ath_obj *x, ath_obj *unused);
+
+/* Float transcendentals (§4.8.2). FLOAT result; out-of-domain → nan/inf. */
+ath_obj *ath_sqrt(ath_obj *x, ath_obj *unused);
+ath_obj *ath_cbrt(ath_obj *x, ath_obj *unused);
+ath_obj *ath_exp(ath_obj *x, ath_obj *unused);
+ath_obj *ath_log(ath_obj *x, ath_obj *unused);
+ath_obj *ath_log2(ath_obj *x, ath_obj *unused);
+ath_obj *ath_log10(ath_obj *x, ath_obj *unused);
+ath_obj *ath_sin(ath_obj *x, ath_obj *unused);
+ath_obj *ath_cos(ath_obj *x, ath_obj *unused);
+ath_obj *ath_tan(ath_obj *x, ath_obj *unused);
+ath_obj *ath_asin(ath_obj *x, ath_obj *unused);
+ath_obj *ath_acos(ath_obj *x, ath_obj *unused);
+ath_obj *ath_atan(ath_obj *x, ath_obj *unused);
+ath_obj *ath_atan2(ath_obj *y, ath_obj *x);
+ath_obj *ath_hypot(ath_obj *x, ath_obj *y);
 
 /* Null-safe payload-presence test (num_kind != NONE), provided as a
  * static inline in the header. */

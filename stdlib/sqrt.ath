@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — square root (float; sqrt of a negative is live nan). SQRT [X, _] R;
+import builtin ath_sqrt as SQRT;
+BIFURCATE ARGS [X, Y];
+SQRT [X, Y] R;
+THIS.DIE(R);

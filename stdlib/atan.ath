@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — arctangent (float). ATAN [X, _] R;
+import builtin ath_atan as ATAN;
+BIFURCATE ARGS [X, Y];
+ATAN [X, Y] R;
+THIS.DIE(R);

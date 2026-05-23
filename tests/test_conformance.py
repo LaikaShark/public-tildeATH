@@ -95,6 +95,13 @@ CASES = [
         id="float_arithmetic",
     ),
     pytest.param(
+        "float_transcendentals.ath",
+        None,
+        "sqrt(16) = 4.0\nsqrt(2.25) = 1.5\nhypot(3, 4) = 5.0\n"
+        "exp(0) = 1.0\nlog(1) = 0.0\ncos(0) = 1.0\n",
+        id="float_transcendentals",
+    ),
+    pytest.param(
         "multi_word_import.ath",
         None,
         "speaking once before she dies\nsilence\n",

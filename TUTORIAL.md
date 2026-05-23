@@ -671,6 +671,12 @@ on any float operand. Helpers convert and round explicitly:
 | `FLOAT_TO_INT [X, _] R;`| `X` truncated toward zero to an int (nan/overflow → dead) |
 | `FLOOR`/`CEIL`/`ROUND`  | round a float down / up / to nearest (still a float) |
 
+The usual transcendentals are stdlib shims too, each returning a float
+(an int operand promotes): `SQRT`, `CBRT`, `EXP`, `LOG`/`LOG2`/`LOG10`,
+`SIN`/`COS`/`TAN`, `ASIN`/`ACOS`/`ATAN`, plus the binary `ATAN2 [Y, X] R;`
+and `HYPOT [X, Y] R;`. An out-of-domain argument (e.g. `SQRT` of a
+negative) yields a live `nan` rather than a dead object.
+
 ---
 
 ## 11. Lifetime extensions
