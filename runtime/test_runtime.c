@@ -148,6 +148,15 @@ int main(void) {
     ath_print_obj_raw(str);
     ath_print_bytes("\n", 1);
 
+    /* A numeric payload renders as its decimal form, so `print $N` prints
+     * the number (§4.4.6). */
+    fputs("expect 42: ", stdout);
+    ath_print_obj(ath_alloc_number(42));
+    fputs("expect -7: ", stdout);
+    ath_print_obj(ath_alloc_number(-7));
+    fputs("expect 3.5: ", stdout);
+    ath_print_obj(ath_alloc_float(3.5));
+
     /* --- Library lookup --- */
     double lo, hi;
     assert(ath_library_lookup("fly", &lo, &hi));

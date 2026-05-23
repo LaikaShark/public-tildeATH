@@ -997,23 +997,26 @@ than the implementation's input buffer (at least 4096 bytes) are
 returned in successive `INPUT` calls.
 
 `print` does double duty (§2, §4.4.6). Its payload is raw literal text,
-but a `$VAR` marker **interpolates** the string object bound to `VAR`:
-the runtime walks `VAR`'s right-spine, writing the byte represented by
-each left-half atom. The walk terminates at the first dead cell, the
-first `NULL`, or the first left half that is not a recognized character
-atom. A whole `print` emits one trailing line feed, no matter how many
-literal and interpolated parts it has.
+but a `$VAR` marker **interpolates** the object bound to `VAR`. If `VAR`
+holds a **number**, it renders as its decimal form (just what `TO_STRING`
+would give — so `print $N;` prints a number directly, no conversion
+step). Otherwise the runtime walks `VAR`'s right-spine as a string,
+writing the byte represented by each left-half atom and terminating at
+the first dead cell, `NULL`, or non-character left half. A whole `print`
+emits one trailing line feed, no matter how many literal and interpolated
+parts it has.
 
 ```ath
+import number 42 as N;
 INPUT name;
-print Hello, $name! Welcome.;
+print Hello, $name! Your number is $N.;
 ```
 
 So `print static text;` prints a constant, `print $line;` prints a
-dynamically constructed string, and the two mix freely on one line.
-Write a literal dollar sign as `\$`. Because `$VAR` is a read, a
-mistyped interpolation variable is a compile error — unlike literal
-text, which prints verbatim.
+dynamically constructed string, `print $N;` prints a number, and they
+mix freely on one line. Write a literal dollar sign as `\$`. Because
+`$VAR` is a read, a mistyped interpolation variable is a compile error —
+unlike literal text, which prints verbatim.
 
 ### 13.2 String operations
 

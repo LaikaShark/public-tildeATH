@@ -89,6 +89,19 @@ def test_text_ident_part_only_use_compiles(tmp_path):
     assert _build_and_run(src, tmp_path) == "n=5\n"
 
 
+def test_print_interpolates_numeric_payload(tmp_path):
+    # `print $N` renders a numeric payload as its decimal form directly,
+    # no TO_STRING needed (int and float).
+    src = tmp_path / "num_interp.ath"
+    src.write_text(
+        "import number 42 as N;\n"
+        "import number 3.14 as PI;\n"
+        "print int $N float $PI;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "int 42 float 3.14\n"
+
+
 def test_die_immediately_terminates(tmp_path):
     src = tmp_path / "early.ath"
     src.write_text(

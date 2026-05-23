@@ -215,7 +215,20 @@ ath_obj *ath_input_line(void) {
     return acc;
 }
 
+/* Forward decl: numeric rendering shared with ath_to_string (defined below). */
+static int ath_number_to_buf(const ath_obj *x, char *buf, size_t cap);
+
 void ath_print_obj_raw(ath_obj *s) {
+    /* A numeric payload renders as its decimal form (§4.4.6), so
+     * `print $N` prints the number instead of nothing — exactly what
+     * TO_STRING would produce. Strings (and char atoms) carry no payload
+     * and fall through to the cons-list walk. */
+    if (s != NULL && s != ath_NULL && ath_is_alive(s) && ath_has_value(s)) {
+        char buf[64];
+        int n = ath_number_to_buf(s, buf, sizeof(buf));
+        if (n > 0) fwrite(buf, 1, (size_t)n, stdout);
+        return;
+    }
     while (s != NULL && s != ath_NULL && ath_is_alive(s)) {
         ath_obj *l, *r;
         ath_decompose(s, &l, &r);
@@ -698,6 +711,15 @@ static int ath_format_double(char *buf, size_t cap, double v) {
     return (int)strlen(buf);
 }
 
+/* Render a numeric payload (INT decimal or FLOAT per ath_format_double)
+ * into buf. Caller guarantees x has a payload. Returns the byte length. */
+static int ath_number_to_buf(const ath_obj *x, char *buf, size_t cap) {
+    if (x->num_kind == ATH_NUM_FLOAT) {
+        return ath_format_double(buf, cap, x->num.f);
+    }
+    return snprintf(buf, cap, "%lld", (long long)x->num.i);
+}
+
 ath_obj *ath_to_string(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (x == NULL || !ath_is_alive(x) || !ath_has_value(x)) {
@@ -705,12 +727,7 @@ ath_obj *ath_to_string(ath_obj *x, ath_obj *unused) {
         return ath_NULL;
     }
     char buf[64];
-    int n;
-    if (x->num_kind == ATH_NUM_FLOAT) {
-        n = ath_format_double(buf, sizeof(buf), x->num.f);
-    } else {
-        n = snprintf(buf, sizeof(buf), "%lld", (long long)x->num.i);
-    }
+    int n = ath_number_to_buf(x, buf, sizeof(buf));
     if (n <= 0) return ath_NULL;
     ath_obj *acc = ath_NULL;
     for (int i = n; i > 0; i--) {

@@ -612,14 +612,15 @@ inter-part separator:
 
 - A **literal part** contributes its already-decoded bytes (its escape
   sequences `\;` `\\` `\n` `\t` `\r` `\$` were resolved at lex time).
-- An **interpolation part** `$VAR` reads `VAR`'s current binding and walks
-  it as a string per §4.6 — exactly the walk formerly performed by
-  `PRINT2` (§4.4.8, removed): decompose each cell, write the recognized
-  character atom, stop on a dead object, `NULL`, or the first unrecognized
-  left half. A dead, `NULL`, or non-string `VAR` therefore contributes
-  nothing (or a truncated prefix); it never aborts the statement or
-  crashes (§6.2). To print a numeric payload, convert it with `TO_STRING`
-  first (§4.8.2).
+- An **interpolation part** `$VAR` reads `VAR`'s current binding. If `VAR`
+  carries a **numeric payload** (§4.8), it renders as its decimal form —
+  exactly what `TO_STRING` would produce (an integer's signed decimal, a
+  float's shortest round-trip, or `nan`/`inf`). Otherwise `VAR` is walked
+  as a string per §4.6 — the walk formerly performed by `PRINT2` (§4.4.8,
+  removed): decompose each cell, write the recognized character atom, stop
+  on a dead object, `NULL`, or the first unrecognized left half. A dead,
+  `NULL`, or non-string-non-number `VAR` therefore contributes nothing (or
+  a truncated prefix); it never aborts the statement or crashes (§6.2).
 
 A payload with zero parts (`print ;`) writes just the trailing line feed.
 
