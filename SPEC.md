@@ -1431,10 +1431,13 @@ All call `ath_inherit_lifetime(R, X, Y)` on success (with `_` = NULL for
 unary ops, which records only `X` as a dependency).
 
 `to_string` of a FLOAT renders the **shortest decimal that round-trips**
-(fewest significant digits whose re-parse recovers the same `double`),
-always including a `.` or exponent so a float reads distinctly from an
-integer (e.g. `3.0`, `3.14`, `2.5e+03`); `nan`, `inf`, and `-inf` print
-as those names. `to_string` of an INT is the canonical signed decimal.
+(fewest digits whose re-parse recovers the same `double`), following the
+familiar `repr` policy: fixed-point notation for ordinary magnitudes
+(decimal exponent in `[-4, 16)`) and scientific notation outside that
+range — so `2500.0`, `3.14`, `0.0001`, but `1e+16` and `1e-05`. The
+result always carries a `.` or an exponent so a float reads distinctly
+from an integer; `nan`, `inf`, and `-inf` print as those names.
+`to_string` of an INT is the canonical signed decimal.
 
 "Born dead" objects have `alive = 0` and `num_kind = NONE`. Subsequent
 arithmetic on a born-dead object propagates death.

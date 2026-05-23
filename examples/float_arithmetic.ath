@@ -8,7 +8,7 @@
 //   # 7 / 2.0 = 3.5
 //   # floor(3.14) = 3.0
 //   # trunc(3.14) = 3
-//   # parse 2.5e3 = 2.5e+03
+//   # parse 2.5e3 = 2500.0
 
 importf <to_string> as TO_STRING;
 importf <add> as ADD;

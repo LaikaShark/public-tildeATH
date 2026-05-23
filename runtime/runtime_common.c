@@ -657,22 +657,42 @@ ath_obj *ath_mod(ath_obj *x, ath_obj *y) {
     return out;
 }
 
-/* Render a double as the shortest decimal that round-trips (SPEC §4.8.2):
- * nan/inf print as "nan"/"inf"/"-inf"; finite values get the fewest
- * significant digits whose strtod recovers the same double, and a forced
- * ".0" when otherwise integer-looking so a float is visually distinct from
- * an int. Returns the written length. */
+/* Render a double as the shortest decimal that round-trips (SPEC §4.8.2),
+ * following the familiar `repr` policy: fixed-point notation for values of
+ * ordinary magnitude (decimal exponent in [-4, 16)), scientific for the
+ * extremes. nan/inf print as "nan"/"inf"/"-inf"; a fixed-point result that
+ * came out integer-looking gets a forced ".0" so a float reads distinctly
+ * from an int. The fixed/scientific cutoff is taken from a canonical "%e"
+ * rendering (not log10) so it is exact and platform-stable. Returns the
+ * written length. */
 static int ath_format_double(char *buf, size_t cap, double v) {
     if (isnan(v)) return snprintf(buf, cap, "nan");
     if (isinf(v)) return snprintf(buf, cap, v < 0 ? "-inf" : "inf");
-    for (int p = 1; p <= 17; p++) {
-        snprintf(buf, cap, "%.*g", p, v);
-        if (strtod(buf, NULL) == v) break;
-    }
-    if (!strpbrk(buf, ".eE")) {
-        size_t len = strlen(buf);
-        if (len + 2 < cap) {
-            buf[len] = '.'; buf[len + 1] = '0'; buf[len + 2] = '\0';
+    if (v == 0.0) return snprintf(buf, cap, signbit(v) ? "-0.0" : "0.0");
+
+    char tmp[64];
+    snprintf(tmp, sizeof tmp, "%.16e", v);
+    const char *epos = strchr(tmp, 'e');
+    int exp10 = epos ? atoi(epos + 1) : 0;
+
+    if (exp10 >= -4 && exp10 < 16) {
+        /* Fixed point: fewest decimal places that round-trip. */
+        for (int d = 0; d <= 17; d++) {
+            snprintf(buf, cap, "%.*f", d, v);
+            if (strtod(buf, NULL) == v) break;
+        }
+        if (!strchr(buf, '.')) {
+            size_t len = strlen(buf);
+            if (len + 2 < cap) {
+                buf[len] = '.'; buf[len + 1] = '0'; buf[len + 2] = '\0';
+            }
+        }
+    } else {
+        /* Scientific: fewest mantissa digits that round-trip (always has
+         * an 'e', so it stays distinct from an int). */
+        for (int p = 0; p <= 17; p++) {
+            snprintf(buf, cap, "%.*e", p, v);
+            if (strtod(buf, NULL) == v) break;
         }
     }
     return (int)strlen(buf);

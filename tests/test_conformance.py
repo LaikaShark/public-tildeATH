@@ -91,7 +91,7 @@ CASES = [
         "float_arithmetic.ath",
         None,
         "pi = 3.14\n3.14 + 7 = 10.14\n7 / 2.0 = 3.5\n"
-        "floor(3.14) = 3.0\ntrunc(3.14) = 3\nparse 2.5e3 = 2.5e+03\n",
+        "floor(3.14) = 3.0\ntrunc(3.14) = 3\nparse 2.5e3 = 2500.0\n",
         id="float_arithmetic",
     ),
     pytest.param(

@@ -653,9 +653,12 @@ print 7 / 2.0 = $HS;          // => 7 / 2.0 = 3.5
 ```
 
 `TO_STRING` of a float prints the shortest decimal that round-trips,
-always with a `.` or exponent so it reads as a float (`3.0`, `3.14`,
-`2.5e+03`); `nan`, `inf`, and `-inf` print by name. `PARSE` returns a
-float when the text contains a `.` or exponent, else an integer.
+in fixed-point notation for ordinary magnitudes and scientific notation
+for the extremes — `3.14`, `2500.0`, `0.0001`, but `1e+16` and `1e-05`
+(the same `repr`-style policy Python uses). It always carries a `.` or
+exponent so it reads as a float; `nan`, `inf`, and `-inf` print by name.
+`PARSE` returns a float when the text contains a `.` or exponent, else an
+integer.
 
 Float division (and `MOD`, via `fmod`) by zero does **not** born-die —
 it yields a live `inf` or `nan`, since those are still numbers.

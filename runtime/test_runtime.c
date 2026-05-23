@@ -1109,6 +1109,14 @@ int main(void) {
         assert(SEQ(ath_to_string(ath_div(F(1.0), F(0.0)), ath_NULL), "inf"));
         assert(SEQ(ath_to_string(ath_neg(ath_div(F(1.0), F(0.0)), ath_NULL), ath_NULL), "-inf"));
         assert(SEQ(ath_to_string(ath_mod(F(1.0), F(0.0)), ath_NULL), "nan"));
+        /* repr-style fixed/scientific policy: ordinary magnitudes are fixed,
+         * extremes are scientific. */
+        assert(SEQ(ath_to_string(F(2500.0), ath_NULL), "2500.0"));
+        assert(SEQ(ath_to_string(F(0.0001), ath_NULL), "0.0001"));
+        assert(SEQ(ath_to_string(F(-2500.0), ath_NULL), "-2500.0"));
+        assert(SEQ(ath_to_string(F(1e16), ath_NULL), "1e+16"));
+        assert(SEQ(ath_to_string(F(1e-5), ath_NULL), "1e-05"));
+        assert(SEQ(ath_to_string(F(0.0), ath_NULL), "0.0"));
 
         /* parse: float syntax → float, plain digits → int. */
         ath_obj *pf = ath_parse(ath_string_from_bytes("2.5", 3), ath_NULL);
