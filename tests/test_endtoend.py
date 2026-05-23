@@ -72,6 +72,23 @@ def test_implicit_termination_at_eof(tmp_path):
     assert _build_and_run(src, tmp_path) == "fell off the end\n"
 
 
+def test_text_target_only_referenced_by_text_compiles(tmp_path):
+    # Regression: `text ... as V` where V is never read elsewhere must still
+    # get a codegen slot. Previously _collect_names had no TextStmt branch,
+    # so this crashed with KeyError: 'V'.
+    src = tmp_path / "text_only.ath"
+    src.write_text('text "hi" as V;\nTHIS.DIE();\n')
+    assert _build_and_run(src, tmp_path) == ""
+
+
+def test_text_ident_part_only_use_compiles(tmp_path):
+    # An IDENT part is a read; its slot must be collected too even if the
+    # name appears nowhere else.
+    src = tmp_path / "text_ident.ath"
+    src.write_text('import number 5 as N;\ntext "n=" N as MSG;\nprint $MSG;\nTHIS.DIE();\n')
+    assert _build_and_run(src, tmp_path) == "n=5\n"
+
+
 def test_die_immediately_terminates(tmp_path):
     src = tmp_path / "early.ath"
     src.write_text(

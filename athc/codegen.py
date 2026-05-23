@@ -112,6 +112,13 @@ def _collect_names(stmts, names: set) -> None:
             for part in s.parts:
                 if part.kind == "var":
                     names.add(part.value)
+        elif isinstance(s, TextStmt):
+            # `text PART+ as TARGET;` (§4.4.25): the target is a write and
+            # each IDENT part is a read — every one needs a slot.
+            names.add(s.target)
+            for part in s.parts:
+                if part.kind == "ident":
+                    names.add(part.value)
         # ImportFuncStmt contributes no variable names.
 
 
