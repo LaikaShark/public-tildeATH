@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "ath_runtime.h"
+#include "bigint.h"
 
 #include <assert.h>
 #include <signal.h>
@@ -13,6 +14,71 @@
 #include <unistd.h>
 
 int main(void) {
+    /* --- Bigint core (SPEC §4.8 bignum phase) --- */
+    {
+        #define BD(s) ath_big_from_decimal(s)
+        #define EQS(big, s) (strcmp(ath_big_to_decimal(big), (s)) == 0)
+
+        /* decimal round-trip, signs, and from_i64 boundaries. */
+        assert(EQS(BD("0"), "0"));
+        assert(EQS(BD("123456789012345678901234567890"),
+                      "123456789012345678901234567890"));
+        assert(EQS(BD("-42"), "-42"));
+        assert(EQS(ath_big_from_i64(0), "0"));
+        assert(EQS(ath_big_from_i64(9223372036854775807LL),
+                      "9223372036854775807"));
+        assert(EQS(ath_big_from_i64(INT64_MIN), "-9223372036854775808"));
+
+        /* add / sub across signs and the int64 boundary. */
+        assert(EQS(ath_big_add(BD("99999999999999999999"), BD("1")),
+                      "100000000000000000000"));
+        assert(EQS(ath_big_add(BD("-5"), BD("3")), "-2"));
+        assert(EQS(ath_big_add(BD("5"), BD("-5")), "0"));
+        assert(EQS(ath_big_sub(BD("100000000000000000000"), BD("1")),
+                      "99999999999999999999"));
+        assert(EQS(ath_big_sub(BD("3"), BD("10")), "-7"));
+
+        /* multiply (verified against Python). */
+        assert(EQS(ath_big_mul(BD("12345678901234567890"),
+                               BD("98765432109876543210")),
+                      "1219326311370217952237463801111263526900"));
+        assert(EQS(ath_big_mul(BD("-7"), BD("6")), "-42"));
+        assert(EQS(ath_big_mul(BD("0"), BD("123")), "0"));
+
+        /* truncated divmod: quotient toward zero, remainder takes a's sign. */
+        ath_bigint *q, *r;
+        assert(ath_big_divmod(BD("100000000000000000000"), BD("7"), &q, &r) == 0);
+        assert(EQS(q, "14285714285714285714") && EQS(r, "2"));
+        assert(ath_big_divmod(BD("-7"), BD("2"), &q, &r) == 0);
+        assert(EQS(q, "-3") && EQS(r, "-1"));
+        assert(ath_big_divmod(BD("7"), BD("-2"), &q, &r) == 0);
+        assert(EQS(q, "-3") && EQS(r, "1"));
+        assert(ath_big_divmod(BD("5"), BD("0"), &q, &r) != 0);  /* div by zero */
+
+        /* compare. */
+        assert(ath_big_cmp(BD("100000000000000000000"),
+                           BD("99999999999999999999")) == 1);
+        assert(ath_big_cmp(BD("-5"), BD("5")) == -1);
+        assert(ath_big_cmp(BD("42"), BD("42")) == 0);
+
+        /* fits_i64 boundary + to_double. */
+        int64_t out;
+        assert(ath_big_fits_i64(BD("9223372036854775807"), &out)
+               && out == 9223372036854775807LL);
+        assert(!ath_big_fits_i64(BD("9223372036854775808"), &out));
+        assert(ath_big_fits_i64(BD("-9223372036854775808"), &out)
+               && out == INT64_MIN);
+        assert(ath_big_to_double(BD("0")) == 0.0);
+        assert(ath_big_to_double(BD("1000000")) == 1000000.0);
+
+        /* malformed decimal → NULL. */
+        assert(ath_big_from_decimal("12x3") == NULL);
+        assert(ath_big_from_decimal("-") == NULL);
+
+        #undef BD
+        #undef EQS
+    }
+
     /* NULL is born dead and stays dead. */
     assert(!ath_is_alive(ath_NULL));
 

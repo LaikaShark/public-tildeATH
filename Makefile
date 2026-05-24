@@ -8,13 +8,16 @@ all: runtime
 
 runtime: $(RUNTIME)/libath_fresh.a $(RUNTIME)/libath_intern.a
 
-$(RUNTIME)/libath_fresh.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/compose_fresh.o
+$(RUNTIME)/libath_fresh.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/compose_fresh.o $(RUNTIME)/bigint.o
 	ar rcs $@ $^
 
-$(RUNTIME)/libath_intern.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/compose_intern.o
+$(RUNTIME)/libath_intern.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/compose_intern.o $(RUNTIME)/bigint.o
 	ar rcs $@ $^
 
-$(RUNTIME)/runtime_common.o: $(RUNTIME)/runtime_common.c $(RUNTIME)/ath_runtime.h
+$(RUNTIME)/runtime_common.o: $(RUNTIME)/runtime_common.c $(RUNTIME)/ath_runtime.h $(RUNTIME)/bigint.h
+	$(CC) $(CFLAGS) -I$(RUNTIME) -c $< -o $@
+
+$(RUNTIME)/bigint.o: $(RUNTIME)/bigint.c $(RUNTIME)/bigint.h
 	$(CC) $(CFLAGS) -I$(RUNTIME) -c $< -o $@
 
 $(RUNTIME)/compose_fresh.o: $(RUNTIME)/compose_fresh.c $(RUNTIME)/ath_runtime.h
