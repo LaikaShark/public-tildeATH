@@ -164,14 +164,19 @@ class Parser:
     def _parse_import_number(self, kw: Token) -> ImportNumberStmt:
         self._advance()  # consume 'number'
         tok = self._peek()
+        is_float = False
+        is_big = False
         if tok.kind is TokenKind.FLOAT:
             self._advance()
-            value: int | float = float(tok.value)
+            value: "int | float | str" = float(tok.value)
             is_float = True
+        elif tok.kind is TokenKind.BIGINT:
+            self._advance()
+            value = tok.value           # decimal string; parsed at runtime
+            is_big = True
         elif tok.kind is TokenKind.INT:
             self._advance()
             value = int(tok.value)
-            is_float = False
         else:
             raise ParseError(
                 f"expected a number literal after 'import number', got "
@@ -188,6 +193,7 @@ class Parser:
             line=kw.line,
             col=kw.col,
             is_float=is_float,
+            is_big=is_big,
         )
 
     def _parse_bifurcate(self):

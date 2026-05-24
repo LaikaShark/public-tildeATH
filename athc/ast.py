@@ -114,12 +114,14 @@ class ImportBuiltinStmt:
 @dataclass
 class ImportNumberStmt:
     """import number N as VAR; — eternal-alive object with a numeric payload
-    (§4.4.14). `value` is an int when is_float is False, else a float."""
-    value: int | float
+    (§4.4.14). `value` is an int (INT), a float (is_float), or the decimal
+    string of an over-int64 bignum literal (is_big)."""
+    value: "int | float | str"
     var: str
     line: int
     col: int
     is_float: bool = False
+    is_big: bool = False
 
 
 @dataclass

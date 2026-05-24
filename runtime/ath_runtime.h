@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "bigint.h"
+
 /* SPEC §4.8 numeric payload discriminant. NONE = no payload; INT selects
  * num.i (int64); FLOAT selects num.f (IEEE-754 double); BIG is reserved for
  * a future arbitrary-precision phase. */
@@ -41,9 +43,11 @@ typedef struct ath_obj {
     int owns_path;
     /* SPEC §4.8 numeric payload (tagged). num_kind selects the active union
      * member: ATH_NUM_NONE = no payload, ATH_NUM_INT = num.i (int64),
-     * ATH_NUM_FLOAT = num.f (double). Use ath_has_value() to test presence. */
+     * ATH_NUM_FLOAT = num.f (double), ATH_NUM_BIG = num.b (arbitrary-
+     * precision int, magnitude always > INT64 range — small values are
+     * normalized back to INT). Use ath_has_value() to test presence. */
     ath_num_kind num_kind;
-    union { int64_t i; double f; } num;
+    union { int64_t i; double f; ath_bigint *b; } num;
     /* SPEC §4.8.1 dependency tracking. ath_is_alive returns 0 if any non-null
      * dep is dead. Installed by ath_inherit_lifetime; never written elsewhere. */
     struct ath_obj *dep1;
@@ -159,6 +163,12 @@ void     ath_register_lifetime(const char *name, double min_s, double max_s);
  * missing payload the result is born dead (alive=0, num_kind=NONE). */
 ath_obj *ath_alloc_number(int64_t v);     /* ATH_NUM_INT payload   */
 ath_obj *ath_alloc_float(double v);       /* ATH_NUM_FLOAT payload */
+/* Wrap a bigint, normalizing to an INT payload when it fits int64 (so a
+ * live BIG always has magnitude beyond int64 range). */
+ath_obj *ath_alloc_bignum(ath_bigint *b);
+/* Parse a decimal literal too large for int64 into a BIG object (§4.4.14);
+ * born dead on malformed input. */
+ath_obj *ath_alloc_bignum_from_decimal(const char *s);
 void     ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b);
 ath_obj *ath_add(ath_obj *x, ath_obj *y);
 ath_obj *ath_sub(ath_obj *x, ath_obj *y);

@@ -444,6 +444,15 @@ def test_import_number_int_is_not_float():
     assert s.value == 5
 
 
+def test_import_number_over_int64_is_bignum():
+    p = parse("import number 99999999999999999999 as BIG;")
+    s = p.statements[0]
+    assert isinstance(s, ImportNumberStmt)
+    assert s.is_big is True
+    assert s.is_float is False
+    assert s.value == "99999999999999999999"   # decimal string, parsed at runtime
+
+
 def test_import_with_metadata_word_builtin_is_not_a_marker():
     # When 'builtin' is not the second token after import, it's an ordinary
     # identifier. `import the builtin BUILTIN;` is a 3-word concept form.

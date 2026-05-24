@@ -677,6 +677,28 @@ The usual transcendentals are stdlib shims too, each returning a float
 and `HYPOT [X, Y] R;`. An out-of-domain argument (e.g. `SQRT` of a
 negative) yields a live `nan` rather than a dead object.
 
+### 10.3 Bignums
+
+An integer literal too large for int64 becomes an **arbitrary-precision
+bignum** (§4.8.7), and bignum arithmetic is exact and never overflows:
+
+```ath
+importf <mul> as MUL;
+import number 99999999999999999999 as BIG;   // beyond int64 → bignum
+MUL [BIG, BIG] SQ;
+print $SQ;     // => 9999999999999999999800000000000000000001
+```
+
+Bignums sit between ints and floats in the tower (FLOAT > BIG > INT): an
+int operand promotes to bignum, a float operand pulls the result back to
+a float approximation. Results that shrink to fit int64 demote back to a
+plain int, so `2`, `2.0`, and a bignum `2` all compare equal. There is no
+auto-promotion on overflow — plain `int64` arithmetic that overflows is
+still born dead (failure-as-death); you opt into bignums by writing a
+literal too big for int64. The bitwise/`GCD`/`POW` family and the
+count/index positions reject bignums (born dead), since those need a
+small machine integer.
+
 ---
 
 ## 11. Lifetime extensions

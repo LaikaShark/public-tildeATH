@@ -102,6 +102,38 @@ def test_print_interpolates_numeric_payload(tmp_path):
     assert _build_and_run(src, tmp_path) == "int 42 float 3.14\n"
 
 
+def test_bignum_literal_and_exact_arithmetic(tmp_path):
+    # A literal beyond int64 is an exact bignum; arithmetic stays exact and
+    # interpolates as its full decimal.
+    src = tmp_path / "big.ath"
+    src.write_text(
+        "importf <mul> as MUL;\n"
+        "import number 99999999999999999999 as BIG;\n"
+        "MUL [BIG, BIG] SQ;\n"
+        "print $SQ;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == (
+        "9999999999999999999800000000000000000001\n"
+    )
+
+
+def test_int_overflow_still_dies(tmp_path):
+    # int64 overflow stays born-dead (failure-as-death preserved); it does
+    # NOT auto-promote to bignum.
+    src = tmp_path / "ov.ath"
+    src.write_text(
+        "importf <add> as ADD;\n"
+        "import number 9223372036854775807 as M;\n"
+        "import number 1 as ONE;\n"
+        "ADD [M, ONE] OV;\n"
+        "~ATH(OV) { print ALIVE_BUG; BIFURCATE NULL[z, OV]; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
 def test_die_immediately_terminates(tmp_path):
     src = tmp_path / "early.ath"
     src.write_text(

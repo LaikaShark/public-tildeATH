@@ -53,14 +53,18 @@ def test_int_literal_max_int64():
     assert toks[0].kind is TokenKind.INT
 
 
-def test_int_literal_overflow_rejected():
-    with pytest.raises(LexError, match="signed 64-bit range"):
-        tokenize("99999999999999999999")
+def test_int_literal_over_int64_becomes_bigint():
+    # An integer literal too large for int64 is a bignum literal (§4.8),
+    # not an error.
+    toks = tokenize("99999999999999999999")
+    assert toks[0].kind is TokenKind.BIGINT
+    assert toks[0].value == "99999999999999999999"
 
 
-def test_int_literal_negative_overflow_rejected():
-    with pytest.raises(LexError, match="signed 64-bit range"):
-        tokenize("-99999999999999999999")
+def test_negative_int_literal_over_int64_becomes_bigint():
+    toks = tokenize("-99999999999999999999")
+    assert toks[0].kind is TokenKind.BIGINT
+    assert toks[0].value == "-99999999999999999999"
 
 
 @pytest.mark.parametrize("lit", ["3.14", "-0.5", "0.0", "10.25", "-12.0"])

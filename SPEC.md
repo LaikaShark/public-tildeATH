@@ -65,7 +65,9 @@ KEYWORD     := 'import' | 'importf' | 'as' | 'watch' | 'BIFURCATE'
 LOOPSTART   := '~ATH'                          [the 'ATH' part is case-insensitive]
 DIE         := '.DIE'                          [the 'DIE' part is case-insensitive]
 IDENT       := [A-Za-z_][A-Za-z0-9_]*          [case-sensitive]
-INT         := '-'? [0-9]+                     [signed int64 literal, §4.8]
+INT         := '-'? [0-9]+                     [integer literal, §4.8; one
+                                                that exceeds int64 is a BIGINT
+                                                (bignum, §4.8.7)]
 FLOAT       := '-'? [0-9]+ ('.' [0-9]+)? ([eE] [+-]? [0-9]+)?
                                                [IEEE-754 double; must have a
                                                 fraction or exponent, §4.8]
@@ -253,8 +255,9 @@ import-builtin
 
 import-number = 'import' 'number' (INT | FLOAT) 'as' IDENT ';' ;
                 (* allocates an eternal-alive object carrying the literal's
-                   payload — an INT literal gives an int64 payload, a FLOAT
-                   literal a double. See §4.4.14. *)
+                   payload — an INT literal gives an int64 payload (or a
+                   bignum when it exceeds int64, §4.8.7), a FLOAT literal a
+                   double. See §4.4.14. *)
 
 importf-stmt  = 'importf' STRING 'as' IDENT ';'
               | 'importf' '<' IDENT '>' 'as' IDENT ';' ;
@@ -811,16 +814,17 @@ error, not as an athc diagnostic.
 A **runtime operation** that allocates a fresh object carrying a
 numeric payload.
 
-1. `N` is an `INT` or `FLOAT` token (§2.2). An `INT` is parsed as a
-   signed 64-bit integer — out-of-range literals (e.g.,
-   `999999999999999999999`) are a compile-time error. A `FLOAT` is
-   parsed as an IEEE-754 double; a non-finite literal (e.g. `1e999`)
-   is a compile-time error.
+1. `N` is an `INT` or `FLOAT` token (§2.2). An `INT` that fits is parsed
+   as a signed 64-bit integer; one that exceeds int64 (e.g.
+   `999999999999999999999`) is a **bignum** literal (§4.8.7), not an
+   error. A `FLOAT` is parsed as an IEEE-754 double; a non-finite literal
+   (e.g. `1e999`) is a compile-time error.
 2. If `VAR` is already bound: no-op (matches §4.4.1's idempotence).
 3. Otherwise: allocate a fresh **eternal-alive** object whose payload is
    the literal's value — `num_kind = ATH_NUM_INT` (`num.i = N`) for an
-   integer, `ATH_NUM_FLOAT` (`num.f = N`) for a float. The object has no
-   deadline, no watch path, no awaited signal, no one-shot flag.
+   int64, `ATH_NUM_FLOAT` (`num.f = N`) for a float, `ATH_NUM_BIG` for an
+   over-int64 integer. The object has no deadline, no watch path, no
+   awaited signal, no one-shot flag.
 4. Bind `VAR` to that object.
 
 Eternal-alive means the object outlives the program by default —
@@ -1364,30 +1368,33 @@ and halves. The payload is **tagged**: a discriminant selects which kind
 of number, if any, is present:
 
 - `num_kind` — `ATH_NUM_NONE` (no payload, the default), `ATH_NUM_INT`
-  (a signed 64-bit integer), or `ATH_NUM_FLOAT` (an IEEE-754 `double`).
-  `ATH_NUM_BIG` is reserved for a future arbitrary-precision phase.
-- `num` — a union holding either the `int64` (`num.i`) or the `double`
-  (`num.f`), selected by `num_kind`.
+  (a signed 64-bit integer), `ATH_NUM_FLOAT` (an IEEE-754 `double`), or
+  `ATH_NUM_BIG` (an arbitrary-precision integer, §4.8.7).
+- `num` — a union holding the `int64` (`num.i`), the `double` (`num.f`),
+  or a pointer to a heap bigint (`num.b`), selected by `num_kind`.
 
 "Has a payload" means `num_kind != ATH_NUM_NONE` (the runtime exposes the
 null-safe `ath_has_value()` for this test). `import number N as VAR;`
 (§4.4.14) is the only surface form that allocates with a payload — an
-integer literal yields an INT payload, a float literal (§2.4, §4.8) a
-FLOAT one. The runtime built-ins (§5.2) propagate payloads. The character
-atoms used by string encoding (§4.6) carry **no** numeric payload — they
-are pointer-identified, not value-identified.
+integer literal that fits int64 yields an INT payload, a float literal
+(§2.4, §4.8) a FLOAT one, and an integer literal too large for int64 a
+BIG one (§4.8.7). The runtime built-ins (§5.2) propagate payloads. The
+character atoms used by string encoding (§4.6) carry **no** numeric
+payload — they are pointer-identified, not value-identified.
 
-**The numeric tower.** Binary arithmetic and comparisons promote: when
-both operands are INT the operation runs in int64 (with the existing
-overflow-to-dead rules); when either operand is FLOAT both are read as
-`double` and the result is FLOAT. So `2` and `2.0` compare equal, and
-`2 + 1.5` is the float `3.5`. The bitwise operators and `gcd` are
-integer-only and are **born dead** on any FLOAT operand. Float results
-are never "born dead from overflow": an operation that produces `±inf`
-or `nan` (e.g. float division by zero) yields a **live** float carrying
-that IEEE value — born-death is reserved for operations that cannot
-produce a number at all (dead/absent operand, integer overflow, integer
-÷0).
+**The numeric tower.** Binary arithmetic and comparisons promote along
+the precedence **FLOAT > BIG > INT**: when both operands are INT the
+operation runs in int64 (with the existing overflow-to-dead rules); when
+either is BIG (and neither FLOAT) it runs in exact arbitrary precision
+and the result is BIG; when either is FLOAT both are read as `double` and
+the result is FLOAT. So `2`, `2.0`, and a bignum `2` all compare equal,
+`2 + 1.5` is the float `3.5`, and a bignum sum never overflows. The
+bitwise operators and `gcd` are integer-only and are **born dead** on any
+FLOAT *or* BIG operand. Float results are never "born dead from
+overflow": an operation that produces `±inf` or `nan` (e.g. float
+division by zero) yields a **live** float carrying that IEEE value —
+born-death is reserved for operations that cannot produce a number at all
+(dead/absent operand, **int64** overflow, integer ÷0).
 
 #### 4.8.1 Lifetime inheritance
 
@@ -1926,6 +1933,38 @@ dead to alive as its operand died would contradict the monotonic-death
 invariant (§4.7) — once observed dead, an object stays dead. Negation
 lives only at the loop level, in the inverted `~ATH(!V)` form (§4.4.10).
 
+#### 4.8.7 Bignum (arbitrary-precision integers)
+
+A `BIG` payload is a heap-allocated, arbitrary-precision signed integer.
+It enters a program in exactly one way — an **integer literal too large
+for int64** (`import number 99999999999999999999 as N;`, §4.4.14) — and
+then propagates through arithmetic by the tower (§4.8). There is no
+auto-promotion: `int64` overflow stays **born dead** (failure-as-death is
+preserved); a value only becomes BIG by starting from a BIG literal.
+
+- **Exactness & normalization.** BIG arithmetic (`+ - * / %`, comparisons,
+  `NEG`, `ABS`, `MIN`, `MAX`, `SIGN`, `CLAMP`) is exact and never
+  overflows. Every result is **normalized**: one that fits int64 is
+  demoted back to an INT payload, so a live BIG always has magnitude
+  beyond int64 range. Thus `big - (big - 1)` is the INT `1`, and `2`,
+  `2.0`, and a bignum `2` all compare equal.
+- **Division.** `DIV`/`MOD` truncate toward zero (remainder takes the
+  dividend's sign); a zero divisor is born dead, like the int case.
+- **Mixed with float.** A BIG combined with a FLOAT promotes to FLOAT via
+  a `double` approximation (the tower's FLOAT > BIG precedence).
+- **Integer-only and out-of-range ops.** The bitwise group, `gcd`, and
+  (this phase) `POW` are **born dead** on a BIG operand; so are `chr`,
+  `float_to_int`, and any count/index/duration position (a BIG is always
+  out of the valid small-integer range). `count_of` (loop counts)
+  saturates a positive BIG to `INT64_MAX`. `SUM`/`PRODUCT`/`MAXIMUM`/
+  `MINIMUM` over a list **containing** a BIG element are born dead this
+  phase (scalar BIG arithmetic is unaffected).
+- **Rendering.** `TO_STRING` and `print $N` interpolation emit the full
+  signed decimal, however long.
+
+Bignums (and their digit arrays) are allocated and never freed, like
+every other runtime object.
+
 ---
 
 ## 5. Runtime ABI
@@ -1939,7 +1978,7 @@ that let us evolve semantics without touching the frontend.
 
 ```c
 typedef enum {
-    ATH_NUM_NONE = 0, ATH_NUM_INT, ATH_NUM_FLOAT, ATH_NUM_BIG /* reserved */
+    ATH_NUM_NONE = 0, ATH_NUM_INT, ATH_NUM_FLOAT, ATH_NUM_BIG /* §4.8.7 */
 } ath_num_kind;
 
 typedef struct ath_obj {
@@ -1958,7 +1997,7 @@ typedef struct ath_obj {
      * num.i holds the int64 when INT, num.f the double when FLOAT. Test
      * presence with ath_has_value() (num_kind != NONE). */
     ath_num_kind   num_kind;
-    union { int64_t i; double f; } num;
+    union { int64_t i; double f; ath_bigint *b; } num;  /* b: §4.8.7 */
 
     /* §4.8.1 dependency tracking */
     struct ath_obj *dep1;       /* NULL = no dep */
@@ -2039,6 +2078,7 @@ void     ath_register_lifetime(const char *name, double min_s, double max_s);
 /* Numeric payload + arithmetic (§4.8) */
 ath_obj *ath_alloc_number(int64_t v);     /* ATH_NUM_INT payload   */
 ath_obj *ath_alloc_float(double v);       /* ATH_NUM_FLOAT payload */
+ath_obj *ath_alloc_bignum_from_decimal(const char *s); /* §4.8.7 BIG literal */
 void     ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b);
 ath_obj *ath_add(ath_obj *x, ath_obj *y);
 ath_obj *ath_sub(ath_obj *x, ath_obj *y);
@@ -2381,9 +2421,9 @@ v0 errors fall into two classes:
 - File-not-found or parse error in an `importf` target. For the
   search-path form (§4.4.9), "not found" means no `ATH_PATH` entry and
   no compiler-adjacent `stdlib/` contains `STEM.ath`.
-- An `INT` literal in `import number` (§4.4.14) that does not fit
-  signed 64-bit range, or a `FLOAT` literal that is not finite
-  (overflows `double`, e.g. `1e999`).
+- A `FLOAT` literal in `import number` (§4.4.14) that is not finite
+  (overflows `double`, e.g. `1e999`). An integer literal that exceeds
+  int64 is **not** an error — it is a bignum literal (§4.8.7).
 - `watch` paths are *not* validated at compile time; missing files cause
   the watching object to be born dead at runtime, never a compile error.
 - Missing C symbols declared by `import builtin` (§4.4.13) surface as

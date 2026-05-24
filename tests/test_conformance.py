@@ -102,6 +102,15 @@ CASES = [
         id="float_transcendentals",
     ),
     pytest.param(
+        "bignum.ath",
+        None,
+        "99999999999999999999 + 1 = 100000000000000000000\n"
+        "square = 9999999999999999999800000000000000000001\n"
+        "square / big = 99999999999999999999\n"
+        "big - (big-1) = 1\n",
+        id="bignum",
+    ),
+    pytest.param(
         "multi_word_import.ath",
         None,
         "speaking once before she dies\nsilence\n",

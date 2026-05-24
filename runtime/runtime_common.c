@@ -224,6 +224,11 @@ void ath_print_obj_raw(ath_obj *s) {
      * TO_STRING would produce. Strings (and char atoms) carry no payload
      * and fall through to the cons-list walk. */
     if (s != NULL && s != ath_NULL && ath_is_alive(s) && ath_has_value(s)) {
+        if (s->num_kind == ATH_NUM_BIG) {   /* decimal may exceed a fixed buf */
+            char *d = ath_big_to_decimal(s->num.b);
+            if (d != NULL) { fwrite(d, 1, strlen(d), stdout); free(d); }
+            return;
+        }
         char buf[64];
         int n = ath_number_to_buf(s, buf, sizeof(buf));
         if (n > 0) fwrite(buf, 1, (size_t)n, stdout);
@@ -492,7 +497,7 @@ ath_obj *ath_alloc_watching_file(const char *path) {
 
 ath_obj *ath_alloc_watching_pid(ath_obj *n) {
     ath_obj *o = ath_alloc_alive();
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT
         || n->num.i <= 0 || n->num.i > INT_MAX) {
         o->alive = 0;
         return o;
@@ -529,6 +534,8 @@ ath_obj *ath_alloc_watching_mtime(const char *path) {
 
 /* --- Numeric payload and arithmetic (SPEC §4.8) ------------------------- */
 
+static ath_obj *ath_alloc_dead_number(void);
+
 ath_obj *ath_alloc_number(int64_t v) {
     ath_obj *o = ath_alloc_alive();
     o->num_kind = ATH_NUM_INT;
@@ -541,6 +548,22 @@ ath_obj *ath_alloc_float(double v) {
     o->num_kind = ATH_NUM_FLOAT;
     o->num.f = v;
     return o;
+}
+
+ath_obj *ath_alloc_bignum(ath_bigint *b) {
+    if (b == NULL) return ath_alloc_dead_number();
+    /* Normalize: a value that fits int64 becomes an INT, so a live BIG is
+     * always genuinely out of int64 range (SPEC §4.8). */
+    int64_t v;
+    if (ath_big_fits_i64(b, &v)) return ath_alloc_number(v);
+    ath_obj *o = ath_alloc_alive();
+    o->num_kind = ATH_NUM_BIG;
+    o->num.b = b;
+    return o;
+}
+
+ath_obj *ath_alloc_bignum_from_decimal(const char *s) {
+    return ath_alloc_bignum(ath_big_from_decimal(s));
 }
 
 void ath_inherit_lifetime(ath_obj *result, ath_obj *a, ath_obj *b) {
@@ -574,15 +597,27 @@ static int ath_operands_usable(ath_obj *x, ath_obj *y) {
     return 1;
 }
 
-/* Numeric-tower helpers (SPEC §4.8.2). A binary op runs in the int64 path
- * when both operands are INT, else promotes both to double and yields a
- * FLOAT. ath_as_double reads either representation. */
+/* Numeric-tower helpers (SPEC §4.8.2). Precedence FLOAT > BIG > INT: a
+ * binary op runs in int64 when both operands are INT, in bigint when either
+ * is BIG (and neither FLOAT), and in double when either is FLOAT. */
 static double ath_as_double(const ath_obj *o) {
-    return o->num_kind == ATH_NUM_FLOAT ? o->num.f : (double)o->num.i;
+    if (o->num_kind == ATH_NUM_FLOAT) return o->num.f;
+    if (o->num_kind == ATH_NUM_BIG)   return ath_big_to_double(o->num.b);
+    return (double)o->num.i;
+}
+
+/* View an INT or BIG operand as a bigint. INT promotes to a fresh bigint;
+ * BIG returns its stored value (read-only, never freed). */
+static ath_bigint *ath_as_bigint(const ath_obj *o) {
+    return o->num_kind == ATH_NUM_BIG ? o->num.b : ath_big_from_i64(o->num.i);
 }
 
 static int ath_either_float(const ath_obj *x, const ath_obj *y) {
     return x->num_kind == ATH_NUM_FLOAT || y->num_kind == ATH_NUM_FLOAT;
+}
+
+static int ath_either_big(const ath_obj *x, const ath_obj *y) {
+    return x->num_kind == ATH_NUM_BIG || y->num_kind == ATH_NUM_BIG;
 }
 
 /* True iff o is FLOAT — used by int-only ops (bitwise, gcd) that born-die
@@ -591,11 +626,24 @@ static int ath_is_float(const ath_obj *o) {
     return o != NULL && o->num_kind == ATH_NUM_FLOAT;
 }
 
+/* True iff o is BIG — int-only ops born-die on it too. */
+static int ath_is_big(const ath_obj *o) {
+    return o != NULL && o->num_kind == ATH_NUM_BIG;
+}
+
+/* An operand an integer-only op (bitwise, gcd, shifts) cannot accept: a
+ * usable operand that is not a plain int64 (i.e. FLOAT or BIG). */
+static int ath_not_plain_int(const ath_obj *o) {
+    return o != NULL && o->num_kind != ATH_NUM_INT;
+}
+
 ath_obj *ath_add(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
     ath_obj *out;
     if (ath_either_float(x, y)) {
         out = ath_alloc_float(ath_as_double(x) + ath_as_double(y));
+    } else if (ath_either_big(x, y)) {
+        out = ath_alloc_bignum(ath_big_add(ath_as_bigint(x), ath_as_bigint(y)));
     } else {
         int64_t r;
         if (__builtin_add_overflow(x->num.i, y->num.i, &r))
@@ -611,6 +659,8 @@ ath_obj *ath_sub(ath_obj *x, ath_obj *y) {
     ath_obj *out;
     if (ath_either_float(x, y)) {
         out = ath_alloc_float(ath_as_double(x) - ath_as_double(y));
+    } else if (ath_either_big(x, y)) {
+        out = ath_alloc_bignum(ath_big_sub(ath_as_bigint(x), ath_as_bigint(y)));
     } else {
         int64_t r;
         if (__builtin_sub_overflow(x->num.i, y->num.i, &r))
@@ -626,6 +676,8 @@ ath_obj *ath_mul(ath_obj *x, ath_obj *y) {
     ath_obj *out;
     if (ath_either_float(x, y)) {
         out = ath_alloc_float(ath_as_double(x) * ath_as_double(y));
+    } else if (ath_either_big(x, y)) {
+        out = ath_alloc_bignum(ath_big_mul(ath_as_bigint(x), ath_as_bigint(y)));
     } else {
         int64_t r;
         if (__builtin_mul_overflow(x->num.i, y->num.i, &r))
@@ -643,6 +695,11 @@ ath_obj *ath_div(ath_obj *x, ath_obj *y) {
         /* True division. x/0.0 yields ±inf or nan, which are live values
          * (SPEC §4.8.2): division produced a number, just not a finite one. */
         out = ath_alloc_float(ath_as_double(x) / ath_as_double(y));
+    } else if (ath_either_big(x, y)) {
+        ath_bigint *q;
+        if (ath_big_divmod(ath_as_bigint(x), ath_as_bigint(y), &q, NULL))
+            return ath_alloc_dead_number();   /* big ÷ 0 */
+        out = ath_alloc_bignum(q);
     } else {
         if (y->num.i == 0) return ath_alloc_dead_number();
         /* INT64_MIN / -1 overflows two's-complement. */
@@ -660,6 +717,11 @@ ath_obj *ath_mod(ath_obj *x, ath_obj *y) {
     if (ath_either_float(x, y)) {
         /* fmod; fmod(x, 0.0) is nan, a live value (§4.8.2). */
         out = ath_alloc_float(fmod(ath_as_double(x), ath_as_double(y)));
+    } else if (ath_either_big(x, y)) {
+        ath_bigint *r;
+        if (ath_big_divmod(ath_as_bigint(x), ath_as_bigint(y), NULL, &r))
+            return ath_alloc_dead_number();   /* big mod 0 */
+        out = ath_alloc_bignum(r);
     } else {
         if (y->num.i == 0) return ath_alloc_dead_number();
         if (x->num.i == INT64_MIN && y->num.i == -1)
@@ -726,14 +788,26 @@ ath_obj *ath_to_string(ath_obj *x, ath_obj *unused) {
         /* No payload → empty string. */
         return ath_NULL;
     }
-    char buf[64];
-    int n = ath_number_to_buf(x, buf, sizeof(buf));
-    if (n <= 0) return ath_NULL;
+    char sbuf[64];
+    char *heap = NULL;       /* BIG decimal can exceed sbuf */
+    const char *s;
+    int n;
+    if (x->num_kind == ATH_NUM_BIG) {
+        heap = ath_big_to_decimal(x->num.b);
+        if (heap == NULL) return ath_NULL;
+        s = heap;
+        n = (int)strlen(heap);
+    } else {
+        n = ath_number_to_buf(x, sbuf, sizeof(sbuf));
+        s = sbuf;
+    }
+    if (n <= 0) { free(heap); return ath_NULL; }
     ath_obj *acc = ath_NULL;
     for (int i = n; i > 0; i--) {
-        ath_obj *c = ath_char_atom((unsigned char)buf[i - 1]);
+        ath_obj *c = ath_char_atom((unsigned char)s[i - 1]);
         acc = ath_compose(c, acc);
     }
+    free(heap);
     ath_inherit_lifetime(acc, x, NULL);
     return acc;
 }
@@ -774,15 +848,18 @@ static ath_obj *ath_verdict_false(void) {
 }
 
 /* Numeric comparisons (SPEC §4.8.3). Promote to double when either operand
- * is FLOAT, else compare as int64 (so large int64s past 2^53 stay exact).
- * Across kinds this makes 2 == 2.0 true. NaN compares per IEEE: every
- * ordered test is false, != is true. */
+ * is FLOAT (preserving IEEE NaN semantics — ordered tests false, != true),
+ * to bigint when either is BIG, else compare as int64 (exact past 2^53).
+ * Across kinds this makes 2 == 2.0 and 2 == big(2) true. */
 #define ATH_CMP(name, op)                                                   \
     ath_obj *name(ath_obj *x, ath_obj *y) {                                 \
         if (!ath_operands_usable(x, y)) return ath_verdict_false();         \
         int res = ath_either_float(x, y)                                    \
                       ? (ath_as_double(x) op ath_as_double(y))              \
-                      : (x->num.i op y->num.i);                             \
+                      : ath_either_big(x, y)                                \
+                          ? (ath_big_cmp(ath_as_bigint(x),                  \
+                                         ath_as_bigint(y)) op 0)            \
+                          : (x->num.i op y->num.i);                         \
         return res ? ath_verdict_true(x, y) : ath_verdict_false();          \
     }
 ATH_CMP(ath_lt, <)
@@ -973,7 +1050,7 @@ ath_obj *ath_concat(ath_obj *a, ath_obj *b) {
 
 ath_obj *ath_index(ath_obj *s, ath_obj *n) {
     if (s == NULL || !ath_is_alive(s)) return ath_alloc_dead();
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT) return ath_alloc_dead();
     if (n->num.i < 0) return ath_alloc_dead();
     int64_t target = n->num.i;
     int64_t i = 0;
@@ -1006,9 +1083,9 @@ ath_obj *ath_slice(ath_obj *s, ath_obj *range) {
         return ath_alloc_dead();
     ath_obj *i_obj, *j_obj;
     ath_decompose(range, &i_obj, &j_obj);
-    if (i_obj == NULL || !ath_is_alive(i_obj) || !ath_has_value(i_obj))
+    if (i_obj == NULL || !ath_is_alive(i_obj) || i_obj->num_kind != ATH_NUM_INT)
         return ath_alloc_dead();
-    if (j_obj == NULL || !ath_is_alive(j_obj) || !ath_has_value(j_obj))
+    if (j_obj == NULL || !ath_is_alive(j_obj) || j_obj->num_kind != ATH_NUM_INT)
         return ath_alloc_dead();
     int64_t i = i_obj->num.i;
     int64_t j = j_obj->num.i;
@@ -1109,7 +1186,7 @@ static int64_t ath_now_ms(void) {
 }
 
 void ath_sleep_ms(ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return;
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT) return;
     if (n->num.i <= 0) return;
     struct timespec ts;
     ts.tv_sec = (time_t)(n->num.i / 1000);
@@ -1119,7 +1196,7 @@ void ath_sleep_ms(ath_obj *n) {
 
 ath_obj *ath_alloc_timer_ms(ath_obj *n) {
     /* Bad duration → born dead. */
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i <= 0) {
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT || n->num.i <= 0) {
         ath_obj *dead = (ath_obj *)calloc(1, sizeof(ath_obj));
         if (!dead) { fputs("ath: out of memory\n", stderr); exit(1); }
         return dead;
@@ -1137,8 +1214,8 @@ ath_obj *ath_now(ath_obj *a, ath_obj *b) {
 }
 
 ath_obj *ath_random_range(ath_obj *lo, ath_obj *hi) {
-    if (lo == NULL || !ath_is_alive(lo) || !ath_has_value(lo)) goto dead;
-    if (hi == NULL || !ath_is_alive(hi) || !ath_has_value(hi)) goto dead;
+    if (lo == NULL || !ath_is_alive(lo) || lo->num_kind != ATH_NUM_INT) goto dead;
+    if (hi == NULL || !ath_is_alive(hi) || hi->num_kind != ATH_NUM_INT) goto dead;
     if (lo->num.i >= hi->num.i) goto dead;
 
     /* Combine two rand() calls for ~62 bits of entropy, more than enough
@@ -1867,7 +1944,7 @@ ath_obj *ath_rfind(ath_obj *hay, ath_obj *needle) {
  * number payload; N == 0 → empty (NULL); N < 0 or no payload → dead.
  * S dead/malformed → dead. */
 ath_obj *ath_repeat(ath_obj *s, ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT) return ath_alloc_dead();
     if (n->num.i < 0) return ath_alloc_dead();
     int s_empty = (s == NULL || s == ath_NULL);
     if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
@@ -1918,7 +1995,7 @@ ath_obj *ath_reverse(ath_obj *s, ath_obj *unused) {
  * a number payload; N < 0 or no payload → dead. S dead/malformed →
  * dead. */
 static ath_obj *ath_pad_impl(ath_obj *s, ath_obj *n, int on_left) {
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT) return ath_alloc_dead();
     if (n->num.i < 0) return ath_alloc_dead();
     int s_empty = (s == NULL || s == ath_NULL);
     if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
@@ -1966,9 +2043,10 @@ ath_obj *ath_ord(ath_obj *a, ath_obj *unused) {
  * of range, lacking a payload, or dead → dead. Inverse of ORD. */
 ath_obj *ath_chr(ath_obj *n, ath_obj *unused) {
     (void)unused;
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return ath_alloc_dead();
-    /* Character codes are integral: a FLOAT code is born dead (§4.8.2). */
-    if (n->num_kind == ATH_NUM_FLOAT) return ath_alloc_dead();
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT) return ath_alloc_dead();
+    /* Character codes are integral and 0..255: a FLOAT or a BIG (always out
+     * of range) code is born dead (§4.8.2). */
+    if (n->num_kind != ATH_NUM_INT) return ath_alloc_dead();
     if (n->num.i < 0 || n->num.i > 255) return ath_alloc_dead();
     ath_obj *atom = ath_char_atom((int)n->num.i);
     ath_obj *result = ath_cons_fresh(atom, ath_NULL);
@@ -1992,6 +2070,10 @@ ath_obj *ath_pow(ath_obj *x, ath_obj *y) {
         /* Float pow handles negative/fractional exponents; out-of-domain
          * cases (e.g. neg base ^ frac) yield nan, a live value (§4.8.2). */
         r = ath_alloc_float(pow(ath_as_double(x), ath_as_double(y)));
+    } else if (ath_either_big(x, y)) {
+        /* Bignum exponentiation is born dead in this phase (results are
+         * unbounded; revisit). */
+        return ath_alloc_dead_number();
     } else {
         if (y->num.i < 0) return ath_alloc_dead_number();
         int64_t base = x->num.i, exp = y->num.i, result = 1;
@@ -2018,6 +2100,8 @@ ath_obj *ath_abs(ath_obj *x, ath_obj *unused) {
     ath_obj *r;
     if (ath_is_float(x)) {
         r = ath_alloc_float(fabs(x->num.f));
+    } else if (ath_is_big(x)) {
+        r = ath_alloc_bignum(ath_big_abs(x->num.b));
     } else {
         if (x->num.i == INT64_MIN) return ath_alloc_dead_number();
         r = ath_alloc_number(x->num.i < 0 ? -x->num.i : x->num.i);
@@ -2027,13 +2111,15 @@ ath_obj *ath_abs(ath_obj *x, ath_obj *unused) {
 }
 
 /* NEG: arithmetic negation. INT64_MIN overflows the int path → dead;
- * FLOAT negates directly. */
+ * FLOAT and BIG negate directly. */
 ath_obj *ath_neg(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
     ath_obj *r;
     if (ath_is_float(x)) {
         r = ath_alloc_float(-x->num.f);
+    } else if (ath_is_big(x)) {
+        r = ath_alloc_bignum(ath_big_neg(x->num.b));
     } else {
         if (x->num.i == INT64_MIN) return ath_alloc_dead_number();
         r = ath_alloc_number(-x->num.i);
@@ -2049,6 +2135,9 @@ ath_obj *ath_min(ath_obj *x, ath_obj *y) {
     if (ath_either_float(x, y)) {
         double a = ath_as_double(x), b = ath_as_double(y);
         r = ath_alloc_float(a < b ? a : b);
+    } else if (ath_either_big(x, y)) {
+        ath_obj *pick = ath_big_cmp(ath_as_bigint(x), ath_as_bigint(y)) <= 0 ? x : y;
+        r = ath_alloc_bignum(ath_big_copy(ath_as_bigint(pick)));
     } else {
         r = ath_alloc_number(x->num.i < y->num.i ? x->num.i : y->num.i);
     }
@@ -2061,6 +2150,9 @@ ath_obj *ath_max(ath_obj *x, ath_obj *y) {
     if (ath_either_float(x, y)) {
         double a = ath_as_double(x), b = ath_as_double(y);
         r = ath_alloc_float(a > b ? a : b);
+    } else if (ath_either_big(x, y)) {
+        ath_obj *pick = ath_big_cmp(ath_as_bigint(x), ath_as_bigint(y)) >= 0 ? x : y;
+        r = ath_alloc_bignum(ath_big_copy(ath_as_bigint(pick)));
     } else {
         r = ath_alloc_number(x->num.i > y->num.i ? x->num.i : y->num.i);
     }
@@ -2073,7 +2165,7 @@ ath_obj *ath_max(ath_obj *x, ath_obj *y) {
  * dead (no gcd over reals). */
 ath_obj *ath_gcd(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
+    if (ath_not_plain_int(x) || ath_not_plain_int(y)) return ath_alloc_dead_number();
     int64_t a = x->num.i, b = y->num.i;
     if (a == INT64_MIN || b == INT64_MIN) return ath_alloc_dead_number();
     if (a < 0) a = -a;
@@ -2092,6 +2184,8 @@ ath_obj *ath_sign(ath_obj *x, ath_obj *unused) {
     if (ath_is_float(x)) {
         double v = x->num.f;
         r = ath_alloc_float((double)((v > 0) - (v < 0)));
+    } else if (ath_is_big(x)) {
+        r = ath_alloc_number(x->num.b->sign);   /* -1 or +1 (big is never 0) */
     } else {
         r = ath_alloc_number((x->num.i > 0) - (x->num.i < 0));
     }
@@ -2103,21 +2197,21 @@ ath_obj *ath_sign(ath_obj *x, ath_obj *unused) {
  * FLOAT operand is born dead (no bit pattern is exposed for doubles). */
 ath_obj *ath_band(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
+    if (ath_not_plain_int(x) || ath_not_plain_int(y)) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(x->num.i & y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_bor(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
+    if (ath_not_plain_int(x) || ath_not_plain_int(y)) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(x->num.i | y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
 }
 ath_obj *ath_bxor(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
+    if (ath_not_plain_int(x) || ath_not_plain_int(y)) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(x->num.i ^ y->num.i);
     ath_inherit_lifetime(r, x, y);
     return r;
@@ -2125,7 +2219,7 @@ ath_obj *ath_bxor(ath_obj *x, ath_obj *y) {
 ath_obj *ath_bnot(ath_obj *x, ath_obj *unused) {
     (void)unused;
     if (!ath_num_usable(x)) return ath_alloc_dead_number();
-    if (ath_is_float(x)) return ath_alloc_dead_number();
+    if (ath_not_plain_int(x)) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(~x->num.i);
     ath_inherit_lifetime(r, x, NULL);
     return r;
@@ -2136,7 +2230,7 @@ ath_obj *ath_bnot(ath_obj *x, ath_obj *unused) {
  * (sign-extending) right shift. Integer-only: a FLOAT operand is born dead. */
 ath_obj *ath_shl(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
+    if (ath_not_plain_int(x) || ath_not_plain_int(y)) return ath_alloc_dead_number();
     if (y->num.i < 0 || y->num.i > 63) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number((int64_t)((uint64_t)x->num.i << y->num.i));
     ath_inherit_lifetime(r, x, y);
@@ -2144,7 +2238,7 @@ ath_obj *ath_shl(ath_obj *x, ath_obj *y) {
 }
 ath_obj *ath_shr(ath_obj *x, ath_obj *y) {
     if (!ath_operands_usable(x, y)) return ath_alloc_dead_number();
-    if (ath_is_float(x) || ath_is_float(y)) return ath_alloc_dead_number();
+    if (ath_not_plain_int(x) || ath_not_plain_int(y)) return ath_alloc_dead_number();
     if (y->num.i < 0 || y->num.i > 63) return ath_alloc_dead_number();
     ath_obj *r = ath_alloc_number(x->num.i >> y->num.i);
     ath_inherit_lifetime(r, x, y);
@@ -2168,6 +2262,13 @@ ath_obj *ath_clamp(ath_obj *x, ath_obj *pair) {
         if (lo_d > hi_d) return ath_alloc_dead_number();
         if (v < lo_d) v = lo_d; else if (v > hi_d) v = hi_d;
         r = ath_alloc_float(v);
+    } else if (ath_is_big(x) || ath_is_big(lo) || ath_is_big(hi)) {
+        if (ath_big_cmp(ath_as_bigint(lo), ath_as_bigint(hi)) > 0)
+            return ath_alloc_dead_number();
+        ath_obj *v = x;
+        if (ath_big_cmp(ath_as_bigint(v), ath_as_bigint(lo)) < 0) v = lo;
+        else if (ath_big_cmp(ath_as_bigint(v), ath_as_bigint(hi)) > 0) v = hi;
+        r = ath_alloc_bignum(ath_big_copy(ath_as_bigint(v)));
     } else {
         if (lo->num.i > hi->num.i) return ath_alloc_dead_number();
         int64_t v = x->num.i;
@@ -2202,6 +2303,9 @@ ath_obj *ath_float_to_int(ath_obj *x, ath_obj *unused) {
         if (isnan(v) || v < -9.2233720368547758e18 || v >= 9.2233720368547758e18)
             return ath_alloc_dead_number();
         r = ath_alloc_number((int64_t)v);
+    } else if (x->num_kind == ATH_NUM_BIG) {
+        /* A BIG is always out of int64 range, so it can't become an int. */
+        return ath_alloc_dead_number();
     } else {
         r = ath_alloc_number(x->num.i);
     }
@@ -2284,7 +2388,7 @@ ath_obj *ath_compare(ath_obj *a, ath_obj *b) {
  * the bare atom). Born dead if N is negative, lacks a payload, or is out
  * of range, or S is dead/malformed. */
 ath_obj *ath_char_at(ath_obj *s, ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i < 0)
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT || n->num.i < 0)
         return ath_alloc_dead();
     int s_empty = (s == NULL || s == ath_NULL);
     if (!s_empty && !ath_is_alive(s)) return ath_alloc_dead();
@@ -2309,7 +2413,7 @@ ath_obj *ath_find_from(ath_obj *s, ath_obj *pair) {
         return ath_alloc_dead_number();
     ath_obj *needle, *start_obj;
     ath_decompose(pair, &needle, &start_obj);
-    if (start_obj == NULL || !ath_is_alive(start_obj) || !ath_has_value(start_obj))
+    if (start_obj == NULL || !ath_is_alive(start_obj) || start_obj->num_kind != ATH_NUM_INT)
         return ath_alloc_dead_number();
     int64_t start = start_obj->num.i;
     if (start < 0) return ath_alloc_dead_number();
@@ -2427,7 +2531,7 @@ static ath_obj *ath_pad_with_impl(ath_obj *s, ath_obj *pair, int on_left) {
     if (pair == NULL || pair == ath_NULL || !ath_is_alive(pair)) return ath_alloc_dead();
     ath_obj *width_obj, *fill_obj;
     ath_decompose(pair, &width_obj, &fill_obj);
-    if (width_obj == NULL || !ath_is_alive(width_obj) || !ath_has_value(width_obj))
+    if (width_obj == NULL || !ath_is_alive(width_obj) || width_obj->num_kind != ATH_NUM_INT)
         return ath_alloc_dead();
     if (width_obj->num.i < 0) return ath_alloc_dead();
 
@@ -2482,7 +2586,8 @@ static ath_obj *ath_fold_num(ath_obj *list, int is_product) {
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
-        if (l == NULL || !ath_is_alive(l) || !ath_has_value(l))
+        if (l == NULL || !ath_is_alive(l) || !ath_has_value(l)
+                || l->num_kind == ATH_NUM_BIG)   /* BIG fold elements: phase limit */
             return ath_alloc_dead_number();
         if (!is_float && l->num_kind == ATH_NUM_FLOAT) {
             acc_f = (double)acc_i;
@@ -2518,7 +2623,8 @@ static ath_obj *ath_extremum(ath_obj *list, int is_max) {
     while (cur != NULL && cur != ath_NULL && ath_is_alive(cur)) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
-        if (l == NULL || !ath_is_alive(l) || !ath_has_value(l))
+        if (l == NULL || !ath_is_alive(l) || !ath_has_value(l)
+                || l->num_kind == ATH_NUM_BIG)   /* BIG fold elements: phase limit */
             return ath_alloc_dead_number();
         if (!is_float && l->num_kind == ATH_NUM_FLOAT) {
             best_f = (double)best_i;
@@ -2554,12 +2660,15 @@ ath_obj *ath_member(ath_obj *list, ath_obj *x) {
         ath_obj *l, *r;
         ath_decompose(cur, &l, &r);
         if (l != NULL && ath_is_alive(l) && ath_has_value(l)) {
-            /* Compare numerically with tower promotion (§4.8): a FLOAT
+            /* Compare numerically with tower promotion (§4.8): a FLOAT/BIG
              * element equals an INT key of the same value. Stay exact in
-             * int64 when neither side is float. */
+             * int64 when both are plain ints. */
             int eq = ath_either_float(l, x)
                          ? (ath_as_double(l) == ath_as_double(x))
-                         : (l->num.i == x->num.i);
+                         : ath_either_big(l, x)
+                             ? (ath_big_cmp(ath_as_bigint(l),
+                                            ath_as_bigint(x)) == 0)
+                             : (l->num.i == x->num.i);
             if (eq) return ath_verdict_true(list, x);
         }
         cur = r;
@@ -2570,7 +2679,7 @@ ath_obj *ath_member(ath_obj *list, ath_obj *x) {
 /* TAKE: a fresh list of the first N elements (all of LIST when N >= its
  * length). N < 0 or no payload → dead; N == 0 → NULL; dead LIST → dead. */
 ath_obj *ath_take(ath_obj *list, ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i < 0)
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT || n->num.i < 0)
         return ath_alloc_dead();
     if (list != NULL && list != ath_NULL && !ath_is_alive(list)) return ath_alloc_dead();
     if (n->num.i == 0) return ath_NULL;
@@ -2589,7 +2698,7 @@ ath_obj *ath_take(ath_obj *list, ath_obj *n) {
 /* DROP: a fresh list of all but the first N elements. N < 0 or no payload
  * → dead; N >= length → NULL; dead LIST → dead. */
 ath_obj *ath_drop(ath_obj *list, ath_obj *n) {
-    if (n == NULL || !ath_is_alive(n) || !ath_has_value(n) || n->num.i < 0)
+    if (n == NULL || !ath_is_alive(n) || n->num_kind != ATH_NUM_INT || n->num.i < 0)
         return ath_alloc_dead();
     if (list != NULL && list != ath_NULL && !ath_is_alive(list)) return ath_alloc_dead();
     int64_t len = ath_spine_length(list);
@@ -2642,7 +2751,8 @@ ath_obj *ath_any_of(ath_obj *list, ath_obj *unused) {
 
 /* Iteration count for the `loop`/`every` loops (SPEC §4.4.26): N's count if
  * N is alive, payload-bearing, and non-negative; otherwise 0 (the loop body
- * runs zero times). A FLOAT payload is floored toward zero (§4.8.2). */
+ * runs zero times). A FLOAT payload is floored toward zero; a BIG (always
+ * beyond int64) clamps to INT64_MAX when positive (§4.8.2). */
 int64_t ath_count_of(ath_obj *n) {
     if (n == NULL || !ath_is_alive(n) || !ath_has_value(n)) return 0;
     if (n->num_kind == ATH_NUM_FLOAT) {
@@ -2650,6 +2760,9 @@ int64_t ath_count_of(ath_obj *n) {
         if (!(v >= 0.0)) return 0;            /* negative or nan → 0 */
         if (v >= 9.2e18) return INT64_MAX;    /* clamp beyond int64 range */
         return (int64_t)v;
+    }
+    if (n->num_kind == ATH_NUM_BIG) {
+        return n->num.b->sign > 0 ? INT64_MAX : 0;
     }
     if (n->num.i < 0) return 0;
     return n->num.i;

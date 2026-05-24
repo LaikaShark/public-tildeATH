@@ -1243,6 +1243,67 @@ int main(void) {
         #undef IS_F
     }
 
+    /* --- Bignum tower integration (SPEC §4.8) --- */
+    {
+        #define I(v) ath_alloc_number(v)
+        #define BIG(s) ath_alloc_bignum_from_decimal(s)
+        #define EQS(o, s) \
+            ath_is_alive(ath_streq(ath_to_string((o), ath_NULL), \
+                                   ath_string_from_bytes(s, sizeof(s) - 1)))
+
+        /* A literal beyond int64 is a live BIG; one that fits normalizes to INT. */
+        ath_obj *big = BIG("99999999999999999999");
+        assert(ath_is_alive(big) && big->num_kind == ATH_NUM_BIG);
+        assert(ath_alloc_bignum_from_decimal("42")->num_kind == ATH_NUM_INT);
+
+        /* Tower arithmetic: BIG promotes INT operands; exact, never overflows. */
+        assert(EQS(ath_add(big, I(1)), "100000000000000000000"));
+        assert(EQS(ath_mul(big, big),
+                   "9999999999999999999800000000000000000001"));
+        /* Results that shrink back into int64 demote to INT. */
+        ath_obj *one = ath_sub(big, BIG("99999999999999999998"));
+        assert(one->num_kind == ATH_NUM_INT && one->num.i == 1);
+
+        /* Truncated div/mod on bignums; big ÷ 0 is born dead (failure-as-death). */
+        assert(EQS(ath_div(ath_mul(big, big), big), "99999999999999999999"));
+        assert(!ath_is_alive(ath_div(big, I(0))));
+
+        /* Comparisons across kinds: big > any int; big(2^64) vs itself. */
+        assert(ath_is_alive(ath_gt(big, I(9223372036854775807LL))));
+        assert(ath_is_alive(ath_eq(BIG("18446744073709551616"),
+                                   BIG("18446744073709551616"))));
+        assert(!ath_is_alive(ath_eq(big, I(5))));
+
+        /* print/to_string renders the full decimal; negative big too. */
+        assert(EQS(BIG("-123456789012345678901234567890"),
+                   "-123456789012345678901234567890"));
+
+        /* Second-wave: neg/abs/min/max/sign promote; sign is an INT. */
+        assert(EQS(ath_neg(big, ath_NULL), "-99999999999999999999"));
+        assert(EQS(ath_abs(BIG("-99999999999999999999"), ath_NULL),
+                   "99999999999999999999"));
+        assert(EQS(ath_max(big, I(7)), "99999999999999999999"));
+        assert(ath_min(big, I(7))->num_kind == ATH_NUM_INT
+               && ath_min(big, I(7))->num.i == 7);
+        ath_obj *sg = ath_sign(BIG("-99999999999999999999"), ath_NULL);
+        assert(sg->num_kind == ATH_NUM_INT && sg->num.i == -1);
+
+        /* Integer-only ops born-die on a BIG operand; float_to_int too. */
+        assert(!ath_is_alive(ath_band(big, I(1))));
+        assert(!ath_is_alive(ath_gcd(big, I(6))));
+        assert(!ath_is_alive(ath_pow(big, I(2))));
+        assert(!ath_is_alive(ath_float_to_int(big, ath_NULL)));
+        assert(!ath_is_alive(ath_chr(big, ath_NULL)));
+
+        /* count_of saturates a positive BIG to INT64_MAX, negative to 0. */
+        assert(ath_count_of(big) == INT64_MAX);
+        assert(ath_count_of(BIG("-99999999999999999999")) == 0);
+
+        #undef I
+        #undef BIG
+        #undef EQS
+    }
+
     /* --- String polish builtins (SPEC §4.8.4 extensions) -------------- */
     {
         #define MKS(lit) ath_string_from_bytes(lit, sizeof(lit) - 1)

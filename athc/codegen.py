@@ -246,6 +246,11 @@ class Codegen:
             ir.FunctionType(self.obj_ptr, [ir.DoubleType()]),
             name="ath_alloc_float",
         )
+        self.f_alloc_bignum_decimal = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
+            name="ath_alloc_bignum_from_decimal",
+        )
         self.f_inherit_lifetime = ir.Function(
             self.module,
             ir.FunctionType(
@@ -596,7 +601,12 @@ class FunctionEmitter:
             "==", cur, ir.Constant(self.cg.obj_ptr, None)
         )
         with builder.if_then(is_unbound):
-            if stmt.is_float:
+            if stmt.is_big:
+                g = self.cg.make_cstring_global(stmt.value)
+                zero = ir.Constant(self.cg.i32, 0)
+                ptr = builder.gep(g, [zero, zero], inbounds=True)
+                fresh = builder.call(self.cg.f_alloc_bignum_decimal, [ptr])
+            elif stmt.is_float:
                 fresh = builder.call(
                     self.cg.f_alloc_float,
                     [ir.Constant(ir.DoubleType(), float(stmt.value))],

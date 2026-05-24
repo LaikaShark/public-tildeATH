@@ -41,6 +41,7 @@ class TokenKind(Enum):
     DOTDOT = auto()
     INT = auto()
     FLOAT = auto()
+    BIGINT = auto()
     RAWTEXT = auto()
     PRINTVAR = auto()
     RESERVED = auto()
@@ -221,11 +222,9 @@ class Lexer:
         except ValueError:
             raise LexError(f"invalid integer literal {text!r}", line, col)
         if n < INT64_MIN or n > INT64_MAX:
-            raise LexError(
-                f"integer literal {text} does not fit signed 64-bit range",
-                line,
-                col,
-            )
+            # Too big for int64 → an arbitrary-precision bignum literal (§4.8).
+            self._emit(TokenKind.BIGINT, text, line, col)
+            return
         self._emit(TokenKind.INT, text, line, col)
 
     # Escape tables (SPEC §2.3, §2.4). Mapping: input-char -> decoded byte(s).
