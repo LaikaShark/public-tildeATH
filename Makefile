@@ -1,18 +1,28 @@
 CC      ?= gcc
-CFLAGS  ?= -std=c11 -Wall -Wextra -Wpedantic -O2
+# -fPIC so the same objects feed both the static archives (linked into
+# executables) and the shared libraries the REPL loads via ctypes.
+CFLAGS  ?= -std=c11 -Wall -Wextra -Wpedantic -O2 -fPIC
 RUNTIME := runtime
 
 .PHONY: all runtime test-runtime clean
 
 all: runtime
 
-runtime: $(RUNTIME)/libath_fresh.a $(RUNTIME)/libath_intern.a
+runtime: $(RUNTIME)/libath_fresh.a $(RUNTIME)/libath_intern.a \
+         $(RUNTIME)/libath_fresh.so $(RUNTIME)/libath_intern.so
 
 $(RUNTIME)/libath_fresh.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/compose_fresh.o $(RUNTIME)/bigint.o
 	ar rcs $@ $^
 
 $(RUNTIME)/libath_intern.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/compose_intern.o $(RUNTIME)/bigint.o
 	ar rcs $@ $^
+
+# Shared libraries for the REPL (loaded via ctypes, athc/runtime_ffi.py).
+$(RUNTIME)/libath_fresh.so: $(RUNTIME)/runtime_common.o $(RUNTIME)/compose_fresh.o $(RUNTIME)/bigint.o
+	$(CC) -shared $^ -lm -o $@
+
+$(RUNTIME)/libath_intern.so: $(RUNTIME)/runtime_common.o $(RUNTIME)/compose_intern.o $(RUNTIME)/bigint.o
+	$(CC) -shared $^ -lm -o $@
 
 $(RUNTIME)/runtime_common.o: $(RUNTIME)/runtime_common.c $(RUNTIME)/ath_runtime.h $(RUNTIME)/bigint.h
 	$(CC) $(CFLAGS) -I$(RUNTIME) -c $< -o $@
@@ -39,6 +49,6 @@ test-runtime: $(RUNTIME)/test_runtime_fresh $(RUNTIME)/test_runtime_intern
 	./$(RUNTIME)/test_runtime_intern
 
 clean:
-	rm -f $(RUNTIME)/*.o $(RUNTIME)/*.a \
+	rm -f $(RUNTIME)/*.o $(RUNTIME)/*.a $(RUNTIME)/*.so \
 	      $(RUNTIME)/test_runtime $(RUNTIME)/test_runtime_fresh \
 	      $(RUNTIME)/test_runtime_intern
