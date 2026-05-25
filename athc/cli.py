@@ -114,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
                 source_text=e.source_text,
                 line=e.line,
                 col=e.col,
+                help=e.help,
             ),
             file=sys.stderr,
         )
@@ -131,6 +132,7 @@ def main(argv: list[str] | None = None) -> int:
                 source_text=sources.get(error_path),
                 line=e.line,
                 col=e.col,
+                help=e.help,
             ),
             file=sys.stderr,
         )

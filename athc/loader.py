@@ -41,6 +41,7 @@ class LoaderError(Exception):
         source_text: str | None = None,
         line: int = 0,
         col: int = 0,
+        help: str | None = None,
     ):
         super().__init__(msg)
         self.msg = msg
@@ -48,6 +49,7 @@ class LoaderError(Exception):
         self.source_text = source_text
         self.line = line
         self.col = col
+        self.help = help
 
 
 def load_program(
@@ -67,7 +69,8 @@ def load_program(
         main_program = parse(src)
     except (LexError, ParseError) as e:
         raise LoaderError(
-            e.msg, path=main_path, source_text=src, line=e.line, col=e.col
+            e.msg, path=main_path, source_text=src, line=e.line, col=e.col,
+            help=e.help
         ) from e
 
     main_program.source_path = main_path
@@ -142,7 +145,8 @@ def _resolve_imports(
             fn_program = parse(src)
         except (LexError, ParseError) as e:
             raise LoaderError(
-                e.msg, path=target, source_text=src, line=e.line, col=e.col
+                e.msg, path=target, source_text=src, line=e.line, col=e.col,
+                help=e.help
             ) from e
         fn_program.source_path = target
         table[imp.name.lower()] = fn_program

@@ -16,18 +16,22 @@ def render_diagnostic(
     line: int = 0,
     col: int = 0,
     context_before: int = 1,
+    help: str | None = None,
 ) -> str:
     path_str = str(path) if path else "<unknown>"
+
+    def with_help(text: str) -> str:
+        return f"{text}\n  help: {help}" if help else text
 
     # No source or no position -> bare one-line message.
     if not source_text or line < 1:
         if line > 0 and col > 0:
-            return f"athc: {path_str}:{line}:{col}: {kind}: {msg}"
-        return f"athc: {path_str}: {kind}: {msg}"
+            return with_help(f"athc: {path_str}:{line}:{col}: {kind}: {msg}")
+        return with_help(f"athc: {path_str}: {kind}: {msg}")
 
     lines = source_text.splitlines()
     if not lines:
-        return f"athc: {path_str}:{line}:{col}: {kind}: {msg}"
+        return with_help(f"athc: {path_str}:{line}:{col}: {kind}: {msg}")
 
     # Clamp line numbers that fall past EOF (unterminated brace, etc.).
     if line > len(lines):
@@ -44,5 +48,7 @@ def render_diagnostic(
 
     pad = " " * max(0, col - 1)
     out.append(f"  {' ':>{width}} | {pad}^")
+    if help:
+        out.append(f"  help: {help}")
 
     return "\n".join(out)

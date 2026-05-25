@@ -29,15 +29,31 @@ from athc.ast import (
     WatchStmt,
     WriteStmt,
 )
-from athc.lexer import Token, TokenKind, tokenize
+from athc.lexer import (
+    Token,
+    TokenKind,
+    describe_kind,
+    describe_token,
+    tokenize,
+)
+from athc.suggest import closest
+
+# Words that begin a statement — used only to suggest a keyword when a
+# misspelled one (lexed as an IDENT) fails to parse (G4).
+_STATEMENT_KEYWORDS = frozenset({
+    "import", "importf", "bifurcate", "print", "input", "watch", "branch",
+    "clone", "sleep", "timer", "read", "write", "append", "close", "text",
+    "loop", "every",
+})
 
 
 class ParseError(Exception):
-    def __init__(self, msg: str, line: int, col: int):
+    def __init__(self, msg: str, line: int, col: int, help: str | None = None):
         super().__init__(f"line {line}, col {col}: {msg}")
         self.msg = msg
         self.line = line
         self.col = col
+        self.help = help
 
 
 class Parser:
@@ -57,7 +73,7 @@ class Parser:
         tok = self._peek()
         if tok.kind is not kind:
             raise ParseError(
-                f"expected {kind.name}, got {tok.kind.name} ({tok.value!r})",
+                f"expected {describe_kind(kind)} but found {describe_token(tok)}",
                 tok.line,
                 tok.col,
             )
@@ -108,7 +124,25 @@ class Parser:
         if tok.kind is TokenKind.KW_TEXT:
             return self._parse_text()
         if tok.kind is TokenKind.IDENT:
-            return self._parse_die_or_funcall()
+            # An IDENT legitimately leads a funcall / subscript / .DIE. But a
+            # *misspelled keyword* also lexes as an IDENT and fails partway
+            # with a cryptic token error. If the IDENT-led parse fails and the
+            # leading word is one typo away from a statement keyword, report
+            # that instead (diagnostics plan, G4).
+            try:
+                return self._parse_die_or_funcall()
+            except ParseError as orig:
+                kw = closest(
+                    tok.value, _STATEMENT_KEYWORDS, fold=True, max_distance=1
+                )
+                if kw is not None:
+                    raise ParseError(
+                        f"unknown statement '{tok.value}'",
+                        tok.line,
+                        tok.col,
+                        help=f"did you mean the keyword '{kw}'?",
+                    ) from orig
+                raise
         if tok.kind is TokenKind.RESERVED:
             raise ParseError(
                 f"'{tok.value}' is reserved and not yet implemented",
@@ -116,7 +150,7 @@ class Parser:
                 tok.col,
             )
         raise ParseError(
-            f"unexpected token {tok.kind.name} ({tok.value!r})",
+            f"unexpected {describe_token(tok)} at the start of a statement",
             tok.line,
             tok.col,
         )
@@ -179,8 +213,8 @@ class Parser:
             value = int(tok.value)
         else:
             raise ParseError(
-                f"expected a number literal after 'import number', got "
-                f"{tok.kind.name}",
+                f"expected a number literal after 'import number' but found "
+                f"{describe_token(tok)}",
                 tok.line,
                 tok.col,
             )
@@ -230,7 +264,8 @@ class Parser:
                 col=kw.col,
             )
         raise ParseError(
-            f"expected identifier or '[' after BIFURCATE, got {nxt.kind.name}",
+            f"expected a name or '[' after BIFURCATE but found "
+            f"{describe_token(nxt)}",
             nxt.line,
             nxt.col,
         )
@@ -413,8 +448,8 @@ class Parser:
         to_tok = self._peek()
         if to_tok.kind is not TokenKind.IDENT or to_tok.value.lower() != "to":
             raise ParseError(
-                f"expected 'to' between source and destination; got "
-                f"{to_tok.kind.name} ({to_tok.value!r})",
+                f"expected 'to' between source and destination but found "
+                f"{describe_token(to_tok)}",
                 to_tok.line,
                 to_tok.col,
             )
@@ -499,7 +534,8 @@ class Parser:
                 search_path=True,
             )
         raise ParseError(
-            f"expected STRING or '<' after 'importf'; got {nxt.kind.name}",
+            f"expected a string literal or '<' after 'importf' but found "
+            f"{describe_token(nxt)}",
             nxt.line,
             nxt.col,
         )
@@ -556,8 +592,8 @@ class Parser:
                 mtime_path=path,
             )
         raise ParseError(
-            "expected STRING, 'signal', 'pid', or 'mtime' after 'watch'; "
-            f"got {nxt.kind.name}",
+            "expected a string literal, 'signal', 'pid', or 'mtime' after "
+            f"'watch' but found {describe_token(nxt)}",
             nxt.line,
             nxt.col,
         )
@@ -572,8 +608,8 @@ class Parser:
         if nxt.kind is TokenKind.IDENT:
             return self._parse_funcall_decompose_ret(first)
         raise ParseError(
-            f"expected '.DIE', '[', or identifier after {first.value!r}; "
-            f"got {nxt.kind.name}",
+            f"expected '.DIE', '[', or a name after '{first.value}' but found "
+            f"{describe_token(nxt)}",
             nxt.line,
             nxt.col,
         )
@@ -625,8 +661,8 @@ class Parser:
                 col=name_tok.col,
             )
         raise ParseError(
-            f"expected ',', '..', or ']' after '[{inner.value}'; "
-            f"got {sep.kind.name}",
+            f"expected ',', '..', or ']' after '[{inner.value}' but found "
+            f"{describe_token(sep)}",
             sep.line,
             sep.col,
         )

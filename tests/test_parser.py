@@ -240,7 +240,7 @@ def test_identifiers_case_sensitive_through_parser():
 
 
 def test_importf_requires_string_literal_path():
-    with pytest.raises(ParseError, match="expected STRING"):
+    with pytest.raises(ParseError, match="expected a string literal"):
         parse("importf foo as bar;")
 
 
@@ -485,7 +485,7 @@ def test_importf_angle_requires_closing_bracket():
 
 
 def test_importf_after_keyword_must_be_string_or_angle():
-    with pytest.raises(ParseError, match="STRING or '<'"):
+    with pytest.raises(ParseError, match=r"string literal or '<'"):
         parse("importf foo as F;")
 
 

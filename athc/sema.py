@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from athc.suggest import closest
 from athc.ast import (
     AppendStmt,
     AthLoop,
@@ -43,12 +44,14 @@ class SemaError(Exception):
         line: int,
         col: int,
         path: Path | None = None,
+        help: str | None = None,
     ):
         super().__init__(f"line {line}, col {col}: {msg}")
         self.msg = msg
         self.line = line
         self.col = col
         self.path = path
+        self.help = help
 
 
 def analyze(program: Program, function_table: dict | None = None) -> None:
@@ -201,7 +204,11 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
 
 def _check_read(name: str, defined: set, stmt) -> None:
     if name not in defined:
-        raise SemaError(f"variable '{name}' is not in scope", stmt.line, stmt.col)
+        sug = closest(name, defined)   # identifiers are case-sensitive
+        help = f"did you mean '{sug}'?" if sug else None
+        raise SemaError(
+            f"variable '{name}' is not in scope", stmt.line, stmt.col, help=help
+        )
 
 
 def _check_write(name: str, stmt) -> None:
@@ -216,8 +223,15 @@ def _check_write(name: str, stmt) -> None:
 def _check_function(name: str, stmt, fnames: set, local_builtins: set) -> None:
     folded = name.lower()
     if folded not in fnames and folded not in local_builtins:
+        # Function names are case-insensitive; suggest the nearest registered
+        # one, echoing the caller's casing.
+        sug = closest(name, fnames | local_builtins, fold=True)
+        if sug and name.isupper():
+            sug = sug.upper()
+        help = f"did you mean '{sug}'?" if sug else None
         raise SemaError(
             f"function '{name}' is not declared by any importf or import builtin",
             stmt.line,
             stmt.col,
+            help=help,
         )

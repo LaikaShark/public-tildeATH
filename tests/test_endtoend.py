@@ -191,7 +191,7 @@ def test_importf_path_must_be_string_literal(tmp_path):
     out = tmp_path / "prog"
     compiled = _compile(src, out)
     assert compiled.returncode != 0
-    assert "expected STRING" in compiled.stderr or "expected string" in compiled.stderr.lower()
+    assert "string literal" in compiled.stderr.lower()
 
 
 def test_unbound_variable_rejected_at_cli(tmp_path):

@@ -56,12 +56,69 @@ class Token:
     col: int
 
 
+# Human-readable names for token kinds, used in parser diagnostics so users
+# never see internal enum names like COMMA or RBRACKET (diagnostics plan).
+_TOKEN_DISPLAY = {
+    TokenKind.SEMI: "';'",
+    TokenKind.COMMA: "','",
+    TokenKind.LBRACKET: "'['",
+    TokenKind.RBRACKET: "']'",
+    TokenKind.LPAREN: "'('",
+    TokenKind.RPAREN: "')'",
+    TokenKind.LBRACE: "'{'",
+    TokenKind.RBRACE: "'}'",
+    TokenKind.LANGLE: "'<'",
+    TokenKind.RANGLE: "'>'",
+    TokenKind.DOTDOT: "'..'",
+    TokenKind.BANG: "'!'",
+    TokenKind.IDENT: "a name",
+    TokenKind.INT: "a number",
+    TokenKind.FLOAT: "a number",
+    TokenKind.BIGINT: "a number",
+    TokenKind.STRING: "a string literal",
+    TokenKind.RAWTEXT: "text",
+    TokenKind.PRINTVAR: "an interpolation",
+    TokenKind.DIE: "'.DIE'",
+    TokenKind.ATH: "'~ATH'",
+    TokenKind.RESERVED: "a reserved word",
+    TokenKind.EOF: "end of input",
+}
+
+# Token kinds whose literal value is worth showing when reporting what was
+# *found* (e.g. found 'THIS', found 'foo').
+_VALUE_KINDS = frozenset({
+    TokenKind.IDENT, TokenKind.INT, TokenKind.FLOAT, TokenKind.BIGINT,
+    TokenKind.STRING, TokenKind.RESERVED,
+})
+
+
+def describe_kind(kind: TokenKind) -> str:
+    """A friendly name for an *expected* token kind."""
+    if kind in _TOKEN_DISPLAY:
+        return _TOKEN_DISPLAY[kind]
+    if kind.name.startswith("KW_"):
+        return f"'{kind.name[3:].lower()}'"
+    return kind.name.lower()
+
+
+def describe_token(tok: "Token") -> str:
+    """A friendly description of a *found* token, showing its value when useful."""
+    if tok.kind is TokenKind.EOF:
+        return "end of input"
+    if tok.kind in _VALUE_KINDS:
+        return f"'{tok.value}'"
+    if tok.kind.name.startswith("KW_"):
+        return f"'{tok.value}'"
+    return describe_kind(tok.kind)
+
+
 class LexError(Exception):
-    def __init__(self, msg: str, line: int, col: int):
+    def __init__(self, msg: str, line: int, col: int, help: str | None = None):
         super().__init__(f"line {line}, col {col}: {msg}")
         self.msg = msg
         self.line = line
         self.col = col
+        self.help = help
 
 
 KEYWORDS = {
