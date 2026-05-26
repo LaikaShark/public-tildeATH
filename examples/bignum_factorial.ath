@@ -1,0 +1,28 @@
+// Growing into a bignum (§4.8.7). `int*int` overflow is born-dead, so a
+// factorial seeded as an int would die past 20!. Seed the accumulator with
+// INT_TO_BIGNUM and — because bignum is *sticky* — the product stays exact
+// and never overflows.
+//
+//   athc examples/bignum_factorial.ath -o bf
+//   ./bf
+//   # expected:
+//   # 25! = 15511210043330985984000000
+
+importf <int_to_bignum> as INT_TO_BIGNUM;
+importf <mul> as MUL;
+importf <add> as ADD;
+importf <to_string> as TS;
+
+import number 1 as ONE;
+INT_TO_BIGNUM [ONE, ONE] ACC;     // ACC := sticky bignum 1
+import number 0 as K;
+import number 25 as N;
+
+loop N {
+  ADD [K, ONE] K;                 // K := 1, 2, ..., 25
+  MUL [ACC, K] ACC;               // ACC *= K (stays bignum)
+}
+
+TS [ACC, ACC] R;
+print 25! = $R;
+THIS.DIE();

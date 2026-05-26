@@ -1455,6 +1455,7 @@ the same rules):
 
 | Name | Result |
 |---|---|
+| `int_to_bignum` | `X` as a (sticky) BIG (§4.8.7) — the opt-in to arbitrary precision. An INT or BIG converts/passes through; an integral FLOAT converts exactly; a non-integral or non-finite FLOAT is born dead |
 | `int_to_float` | `X` as a FLOAT (a FLOAT passes through) |
 | `float_to_int` | `X` truncated toward zero to an INT (an INT passes through); a `nan` or out-of-int64-range float is born dead |
 | `floor` / `ceil` / `round` | a FLOAT `X` rounded down / up / to-nearest-half-away-from-zero (still a FLOAT); an INT passes through unchanged |
@@ -1936,29 +1937,35 @@ lives only at the loop level, in the inverted `~ATH(!V)` form (§4.4.10).
 #### 4.8.7 Bignum (arbitrary-precision integers)
 
 A `BIG` payload is a heap-allocated, arbitrary-precision signed integer.
-It enters a program in exactly one way — an **integer literal too large
-for int64** (`import number 99999999999999999999 as N;`, §4.4.14) — and
-then propagates through arithmetic by the tower (§4.8). There is no
-auto-promotion: `int64` overflow stays **born dead** (failure-as-death is
-preserved); a value only becomes BIG by starting from a BIG literal.
+A value becomes BIG in exactly two ways — an **integer literal too large
+for int64** (`import number 99999999999999999999 as N;`, §4.4.14), or an
+explicit **`int_to_bignum`** conversion (§4.8.2) — and then propagates
+through arithmetic by the tower (§4.8). There is **no auto-promotion**:
+`int64` overflow stays **born dead** (failure-as-death is preserved); you
+opt a value into arbitrary precision deliberately.
 
-- **Exactness & normalization.** BIG arithmetic (`+ - * / %`, comparisons,
-  `NEG`, `ABS`, `MIN`, `MAX`, `SIGN`, `CLAMP`) is exact and never
-  overflows. Every result is **normalized**: one that fits int64 is
-  demoted back to an INT payload, so a live BIG always has magnitude
-  beyond int64 range. Thus `big - (big - 1)` is the INT `1`, and `2`,
-  `2.0`, and a bignum `2` all compare equal.
+- **Stickiness & exactness.** BIG is **sticky**: BIG arithmetic
+  (`+ - * / %`, comparisons, `NEG`, `ABS`, `MIN`, `MAX`, `SIGN`, `CLAMP`)
+  is exact and never overflows, and a result is **not demoted** even when
+  it would fit int64 — once a value is BIG it stays BIG. This is what lets
+  a *growing* computation reach arbitrary precision: seed an accumulator
+  with `int_to_bignum` and a factorial or running product never overflows.
+  A BIG **compares and prints identically to the equal integer** — `2`,
+  `2.0`, and a bignum `2` all compare equal — so stickiness is invisible to
+  arithmetic and output; it shows only in the integer-only / small-integer
+  contexts below.
 - **Division.** `DIV`/`MOD` truncate toward zero (remainder takes the
   dividend's sign); a zero divisor is born dead, like the int case.
 - **Mixed with float.** A BIG combined with a FLOAT promotes to FLOAT via
   a `double` approximation (the tower's FLOAT > BIG precedence).
-- **Integer-only and out-of-range ops.** The bitwise group, `gcd`, and
+- **Integer-only and small-integer ops.** The bitwise group, `gcd`, and
   (this phase) `POW` are **born dead** on a BIG operand; so are `chr`,
-  `float_to_int`, and any count/index/duration position (a BIG is always
-  out of the valid small-integer range). `count_of` (loop counts)
-  saturates a positive BIG to `INT64_MAX`. `SUM`/`PRODUCT`/`MAXIMUM`/
-  `MINIMUM` over a list **containing** a BIG element are born dead this
-  phase (scalar BIG arithmetic is unaffected).
+  `float_to_int`, and an out-of-range count/index/duration. A *small*
+  sticky BIG is accepted where its value fits: `count_of` (loop counts)
+  uses a BIG's value when it fits int64 and saturates a too-large positive
+  one to `INT64_MAX`. `SUM`/`PRODUCT`/`MAXIMUM`/`MINIMUM` over a list
+  **containing** a BIG element are born dead this phase (scalar BIG
+  arithmetic is unaffected).
 - **Rendering.** `TO_STRING` and `print $N` interpolation emit the full
   signed decimal, however long.
 
@@ -2112,7 +2119,8 @@ ath_obj *ath_shl(ath_obj *x, ath_obj *y);
 ath_obj *ath_shr(ath_obj *x, ath_obj *y);
 ath_obj *ath_clamp(ath_obj *x, ath_obj *pair);
 
-/* Float conversions and rounding (§4.8.2). */
+/* Numeric conversions and rounding (§4.8.2). */
+ath_obj *ath_int_to_bignum(ath_obj *x, ath_obj *unused);  /* sticky BIG, §4.8.7 */
 ath_obj *ath_int_to_float(ath_obj *x, ath_obj *unused);
 ath_obj *ath_float_to_int(ath_obj *x, ath_obj *unused);
 ath_obj *ath_floor(ath_obj *x, ath_obj *unused);

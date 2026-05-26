@@ -720,13 +720,30 @@ print $SQ;     // => 9999999999999999999800000000000000000001
 
 Bignums sit between ints and floats in the tower (FLOAT > BIG > INT): an
 int operand promotes to bignum, a float operand pulls the result back to
-a float approximation. Results that shrink to fit int64 demote back to a
-plain int, so `2`, `2.0`, and a bignum `2` all compare equal. There is no
-auto-promotion on overflow — plain `int64` arithmetic that overflows is
-still born dead (failure-as-death); you opt into bignums by writing a
-literal too big for int64. The bitwise/`GCD`/`POW` family and the
-count/index positions reject bignums (born dead), since those need a
-small machine integer.
+a float approximation. There is no auto-promotion on overflow — plain
+`int64` arithmetic that overflows is still born dead (failure-as-death);
+you opt into bignums deliberately.
+
+Besides an over-int64 literal, the other opt-in is **`INT_TO_BIGNUM`**, and
+bignum is **sticky**: once a value is a bignum it stays one through
+arithmetic (no demotion), so a *growing* computation reaches arbitrary
+precision. That makes a non-overflowing factorial writable — seed the
+accumulator as a bignum and multiply:
+
+```ath
+importf <int_to_bignum> as TO_BIG;
+importf <mul> as MUL;
+import number 1 as ONE;
+TO_BIG [ONE, ONE] ACC;          // ACC is now a (sticky) bignum 1
+import number 25 as K;
+loop K { MUL [ACC, K] ACC; ... } // 25! exactly, no overflow
+```
+
+A bignum compares and prints identically to the equal integer (`2`,
+`2.0`, and a bignum `2` all compare equal), so stickiness is invisible to
+arithmetic and output. It shows only where a *machine* integer is
+required: the bitwise/`GCD`/`POW` family rejects bignums (born dead), and
+a bignum used as a char code or out-of-range index/count is rejected too.
 
 ---
 

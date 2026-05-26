@@ -163,8 +163,9 @@ void     ath_register_lifetime(const char *name, double min_s, double max_s);
  * missing payload the result is born dead (alive=0, num_kind=NONE). */
 ath_obj *ath_alloc_number(int64_t v);     /* ATH_NUM_INT payload   */
 ath_obj *ath_alloc_float(double v);       /* ATH_NUM_FLOAT payload */
-/* Wrap a bigint, normalizing to an INT payload when it fits int64 (so a
- * live BIG always has magnitude beyond int64 range). */
+/* Wrap a bigint as a (sticky) BIG payload — no demotion to INT, so bignum
+ * arithmetic stays bignum and growing computations reach arbitrary
+ * precision (§4.8.7). */
 ath_obj *ath_alloc_bignum(ath_bigint *b);
 /* Parse a decimal literal too large for int64 into a BIG object (§4.4.14);
  * born dead on malformed input. */
@@ -289,7 +290,8 @@ ath_obj *ath_shl(ath_obj *x, ath_obj *y);
 ath_obj *ath_shr(ath_obj *x, ath_obj *y);
 ath_obj *ath_clamp(ath_obj *x, ath_obj *pair);
 
-/* Float conversions and rounding (§4.8.2). */
+/* Numeric conversions and rounding (§4.8.2). */
+ath_obj *ath_int_to_bignum(ath_obj *x, ath_obj *unused);  /* sticky BIG, §4.8.7 */
 ath_obj *ath_int_to_float(ath_obj *x, ath_obj *unused);
 ath_obj *ath_float_to_int(ath_obj *x, ath_obj *unused);
 ath_obj *ath_floor(ath_obj *x, ath_obj *unused);

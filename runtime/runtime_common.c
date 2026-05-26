@@ -552,10 +552,10 @@ ath_obj *ath_alloc_float(double v) {
 
 ath_obj *ath_alloc_bignum(ath_bigint *b) {
     if (b == NULL) return ath_alloc_dead_number();
-    /* Normalize: a value that fits int64 becomes an INT, so a live BIG is
-     * always genuinely out of int64 range (SPEC §4.8). */
-    int64_t v;
-    if (ath_big_fits_i64(b, &v)) return ath_alloc_number(v);
+    /* BIG is "sticky" (SPEC §4.8.7): once a value is a bignum it stays one
+     * through arithmetic — no demotion to INT — so a growing computation
+     * (factorial, a running product) reaches arbitrary precision. A small
+     * bignum compares and prints identically to the equal int. */
     ath_obj *o = ath_alloc_alive();
     o->num_kind = ATH_NUM_BIG;
     o->num.b = b;
@@ -2280,7 +2280,33 @@ ath_obj *ath_clamp(ath_obj *x, ath_obj *pair) {
     return r;
 }
 
-/* --- Float conversions and rounding (SPEC §4.8.2) -------------------- */
+/* --- Numeric conversions and rounding (SPEC §4.8.2) ------------------ */
+
+/* INT_TO_BIGNUM: promote a value into the sticky BIG representation
+ * (§4.8.7) — the explicit opt-in for arbitrary precision. An INT becomes a
+ * bignum of the same value; a BIG passes through; an integral FLOAT is
+ * converted exactly (a non-integral or non-finite FLOAT is born dead).
+ * Because BIG is sticky, the seeded value stays big through subsequent
+ * arithmetic, so e.g. a factorial accumulator grows without overflow. */
+ath_obj *ath_int_to_bignum(ath_obj *x, ath_obj *unused) {
+    (void)unused;
+    if (!ath_num_usable(x)) return ath_alloc_dead_number();
+    ath_bigint *b;
+    if (x->num_kind == ATH_NUM_BIG) {
+        b = ath_big_copy(x->num.b);
+    } else if (x->num_kind == ATH_NUM_FLOAT) {
+        double v = x->num.f;
+        if (!isfinite(v) || trunc(v) != v) return ath_alloc_dead_number();
+        char buf[512];
+        snprintf(buf, sizeof(buf), "%.0f", v);
+        b = ath_big_from_decimal(buf);
+    } else {
+        b = ath_big_from_i64(x->num.i);
+    }
+    ath_obj *r = ath_alloc_bignum(b);
+    ath_inherit_lifetime(r, x, NULL);
+    return r;
+}
 
 /* INT_TO_FLOAT: reinterpret the payload as a FLOAT (an already-float value
  * passes through). Born dead on a dead/missing operand. */
@@ -2762,6 +2788,9 @@ int64_t ath_count_of(ath_obj *n) {
         return (int64_t)v;
     }
     if (n->num_kind == ATH_NUM_BIG) {
+        int64_t v;
+        if (ath_big_fits_i64(n->num.b, &v))   /* sticky small bignum */
+            return v < 0 ? 0 : v;
         return n->num.b->sign > 0 ? INT64_MAX : 0;
     }
     if (n->num.i < 0) return 0;

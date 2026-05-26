@@ -1251,18 +1251,22 @@ int main(void) {
             ath_is_alive(ath_streq(ath_to_string((o), ath_NULL), \
                                    ath_string_from_bytes(s, sizeof(s) - 1)))
 
-        /* A literal beyond int64 is a live BIG; one that fits normalizes to INT. */
+        /* A literal beyond int64 is a live BIG. (The lexer only ever feeds
+         * alloc_bignum_from_decimal an over-int64 string; BIG is now sticky,
+         * so even a small decimal stays BIG — see the equal-by-value checks
+         * below.) */
         ath_obj *big = BIG("99999999999999999999");
         assert(ath_is_alive(big) && big->num_kind == ATH_NUM_BIG);
-        assert(ath_alloc_bignum_from_decimal("42")->num_kind == ATH_NUM_INT);
 
         /* Tower arithmetic: BIG promotes INT operands; exact, never overflows. */
         assert(EQS(ath_add(big, I(1)), "100000000000000000000"));
         assert(EQS(ath_mul(big, big),
                    "9999999999999999999800000000000000000001"));
-        /* Results that shrink back into int64 demote to INT. */
+        /* BIG is sticky: results that shrink stay BIG (no demotion) but still
+         * equal the int by value (§4.8.7). */
         ath_obj *one = ath_sub(big, BIG("99999999999999999998"));
-        assert(one->num_kind == ATH_NUM_INT && one->num.i == 1);
+        assert(one->num_kind == ATH_NUM_BIG && EQS(one, "1"));
+        assert(ath_is_alive(ath_eq(one, I(1))));   /* big 1 == int 1 */
 
         /* Truncated div/mod on bignums; big ÷ 0 is born dead (failure-as-death). */
         assert(EQS(ath_div(ath_mul(big, big), big), "99999999999999999999"));
@@ -1283,10 +1287,10 @@ int main(void) {
         assert(EQS(ath_abs(BIG("-99999999999999999999"), ath_NULL),
                    "99999999999999999999"));
         assert(EQS(ath_max(big, I(7)), "99999999999999999999"));
-        assert(ath_min(big, I(7))->num_kind == ATH_NUM_INT
-               && ath_min(big, I(7))->num.i == 7);
+        assert(EQS(ath_min(big, I(7)), "7"));   /* sticky BIG 7, equals int 7 */
+        assert(ath_is_alive(ath_eq(ath_min(big, I(7)), I(7))));
         ath_obj *sg = ath_sign(BIG("-99999999999999999999"), ath_NULL);
-        assert(sg->num_kind == ATH_NUM_INT && sg->num.i == -1);
+        assert(sg->num_kind == ATH_NUM_INT && sg->num.i == -1);   /* sign is INT */
 
         /* Integer-only ops born-die on a BIG operand; float_to_int too. */
         assert(!ath_is_alive(ath_band(big, I(1))));
@@ -1295,9 +1299,22 @@ int main(void) {
         assert(!ath_is_alive(ath_float_to_int(big, ath_NULL)));
         assert(!ath_is_alive(ath_chr(big, ath_NULL)));
 
-        /* count_of saturates a positive BIG to INT64_MAX, negative to 0. */
+        /* count_of: a too-big positive BIG saturates to INT64_MAX; a small
+         * sticky BIG yields its real value (§4.8.7). */
         assert(ath_count_of(big) == INT64_MAX);
         assert(ath_count_of(BIG("-99999999999999999999")) == 0);
+        assert(ath_count_of(ath_int_to_bignum(I(3), ath_NULL)) == 3);
+
+        /* int_to_bignum + sticky growth: int*int overflows-to-dead, but a
+         * bignum-seeded chain grows exactly. 25! > int64. */
+        ath_obj *acc = ath_int_to_bignum(I(1), ath_NULL);
+        assert(acc->num_kind == ATH_NUM_BIG && EQS(acc, "1"));
+        for (int64_t k = 2; k <= 25; k++)
+            acc = ath_mul(acc, I(k));
+        assert(EQS(acc, "15511210043330985984000000"));   /* 25! */
+        /* float -> bignum (integral); non-integral float -> dead. */
+        assert(EQS(ath_int_to_bignum(ath_alloc_float(42.0), ath_NULL), "42"));
+        assert(!ath_is_alive(ath_int_to_bignum(ath_alloc_float(2.5), ath_NULL)));
 
         #undef I
         #undef BIG

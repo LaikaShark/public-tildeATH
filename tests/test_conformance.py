@@ -111,6 +111,12 @@ CASES = [
         id="bignum",
     ),
     pytest.param(
+        "bignum_factorial.ath",
+        None,
+        "25! = 15511210043330985984000000\n",
+        id="bignum_factorial",
+    ),
+    pytest.param(
         "multi_word_import.ath",
         None,
         "speaking once before she dies\nsilence\n",
