@@ -49,7 +49,14 @@ def _parse_lifetime_spec(spec: str) -> tuple[str, float, float]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="athc", description="Compiler for ~ATH.")
-    ap.add_argument("source", help="path to .ath source file")
+    ap.add_argument(
+        "source", nargs="?", help="path to .ath source file (omit for the REPL)"
+    )
+    ap.add_argument(
+        "--repl",
+        action="store_true",
+        help="start the interactive REPL (the default when no source is given)",
+    )
     ap.add_argument("-o", "--output", default="a.out", help="output executable path")
     ap.add_argument(
         "--emit-ir", action="store_true", help="print LLVM IR to stdout and exit"
@@ -90,6 +97,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = ap.parse_args(argv)
+
+    if args.repl or args.source is None:
+        from athc.repl import Repl
+        from athc.runtime_ffi import RuntimeNotBuilt
+        try:
+            Repl(mode=args.compose).run()
+        except RuntimeNotBuilt as e:
+            print(f"athc: {e}", file=sys.stderr)
+            return 1
+        return 0
 
     user_lifetimes: list[tuple[str, float, float]] = []
     for spec in args.define_lifetime:

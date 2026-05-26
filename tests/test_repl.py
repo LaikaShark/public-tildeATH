@@ -155,3 +155,94 @@ def test_repl_top_level_die_does_not_end_session():
     ev.run(parse("THIS.DIE();").statements)   # would terminate a program
     ev.run(parse("import number 5 as N;").statements)
     assert rt.to_text(ev._read("N")) == "5"   # session continued
+
+
+# --- R3: the interactive loop ---------------------------------------------
+
+def _drive_repl(lines, mode="fresh"):
+    """Feed `lines` to the REPL; return (meta_output, program_output) where
+    program_output is what the C runtime wrote to fd 1."""
+    import io
+    from athc.repl import Repl
+
+    _ensure_so(mode)
+    it = iter(lines)
+
+    def feed():
+        try:
+            return next(it)
+        except StopIteration:
+            raise EOFError
+
+    meta = io.StringIO()
+    r_fd, w_fd = os.pipe()
+    saved = os.dup(1)
+    os.dup2(w_fd, 1)
+    os.close(w_fd)
+    try:
+        Repl(mode=mode, input_fn=feed, out=meta).run()
+        ctypes.CDLL(None).fflush(None)
+    finally:
+        os.dup2(saved, 1)
+        os.close(saved)
+    prog = b""
+    while True:
+        c = os.read(r_fd, 4096)
+        if not c:
+            break
+        prog += c
+    os.close(r_fd)
+    return meta.getvalue(), prog.decode("utf-8")
+
+
+def test_repl_inspect_and_env():
+    meta, _ = _drive_repl([
+        "import number 5 as N;",
+        "importf <add> as ADD;",
+        "ADD [N, N] R;",
+        ":inspect R",
+        ":env",
+        ":quit",
+    ])
+    assert "R: live · int · 10" in meta
+    assert "N: live · int · 5" in meta
+
+
+def test_repl_multiline_block():
+    _, prog = _drive_repl([
+        "import a A;",
+        "~ATH(A) {",
+        "  print tick;",
+        "  BIFURCATE NULL[j, A];",
+        "}",
+        ":quit",
+    ])
+    assert prog == "tick\n"
+
+
+def test_repl_renders_diagnostic_with_suggestion():
+    meta, _ = _drive_repl(["printt hello;", ":quit"])
+    assert "unknown statement 'printt'" in meta
+    assert "did you mean the keyword 'print'" in meta
+
+
+def test_repl_unknown_function_is_repl_error():
+    meta, _ = _drive_repl(["import number 1 as N;", "NOPE [N, N] R;", ":quit"])
+    assert "is not declared" in meta
+
+
+def test_repl_reset_clears_environment():
+    meta, _ = _drive_repl([
+        "import number 9 as N;",
+        ":reset",
+        ":inspect N",
+        ":quit",
+    ])
+    assert "'N' is not bound" in meta
+
+
+def test_repl_load_file(tmp_path):
+    f = tmp_path / "snippet.ath"
+    f.write_text("import number 7 as V;\nprint loaded $V;\n")
+    _, prog = _drive_repl([f":load {f}", ":quit"])
+    assert prog == "loaded 7\n"
