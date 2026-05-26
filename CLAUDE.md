@@ -23,6 +23,9 @@ pytest tests/test_conformance.py -k hello   # one case
 python -m athc.cli examples/hello.ath -o hello
 ./hello
 
+# Interactive REPL (drives the real runtime via ctypes against libath_*.so).
+python -m athc.cli --repl
+
 # Useful flags:
 python -m athc.cli prog.ath --emit-ir              # print LLVM IR, no link
 python -m athc.cli prog.ath --emit-obj prog.o      # stop after codegen

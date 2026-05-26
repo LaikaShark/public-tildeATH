@@ -63,6 +63,35 @@ Two environment variables are consulted at runtime:
 A program either runs to completion (returning OS exit code 0) or runs
 indefinitely. There are no runtime errors.
 
+### 1.1 The REPL
+
+For exploring interactively, start the REPL with `python -m athc.cli --repl`
+(or just `athc` with no source file). It evaluates statements against the
+**real runtime** — the same C library a compiled program links — so behavior
+is identical; bindings persist across lines.
+
+```
+~ATH> import number 5 as N;
+~ATH> importf <add> as ADD;
+~ATH> ADD [N, N] R;
+~ATH> print $N doubled is $R;
+5 doubled is 10
+~ATH> :inspect R
+R: live · int · 10
+```
+
+Statements end with `;`; a block (`~ATH(…){ … }`, `BRANCH`, `loop`) spans
+lines until its `}`. Meta-commands start with `:` — `:inspect VAR`, `:env`,
+`:load FILE`, `:reset`, `:compose fresh|intern`, `:help`, `:quit` (also
+Ctrl-D). Parse errors render with the same carets and suggestions the
+compiler uses.
+
+A few REPL-only conventions: a top-level `THIS.DIE()` ends the current line
+rather than the session (use `:quit` to exit); `INPUT` reads the next typed
+line; and `every N { }` (infinite in a compiled program) is bounded so it
+cannot hang the session. Building the runtime (`make runtime`) produces the
+shared libraries the REPL loads.
+
 ---
 
 ## 2. A first program
