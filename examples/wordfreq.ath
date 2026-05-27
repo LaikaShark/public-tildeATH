@@ -1,0 +1,78 @@
+// Word-frequency count over stdin, in first-occurrence order. ~ATH has no
+// hash map and cons cells aren't mutated, so instead of updating counts we
+// collect every word into one cons-list (CONCAT of each line's SPLIT) and,
+// for each position, print the word's total count only the first time it
+// appears (a prefix scan with a match counter detects that). O(n^2), but
+// pure list+string ops. Note the reset idiom `ADD [ZERO,ZERO] V` (since
+// `import` is idempotent and won't re-zero a loop-local).
+//
+//   athc examples/wordfreq.ath -o wordfreq
+//   printf 'the cat sat the cat\n' | ./wordfreq
+//   # expected:
+//   # the: 2
+//   # cat: 2
+//   # sat: 1
+
+importf <add>    as ADD;
+importf <lt>     as LT;
+importf <eq>     as EQ;
+importf <streq>  as STREQ;
+importf <length> as LENGTH;
+importf <split>  as SPLIT;
+importf <concat> as CONCAT;
+
+text " " as SPACE;
+text "" as WORDS;                 // grows into a cons-list of all words
+import number 0 as ZERO;
+import number 1 as ONE;
+import number 0 as I;
+import number 0 as J;
+import number 0 as K;
+import number 0 as CNT;
+import number 0 as SEEN;           // prefix matches for the current word
+
+INPUT LINE;
+~ATH(LINE) {
+    SPLIT [LINE, SPACE] PARTS;
+    CONCAT [WORDS, PARTS] WORDS;
+    INPUT LINE;
+}
+
+LENGTH [WORDS, NULL] NW;
+ADD [ZERO, ZERO] I;
+LT [I, NW] OUTER;
+~ATH(OUTER) {
+    WORDS[I] W;
+
+    // first occurrence? count equal words in the prefix WORDS[0 .. I-1].
+    ADD [ZERO, ZERO] SEEN;
+    ADD [ZERO, ZERO] J;
+    LT [J, I] PREV;
+    ~ATH(PREV) {
+        WORDS[J] WJ;
+        STREQ [W, WJ] SAME;
+        BRANCH(SAME) { ADD [SEEN, ONE] SEEN; } ELSE { }
+        ADD [J, ONE] J;
+        LT [J, I] PREV;
+    }
+
+    EQ [SEEN, ZERO] FC;                   // first occurrence iff no prefix match
+    BRANCH(FC) {
+        // count occurrences of W across all of WORDS
+        ADD [ZERO, ZERO] CNT;
+        ADD [ZERO, ZERO] K;
+        LT [K, NW] COUNTL;
+        ~ATH(COUNTL) {
+            WORDS[K] WK;
+            STREQ [W, WK] EQK;
+            BRANCH(EQK) { ADD [CNT, ONE] CNT; } ELSE { }
+            ADD [K, ONE] K;
+            LT [K, NW] COUNTL;
+        }
+        print $W: $CNT;
+    } ELSE { }
+
+    ADD [I, ONE] I;
+    LT [I, NW] OUTER;
+}
+THIS.DIE();

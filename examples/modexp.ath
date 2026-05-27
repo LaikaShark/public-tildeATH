@@ -1,0 +1,46 @@
+// Modular exponentiation base^exp mod m by repeated squaring — the heart of
+// RSA. The modulus is a 20-digit bignum (> int64), so every intermediate
+// product is arbitrary-precision; because BIG is sticky (§4.8.7) the running
+// `RESULT`/`B` stay bignum throughout. The exponent stays a small int, so we
+// use `MOD 2` / `DIV 2` instead of bitwise ops (which reject bignums anyway).
+//
+//   athc examples/modexp.ath -o modexp
+//   ./modexp
+//   # expected:
+//   # 123456789 ^ 20 mod 98765432109876543211 = 82630247944240163692
+
+importf <int_to_bignum> as TO_BIG;
+importf <mul> as MUL;
+importf <mod> as MOD;
+importf <div> as DIV;
+importf <gt>  as GT;
+importf <eq>  as EQ;
+
+import number 123456789 as BASE;
+import number 20 as EXP;
+import number 98765432109876543211 as M;     // bignum modulus
+import number 0 as ZERO;
+import number 1 as ONE;
+import number 2 as TWO;
+
+import number 1 as RESULT;
+TO_BIG [RESULT, RESULT] RESULT;               // RESULT := sticky bignum 1
+MOD [BASE, M] B;                              // B := base mod m (bignum)
+
+import number 20 as E;                        // working copy of the exponent
+GT [E, ZERO] GOING;
+~ATH(GOING) {
+    MOD [E, TWO] BIT;
+    EQ [BIT, ONE] ODD;
+    BRANCH(ODD) {
+        MUL [RESULT, B] T;
+        MOD [T, M] RESULT;                    // RESULT := RESULT*B mod m
+    } ELSE { }
+    MUL [B, B] BB;
+    MOD [BB, M] B;                            // B := B*B mod m
+    DIV [E, TWO] E;                           // E := E / 2
+    GT [E, ZERO] GOING;
+}
+
+print $BASE ^ $EXP mod $M = $RESULT;
+THIS.DIE();

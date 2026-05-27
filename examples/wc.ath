@@ -1,0 +1,42 @@
+// A small `wc`: count lines, words, and characters of stdin. Reads lines in
+// a `~ATH(LINE)` loop — INPUT yields the dead NULL at end-of-input, which
+// ends the loop. Words are SPLIT on spaces. (Quirk: a *blank* line also
+// reads as NULL, so this stops at the first empty line — fine for simple
+// text without blank lines.)
+//
+//   athc examples/wc.ath -o wc
+//   printf 'hello world\nfoo bar baz\n' | ./wc
+//   # expected:
+//   # lines: 2
+//   # words: 5
+//   # chars: 24
+
+importf <add>    as ADD;
+importf <length> as LENGTH;
+importf <split>  as SPLIT;
+
+import number 0 as LINES;
+import number 0 as WORDS;
+import number 0 as CHARS;
+import number 1 as ONE;
+text " " as SPACE;
+
+INPUT LINE;
+~ATH(LINE) {
+    ADD [LINES, ONE] LINES;
+
+    LENGTH [LINE, NULL] LL;
+    ADD [CHARS, LL] CHARS;
+    ADD [CHARS, ONE] CHARS;          // count the newline too
+
+    SPLIT [LINE, SPACE] PARTS;
+    LENGTH [PARTS, NULL] NW;
+    ADD [WORDS, NW] WORDS;
+
+    INPUT LINE;
+}
+
+print lines: $LINES;
+print words: $WORDS;
+print chars: $CHARS;
+THIS.DIE();

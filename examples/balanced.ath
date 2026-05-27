@@ -1,0 +1,75 @@
+// Balanced-bracket checker using a stack built from cons cells. On an
+// opening bracket we push the *expected* closing code; on a closing bracket
+// we pop and compare. Balanced iff no mismatch happened and the stack is
+// empty at the end. Demonstrates the object model as a data structure
+// (compose = push, decompose = pop, NULL = empty) and failure-as-death
+// (a live `BAL` sentinel = still balanced).
+//
+//   athc examples/balanced.ath -o balanced
+//   echo '([]{})' | ./balanced   # => balanced
+//   echo '([)]'   | ./balanced   # => unbalanced
+//   echo '(()'    | ./balanced   # => unbalanced
+
+importf <add>    as ADD;
+importf <lt>     as LT;
+importf <eq>     as EQ;
+importf <or>     as OR;
+importf <length> as LENGTH;
+importf <ord>    as ORD;
+
+INPUT LINE;
+import balanced BAL;             // alive = still balanced
+BIFURCATE NULL[junk, STACK];    // STACK := NULL (empty)
+
+import number 0   as I;
+import number 1   as ONE;
+import number 2   as TWO;
+import number 40  as OPAREN;    // (
+import number 91  as OBRACK;    // [
+import number 123 as OBRACE;    // {
+import number 41  as CPAREN;    // )
+import number 93  as CBRACK;    // ]
+import number 125 as CBRACE;    // }
+
+LENGTH [LINE, NULL] L;
+LT [I, L] GOING;
+~ATH(GOING) {
+    LINE[I] CH;
+    ORD [CH, NULL] C;
+
+    EQ [C, OPAREN] o1;  EQ [C, OBRACK] o2;  EQ [C, OBRACE] o3;
+    OR [o1, o2] oo;  OR [oo, o3] ISOPEN;
+    EQ [C, CPAREN] c1;  EQ [C, CBRACK] c2;  EQ [C, CBRACE] c3;
+    OR [c1, c2] cc;  OR [cc, c3] ISCLOSE;
+
+    BRANCH(ISOPEN) {
+        // expected closing code: '(' -> +1, '[' / '{' -> +2
+        EQ [C, OPAREN] isp;
+        BRANCH(isp) { ADD [C, ONE] EC; } ELSE { ADD [C, TWO] EC; }
+        BIFURCATE [EC, STACK] STACK;            // push
+    } ELSE {
+        BRANCH(ISCLOSE) {
+            CLONE STACK as SC;
+            BRANCH(SC) {
+                BIFURCATE STACK[TOP, STACK];    // pop
+                EQ [TOP, C] OK;
+                CLONE OK as OKC;
+                BRANCH(OKC) { } ELSE { BAL.DIE(); }   // wrong closer
+            } ELSE {
+                BAL.DIE();                      // close with empty stack
+            }
+        } ELSE { }                              // other char: ignore
+    }
+
+    ADD [I, ONE] I;
+    LT [I, L] GOING;
+}
+
+CLONE BAL as BCHK;
+BRANCH(BCHK) {
+    CLONE STACK as SCHK;
+    BRANCH(SCHK) { print unbalanced; } ELSE { print balanced; }
+} ELSE {
+    print unbalanced;
+}
+THIS.DIE();

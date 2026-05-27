@@ -1,0 +1,20 @@
+// A tiny `grep`: the first input line is the pattern; every later line that
+// CONTAINS it is echoed. A `~ATH(LINE)` read loop + a CONTAINS verdict +
+// BRANCH. (As in `wc`, a blank line ends input.)
+//
+//   athc examples/grep.ath -o grep
+//   printf 'err\nerror 1\nok\nerror 2\n' | ./grep
+//   # expected:
+//   # error 1
+//   # error 2
+
+importf <contains> as CONTAINS;
+
+INPUT PAT;                       // first line: the search pattern
+INPUT LINE;
+~ATH(LINE) {
+    CONTAINS [LINE, PAT] HIT;
+    BRANCH(HIT) { print $LINE; } ELSE { }
+    INPUT LINE;
+}
+THIS.DIE();

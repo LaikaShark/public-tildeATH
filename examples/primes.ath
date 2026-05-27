@@ -1,0 +1,49 @@
+// Primes below 31 by trial division (~ATH has no mutable array for a real
+// sieve). For each candidate C, an inner loop tests divisors D with D*D<=C
+// and counts how many divide it; C is prime iff that count is zero.
+// Demonstrates nested conditional loops and the reset idiom `ADD [K, ZERO] V`
+// (to reset a number each pass, since `import` is idempotent). A numeric flag
+// — not a revived object sentinel — keeps it correct under both compose modes.
+//
+//   athc examples/primes.ath -o primes
+//   ./primes
+//   # expected: 2 3 5 7 11 13 17 19 23 29  (one per line)
+
+importf <mod> as MOD;
+importf <lt>  as LT;
+importf <le>  as LE;
+importf <eq>  as EQ;
+importf <add> as ADD;
+importf <mul> as MUL;
+
+import number 2  as C;
+import number 31 as LIMIT;
+import number 0  as ZERO;
+import number 1  as ONE;
+import number 2  as TWO;
+import number 0  as DIVISORS;     // reset each candidate
+import number 2  as D;            // reset to 2 each candidate
+
+LT [C, LIMIT] OUTER;
+~ATH(OUTER) {
+    ADD [ZERO, ZERO] DIVISORS;        // DIVISORS := 0
+    ADD [TWO, ZERO] D;                // D := 2
+
+    MUL [D, D] DSQ;
+    LE [DSQ, C] INNER;                // D*D <= C ?
+    ~ATH(INNER) {
+        MOD [C, D] R;
+        EQ [R, ZERO] DIVIDES;
+        BRANCH(DIVIDES) { ADD [DIVISORS, ONE] DIVISORS; } ELSE { }
+        ADD [D, ONE] D;
+        MUL [D, D] DSQ;
+        LE [DSQ, C] INNER;
+    }
+
+    EQ [DIVISORS, ZERO] ISPRIME;
+    BRANCH(ISPRIME) { print $C; } ELSE { }
+
+    ADD [C, ONE] C;
+    LT [C, LIMIT] OUTER;
+}
+THIS.DIE();

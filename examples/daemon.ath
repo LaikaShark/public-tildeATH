@@ -1,0 +1,26 @@
+// A daemon that works until interrupted, then shuts down cleanly. The loop
+// runs *while a watched-signal object is alive*; SIGINT flips it dead, so the
+// `~ATH(RUN)` loop falls through to the shutdown line. This is ~ATH's central
+// idea — control flow is an object's life, not a boolean — and it expresses
+// "run until this external event happens" with no flags or exceptions.
+//
+//   athc examples/daemon.ath -o daemon
+//   ./daemon            # prints "working..." every 500ms
+//   # press Ctrl-C  ->  "received SIGINT; shutting down cleanly."
+//
+// Variants: `watch mtime "heartbeat" as RUN;` is a dead-man's-switch (runs
+// until the file stops being touched); `watch pid N as RUN;` waits for
+// another process to exit.
+
+import number 500 as TICK;        // 500 ms
+
+watch signal SIGINT as RUN;
+print daemon started (SIGINT to stop)...;
+
+~ATH(RUN) {
+    print working...;
+    sleep TICK;
+}
+
+print received SIGINT\; shutting down cleanly.;
+THIS.DIE();

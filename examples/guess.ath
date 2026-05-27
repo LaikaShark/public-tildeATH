@@ -1,0 +1,39 @@
+// Number-guessing game. A RANDOM secret in 1..100; read guesses and reply
+// too-low / too-high / correct. The session loops *while a "playing" object
+// is alive* — a correct guess kills it, ending the game. Showcases random +
+// INPUT + PARSE + nested BRANCH + liveness-as-control. Set ATH_SEED to make
+// the secret reproducible.
+//
+//   athc examples/guess.ath -o guess
+//   ATH_SEED=1 ./guess     # then type guesses; e.g. 50, 25, 37, ...
+
+importf <random> as RANDOM;
+importf <parse>  as PARSE;
+importf <lt>     as LT;
+importf <gt>     as GT;
+
+import number 1   as LO;
+import number 101 as HI;            // exclusive → 1..100
+RANDOM [LO, HI] SECRET;
+
+print I am thinking of a number from 1 to 100.;
+
+import playing PLAYING;             // alive = game in progress
+~ATH(PLAYING) {
+    print your guess?;
+    INPUT G;
+    PARSE [G, NULL] GUESS;
+    LT [GUESS, SECRET] LOW;
+    BRANCH(LOW) {
+        print too low;
+    } ELSE {
+        GT [GUESS, SECRET] HIGH;
+        BRANCH(HIGH) {
+            print too high;
+        } ELSE {
+            print correct!;
+            PLAYING.DIE();          // win → end the loop
+        }
+    }
+}
+THIS.DIE();

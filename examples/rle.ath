@@ -1,0 +1,83 @@
+// Run-length encoding and decoding. Encode counts maximal runs of equal
+// characters ("aaabbbbc" -> "3a4b1c"); decode parses each <count><char>
+// group and expands it. Prints the encoding and the round-tripped string.
+// Showcases nested string walks, an out-of-range subscript yielding a dead
+// object (used as the natural inner-loop terminator), digit parsing, and
+// `loop N` for the expansion.
+//
+//   athc examples/rle.ath -o rle
+//   echo 'aaabbbbc' | ./rle
+//   # expected:
+//   # encoded: 3a4b1c
+//   # decoded: aaabbbbc
+
+importf <add>       as ADD;
+importf <mul>       as MUL;
+importf <sub>       as SUB;
+importf <lt>        as LT;
+importf <le>        as LE;
+importf <ge>        as GE;
+importf <eq>        as EQ;
+importf <and>       as AND;
+importf <length>    as LENGTH;
+importf <ord>       as ORD;
+importf <chr>       as CHR;
+importf <concat>    as CONCAT;
+importf <to_string> as TO_STRING;
+
+INPUT S;
+import number 0  as ZERO;
+import number 1  as ONE;
+import number 10 as TEN;
+import number 48 as D0;      // '0'
+import number 57 as D9;      // '9'
+
+// --- encode ---------------------------------------------------------------
+LENGTH [S, NULL] L;
+text "" as ENC;
+import number 0 as I;
+LT [I, L] EGO;
+~ATH(EGO) {
+    S[I] CH;  ORD [CH, NULL] C;
+    ADD [ONE, ZERO] RUN;             // RUN := 1
+    ADD [I, ONE] J;
+    S[J] CHJ;  ORD [CHJ, NULL] CJ;  EQ [CJ, C] JIN;   // dead when J out of range
+    ~ATH(JIN) {
+        ADD [RUN, ONE] RUN;
+        ADD [J, ONE] J;
+        S[J] CHK;  ORD [CHK, NULL] CK;  EQ [CK, C] JIN;
+    }
+    TO_STRING [RUN, NULL] RUNS;
+    CHR [C, NULL] CHS;
+    CONCAT [ENC, RUNS] ENC;
+    CONCAT [ENC, CHS] ENC;
+    ADD [J, ZERO] I;                 // I := J (start of next run)
+    LT [I, L] EGO;
+}
+print encoded: $ENC;
+
+// --- decode ---------------------------------------------------------------
+LENGTH [ENC, NULL] EL;
+text "" as DEC;
+import number 0 as K;
+LT [K, EL] DGO;
+~ATH(DGO) {
+    // read a run of digits into NUM
+    ADD [ZERO, ZERO] NUM;
+    ENC[K] DCH;  ORD [DCH, NULL] DC;
+    GE [DC, D0] g;  LE [DC, D9] l;  AND [g, l] ISDIG;
+    ~ATH(ISDIG) {
+        SUB [DC, D0] DV;
+        MUL [NUM, TEN] NUM;  ADD [NUM, DV] NUM;       // NUM := NUM*10 + digit
+        ADD [K, ONE] K;
+        ENC[K] DCH;  ORD [DCH, NULL] DC;
+        GE [DC, D0] g2;  LE [DC, D9] l2;  AND [g2, l2] ISDIG;
+    }
+    // the next character is the run char; emit it NUM times
+    CHR [DC, NULL] RUNCH;
+    loop NUM { CONCAT [DEC, RUNCH] DEC; }
+    ADD [K, ONE] K;
+    LT [K, EL] DGO;
+}
+print decoded: $DEC;
+THIS.DIE();

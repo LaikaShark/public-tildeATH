@@ -1,0 +1,33 @@
+// Newton's method for a square root, in floats. The loop runs *while a
+// "not-converged" verdict is alive* — the convergence test is literally an
+// object that dies when |x*x - a| drops below epsilon, so failure-as-death
+// is the loop condition. Showcases the float tower + a verdict-driven loop.
+//
+//   athc examples/newton_sqrt.ath -o nsqrt
+//   ./nsqrt
+//   # expected:
+//   # sqrt(2) ~ 1.414213562373095
+
+importf <add> as ADD;
+importf <sub> as SUB;
+importf <mul> as MUL;
+importf <div> as DIV;
+importf <abs> as ABS;
+importf <gt>  as GT;
+
+import number 2.0 as A;             // take the square root of 2
+import number 1.0 as X;             // initial guess
+import number 0.000000000000001 as EPS;  // 1e-15
+import number 2.0 as TWO;
+
+// not-converged := |x*x - a| > eps
+MUL [X, X] XSQ;  SUB [XSQ, A] D;  ABS [D, NULL] AD;  GT [AD, EPS] GOING;
+~ATH(GOING) {
+    DIV [A, X] AX;            // a / x
+    ADD [X, AX] S;           // x + a/x
+    DIV [S, TWO] X;          // x := (x + a/x) / 2
+    MUL [X, X] XSQ;  SUB [XSQ, A] D;  ABS [D, NULL] AD;  GT [AD, EPS] GOING;
+}
+
+print sqrt(2) ~ $X;
+THIS.DIE();

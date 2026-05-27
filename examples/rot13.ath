@@ -1,0 +1,61 @@
+// ROT13: rotate each letter by 13 (its own inverse); pass everything else
+// through. Walks the input string by index, maps each character's code with
+// ORD/CHR + modular arithmetic, and rebuilds the result with CONCAT. Shows
+// strings-as-arrays, range tests via AND of comparison verdicts, and BRANCH.
+//
+//   athc examples/rot13.ath -o rot13
+//   echo 'Hello, World!' | ./rot13
+//   # => Uryyb, Jbeyq!
+//   echo 'Uryyb, Jbeyq!' | ./rot13   # round-trips back
+
+importf <add>    as ADD;
+importf <sub>    as SUB;
+importf <mod>    as MOD;
+importf <lt>     as LT;
+importf <le>     as LE;
+importf <ge>     as GE;
+importf <and>    as AND;
+importf <length> as LENGTH;
+importf <ord>    as ORD;
+importf <chr>    as CHR;
+importf <concat> as CONCAT;
+
+INPUT LINE;
+text "" as OUT;
+
+import number 0   as I;
+import number 0   as ZERO;
+import number 1   as ONE;
+import number 13  as SHIFT;
+import number 26  as MOD26;
+import number 65  as UA;     // 'A'
+import number 90  as UZ;     // 'Z'
+import number 97  as LA;     // 'a'
+import number 122 as LZ;     // 'z'
+
+LENGTH [LINE, NULL] L;
+LT [I, L] GOING;
+~ATH(GOING) {
+    LINE[I] CH;
+    ORD [CH, NULL] C;
+    ADD [C, ZERO] NC;                 // NC := C (default: unchanged)
+
+    GE [C, UA] GU;  LE [C, UZ] LU;  AND [GU, LU] ISUP;
+    BRANCH(ISUP) {
+        SUB [C, UA] T;  ADD [T, SHIFT] T;  MOD [T, MOD26] T;  ADD [T, UA] NC;
+    } ELSE { }
+
+    GE [C, LA] GL;  LE [C, LZ] LL;  AND [GL, LL] ISLO;
+    BRANCH(ISLO) {
+        SUB [C, LA] T;  ADD [T, SHIFT] T;  MOD [T, MOD26] T;  ADD [T, LA] NC;
+    } ELSE { }
+
+    CHR [NC, NULL] NCH;
+    CONCAT [OUT, NCH] OUT;
+
+    ADD [I, ONE] I;
+    LT [I, L] GOING;
+}
+
+print $OUT;
+THIS.DIE();

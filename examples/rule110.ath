@@ -1,0 +1,83 @@
+// Rule 110, the (Turing-complete) elementary cellular automaton. Each row is
+// a string of '#'/'.'; the next row's cell i comes from the 3-cell
+// neighborhood (i-1, i, i+1) via Rule 110's table, encoded as bit p of 110.
+// Boundary cells need no special case: an out-of-range subscript yields a
+// dead verdict, i.e. value 0. Showcases strings-as-arrays, `loop`, and a
+// verdict→{0,1} conversion via BRANCH.
+//
+//   athc examples/rule110.ath -o rule110
+//   ./rule110
+//   # expected (16 rows, a single seed at the right growing left):
+//   # ...............................#
+//   # ..............................##
+//   # .............................###
+//   # ............................##.#
+//   # ...........................#####
+//   # ..........................##...#
+//   # .........................###..##
+//   # ........................##.#.###
+//   # .......................#######.#
+//   # ......................##.....###
+//   # .....................###....##.#
+//   # ....................##.#...#####
+//   # ...................#####..##...#
+//   # ..................##...#.###..##
+//   # .................###..####.#.###
+//   # ................##.#.##..#####.#
+
+importf <add>  as ADD;
+importf <sub>  as SUB;
+importf <mul>  as MUL;
+importf <lt>   as LT;
+importf <eq>   as EQ;
+importf <shr>  as SHR;
+importf <band> as BAND;
+importf <ord>  as ORD;
+importf <concat> as CONCAT;
+
+import number 0   as ZERO;
+import number 1   as ONE;
+import number 2   as TWO;
+import number 4   as FOUR;
+import number 35  as HASH;     // '#'
+import number 110 as R110;
+import number 32  as W;        // row width
+import number 16  as GENS;
+
+text "#" as HS;
+text "." as DS;
+text "" as MT;
+text "...............................#" as ROW;   // 31 dots + '#'
+
+import number 0 as I;
+text "" as NEXT;
+
+loop GENS {
+    print $ROW;
+
+    // build NEXT from ROW, cell by cell
+    text "" as N2;            // (rebind a fresh empty accumulator)
+    ADD [ZERO, ZERO] I;
+    LT [I, W] CIN;
+    ~ATH(CIN) {
+        // neighborhood values (out-of-range -> dead verdict -> 0)
+        SUB [I, ONE] IM;  ROW[IM] CL;  ORD [CL, NULL] OL;  EQ [OL, HASH] LH;
+        ROW[I]  CS;  ORD [CS, NULL] OS;  EQ [OS, HASH] SH;
+        ADD [I, ONE] IP;  ROW[IP] CR;  ORD [CR, NULL] ORr;  EQ [ORr, HASH] RH;
+
+        ADD [ZERO, ZERO] LV;  BRANCH(LH) { ADD [ONE, ZERO] LV; } ELSE { }
+        ADD [ZERO, ZERO] SV;  BRANCH(SH) { ADD [ONE, ZERO] SV; } ELSE { }
+        ADD [ZERO, ZERO] RV;  BRANCH(RH) { ADD [ONE, ZERO] RV; } ELSE { }
+
+        MUL [LV, FOUR] A;  MUL [SV, TWO] B;  ADD [A, B] AB;  ADD [AB, RV] P;
+        SHR [R110, P] T;  BAND [T, ONE] NB;          // next bit = (110 >> p) & 1
+
+        EQ [NB, ONE] ON;
+        BRANCH(ON) { CONCAT [N2, HS] N2; } ELSE { CONCAT [N2, DS] N2; }
+
+        ADD [I, ONE] I;
+        LT [I, W] CIN;
+    }
+    CONCAT [N2, MT] ROW;       // ROW := NEXT
+}
+THIS.DIE();

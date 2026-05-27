@@ -440,6 +440,43 @@ CASES = [
         "working\nfarewell\nafter\n",
         id="tier4h_execute_postfix_hook",
     ),
+
+    # --- non-trivial showcase programs ---
+    pytest.param("universe_ends.ath", None,
+        "the universe is alive; we wait.\nthe universe has ended.\n"
+        "and yet, the program continues.\n", id="ex_universe_ends"),
+    pytest.param("collatz.ath", None,
+        "6\n3\n10\n5\n16\n8\n4\n2\n1\nreached 1 in 8 steps\n", id="ex_collatz"),
+    pytest.param("primes.ath", None,
+        "2\n3\n5\n7\n11\n13\n17\n19\n23\n29\n", id="ex_primes"),
+    pytest.param("modexp.ath", None,
+        "123456789 ^ 20 mod 98765432109876543211 = 82630247944240163692\n",
+        id="ex_modexp"),
+    pytest.param("newton_sqrt.ath", None,
+        "sqrt(2) ~ 1.414213562373095\n", id="ex_newton_sqrt"),
+    pytest.param("rule110.ath", None,
+        "...............................#\n..............................##\n"
+        ".............................###\n............................##.#\n"
+        "...........................#####\n..........................##...#\n"
+        ".........................###..##\n........................##.#.###\n"
+        ".......................#######.#\n......................##.....###\n"
+        ".....................###....##.#\n....................##.#...#####\n"
+        "...................#####..##...#\n..................##...#.###..##\n"
+        ".................###..####.#.###\n................##.#.##..#####.#\n",
+        id="ex_rule110"),
+    pytest.param("rot13.ath", "Hello, World!\n", "Uryyb, Jbeyq!\n", id="ex_rot13"),
+    pytest.param("balanced.ath", "([]{})\n", "balanced\n", id="ex_balanced_ok"),
+    pytest.param("balanced.ath", "([)]\n", "unbalanced\n", id="ex_balanced_bad"),
+    pytest.param("wc.ath", "hello world\nfoo bar baz\n",
+        "lines: 2\nwords: 5\nchars: 24\n", id="ex_wc"),
+    pytest.param("grep.ath", "err\nerror 1\nok\nerror 2\n",
+        "error 1\nerror 2\n", id="ex_grep"),
+    pytest.param("rle.ath", "aaabbbbc\n",
+        "encoded: 3a4b1c\ndecoded: aaabbbbc\n", id="ex_rle"),
+    pytest.param("wordfreq.ath", "the cat sat the cat\n",
+        "the: 2\ncat: 2\nsat: 1\n", id="ex_wordfreq"),
+    pytest.param("calculator.ath", "3 + 4 * 2 - 1\n", "10\n", id="ex_calc1"),
+    pytest.param("calculator.ath", "2 * 3 + 4 * 5\n", "26\n", id="ex_calc2"),
 ]
 
 
@@ -458,6 +495,14 @@ ENV_CASES = [
         "3\n",
         {"ATH_SEED": "99"},
         id="tier5_random_seed_99",
+    ),
+    pytest.param(
+        "guess.ath",
+        "50\n71\n",          # secret is 71 under ATH_SEED=1
+        "I am thinking of a number from 1 to 100.\n"
+        "your guess?\ntoo low\nyour guess?\ncorrect!\n",
+        {"ATH_SEED": "1"},
+        id="ex_guess",
     ),
 ]
 

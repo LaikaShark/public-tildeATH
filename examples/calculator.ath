@@ -1,0 +1,117 @@
+// An infix expression calculator with correct precedence, using Dijkstra's
+// two-stack (shunting-yard) method — better suited to ~ATH than recursive
+// descent, whose threaded parser state is awkward with single-value
+// functions. Reads one space-separated expression of non-negative integers
+// and + - * / (no parentheses) and prints the result.
+//
+// Showcases: two cons-cell stacks (compose=push, decompose=pop, NULL=empty),
+// a peek via CLONE, operator-precedence draining, tokenizing with SPLIT, and
+// the arithmetic tower.
+//
+//   athc examples/calculator.ath -o calc
+//   echo '3 + 4 * 2 - 1' | ./calc      # => 10
+//   echo '2 * 3 + 4 * 5'  | ./calc      # => 26
+//   echo '100 / 5 / 2'    | ./calc      # => 10
+
+importf <add>    as ADD;
+importf <sub>    as SUB;
+importf <mul>    as MUL;
+importf <div>    as DIV;
+importf <lt>     as LT;
+importf <eq>     as EQ;
+importf <ge>     as GE;
+importf <or>     as OR;
+importf <length> as LENGTH;
+importf <split>  as SPLIT;
+importf <ord>    as ORD;
+importf <parse>  as PARSE;
+
+INPUT EXPR;
+text " " as SPACE;
+SPLIT [EXPR, SPACE] TOKENS;
+LENGTH [TOKENS, NULL] NT;
+
+import number 0  as ZERO;
+import number 1  as ONE;
+import number 2  as TWO;
+import number 42 as STAR;     // *
+import number 43 as PLUS;     // +
+import number 45 as MINUS;    // -
+import number 47 as SLASH;    // /
+
+BIFURCATE NULL[j1, VALUES];   // value stack := empty
+BIFURCATE NULL[j2, OPS];      // operator stack := empty
+
+import number 0 as I;
+LT [I, NT] TLOOP;
+~ATH(TLOOP) {
+    TOKENS[I] T;
+    T[ZERO] T0;  ORD [T0, NULL] C;        // first-char code
+
+    EQ [C, STAR] e1;  EQ [C, PLUS] e2;  EQ [C, MINUS] e3;  EQ [C, SLASH] e4;
+    OR [e1, e2] o1;  OR [o1, e3] o2;  OR [o2, e4] ISOP;
+
+    BRANCH(ISOP) {
+        // precedence of this operator: * / = 2, + - = 1
+        EQ [C, STAR] s1;  EQ [C, SLASH] s2;  OR [s1, s2] HI;
+        ADD [ONE, ZERO] PCUR;  BRANCH(HI) { ADD [TWO, ZERO] PCUR; } ELSE { }
+
+        // drain operators whose precedence >= this one's. The loop runs while
+        // OPS is non-empty (a clone is alive iff non-empty); inside, if the
+        // top's precedence is too low we stop by killing the guard.
+        CLONE OPS as DRAINCHK;
+        ~ATH(DRAINCHK) {
+            CLONE OPS as PK;  BIFURCATE PK[PV, jp];      // peek top op code
+            EQ [PV, STAR] q1;  EQ [PV, SLASH] q2;  OR [q1, q2] QHI;
+            ADD [ONE, ZERO] QT;  BRANCH(QHI) { ADD [TWO, ZERO] QT; } ELSE { }
+            GE [QT, PCUR] KEEP;
+            CLONE KEEP as KEEPC;
+            BRANCH(KEEPC) {
+                BIFURCATE OPS[OPC, OPS];          // pop operator
+                BIFURCATE VALUES[BV, VALUES];     // pop b
+                BIFURCATE VALUES[AV, VALUES];     // pop a
+                EQ [OPC, PLUS] a1;
+                BRANCH(a1) { ADD [AV, BV] RES; } ELSE {
+                    EQ [OPC, MINUS] a2;
+                    BRANCH(a2) { SUB [AV, BV] RES; } ELSE {
+                        EQ [OPC, STAR] a3;
+                        BRANCH(a3) { MUL [AV, BV] RES; } ELSE { DIV [AV, BV] RES; }
+                    }
+                }
+                BIFURCATE [RES, VALUES] VALUES;   // push result
+                CLONE OPS as DRAINCHK;             // continue iff OPS still non-empty
+            } ELSE {
+                BIFURCATE NULL[jb, DRAINCHK];      // precedence too low: stop draining
+            }
+        }
+        BIFURCATE [C, OPS] OPS;               // push this operator
+    } ELSE {
+        PARSE [T, NULL] V;
+        BIFURCATE [V, VALUES] VALUES;         // push operand
+    }
+
+    ADD [I, ONE] I;
+    LT [I, NT] TLOOP;
+}
+
+// drain the rest
+CLONE OPS as FIN;
+~ATH(FIN) {
+    BIFURCATE OPS[OPC, OPS];
+    BIFURCATE VALUES[BV, VALUES];
+    BIFURCATE VALUES[AV, VALUES];
+    EQ [OPC, PLUS] f1;
+    BRANCH(f1) { ADD [AV, BV] RES; } ELSE {
+        EQ [OPC, MINUS] f2;
+        BRANCH(f2) { SUB [AV, BV] RES; } ELSE {
+            EQ [OPC, STAR] f3;
+            BRANCH(f3) { MUL [AV, BV] RES; } ELSE { DIV [AV, BV] RES; }
+        }
+    }
+    BIFURCATE [RES, VALUES] VALUES;
+    CLONE OPS as FIN;
+}
+
+BIFURCATE VALUES[ANSWER, jrest];
+print $ANSWER;
+THIS.DIE();

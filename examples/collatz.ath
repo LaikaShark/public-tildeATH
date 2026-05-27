@@ -1,0 +1,52 @@
+// Collatz (3n+1) trajectory from a fixed seed. While n != 1: halve if even,
+// else 3n+1. Demonstrates a conditional ~ATH loop driven by a recomputed
+// verdict, integer arithmetic, a parity BRANCH, and numeric `$N`
+// interpolation (no TO_STRING needed).
+//
+//   athc examples/collatz.ath -o collatz
+//   ./collatz
+//   # expected:
+//   # 6
+//   # 3
+//   # 10
+//   # 5
+//   # 16
+//   # 8
+//   # 4
+//   # 2
+//   # 1
+//   # reached 1 in 8 steps
+
+importf <mod> as MOD;
+importf <div> as DIV;
+importf <mul> as MUL;
+importf <add> as ADD;
+importf <eq>  as EQ;
+importf <ne>  as NE;
+
+import number 6 as N;
+import number 0 as STEPS;
+import number 0 as ZERO;
+import number 1 as ONE;
+import number 2 as TWO;
+import number 3 as THREE;
+
+print $N;
+
+NE [N, ONE] GOING;
+~ATH(GOING) {
+    MOD [N, TWO] R;
+    EQ [R, ZERO] EVEN;
+    BRANCH(EVEN) {
+        DIV [N, TWO] N;
+    } ELSE {
+        MUL [N, THREE] M;
+        ADD [M, ONE] N;
+    }
+    ADD [STEPS, ONE] STEPS;
+    print $N;
+    NE [N, ONE] GOING;
+}
+
+print reached 1 in $STEPS steps;
+THIS.DIE();
