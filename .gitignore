@@ -8,6 +8,7 @@ build/
 dist/
 *.o
 *.a
+*.so
 *.ll
 *.bc
 *.s
