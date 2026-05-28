@@ -478,6 +478,20 @@ CASES = [
     pytest.param("calculator.ath", "3 + 4 * 2 - 1\n", "10\n", id="ex_calc1"),
     pytest.param("calculator.ath", "2 * 3 + 4 * 5\n", "26\n", id="ex_calc2"),
     pytest.param("brainfuck.ath", None, "Hello World!\n", id="ex_brainfuck"),
+    pytest.param("maze.ath", None,
+        "generated:\n"
+        "#################\n#               #\n# # # # ##### # #\n"
+        "# # # # #     # #\n# ######### # # #\n# #         # # #\n"
+        "### ### # # # # #\n#   #   # # # # #\n##### ### ##### #\n"
+        "#     #   #     #\n# # ### # # # # #\n# # #   # # # # #\n"
+        "#################\n"
+        "solved:\n"
+        "#################\n#* * * * * * * *#\n# # # # ##### # #\n"
+        "# # # # #     #*#\n# ######### # # #\n# #         # #*#\n"
+        "### ### # # # # #\n#   #   # # # #*#\n##### ### ##### #\n"
+        "#     #   #    *#\n# # ### # # # # #\n# # #   # # # #*#\n"
+        "#################\n",
+        id="ex_maze"),
 ]
 
 
