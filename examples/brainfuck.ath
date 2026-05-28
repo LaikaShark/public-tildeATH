@@ -1,0 +1,146 @@
+// A Brainfuck interpreter — proof that ~ATH is Turing-complete. The byte tape
+// is a string of cells (mutated by rebuilding the string, since strings are
+// immutable); the data pointer and program counter are ints; the main loop
+// fetches program[pc] and dispatches the eight commands. `[` and `]` jump by
+// scanning for the matching bracket with a depth counter. Output is collected
+// into a string and printed at the end (`print` always adds one newline).
+//
+// The embedded program prints "Hello World!".
+//
+//   athc examples/brainfuck.ath -o bf
+//   ./bf
+//   # expected:
+//   # Hello World!
+
+importf <add>    as ADD;
+importf <sub>    as SUB;
+importf <mod>    as MOD;
+importf <lt>     as LT;
+importf <gt>     as GT;
+importf <eq>     as EQ;
+importf <length> as LENGTH;
+importf <ord>    as ORD;
+importf <chr>    as CHR;
+importf <concat> as CONCAT;
+
+// Hello-World Brainfuck (no trailing newline).
+text "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+." as PROG;
+LENGTH [PROG, NULL] PLEN;
+
+import number 0   as ZERO;
+import number 1   as ONE;
+import number 256 as C256;
+import number 255 as C255;
+import number 62  as GTC;    // >
+import number 60  as LTC;    // <
+import number 43  as PLUSC;  // +
+import number 45  as MINUSC; // -
+import number 46  as DOTC;   // .
+import number 91  as LBC;    // [
+import number 93  as RBC;    // ]
+import number 30  as TLEN;   // tape length
+
+// tape := TLEN zero cells; OUT := ""
+CHR [ZERO, NULL] ZCH;
+text "" as TAPE;
+loop TLEN { CONCAT [TAPE, ZCH] TAPE; }
+text "" as OUT;
+
+import number 0 as PTR;
+import number 0 as PC;
+import number 0 as WFLAG;    // flag: this command writes a new cell value
+import number 0 as NEWVAL;
+import number 0 as RJ;       // tape-rebuild countdown index (reset each write)
+
+LT [PC, PLEN] RUN;
+~ATH(RUN) {
+    PROG[PC] CMDCH;  ORD [CMDCH, NULL] OP;
+    TAPE[PTR] CELLCH;  ORD [CELLCH, NULL] CELL;
+    ADD [ZERO, ZERO] WFLAG;
+
+    EQ [OP, GTC] isgt;
+    BRANCH(isgt) { ADD [PTR, ONE] PTR; } ELSE {
+    EQ [OP, LTC] islt;
+    BRANCH(islt) { SUB [PTR, ONE] PTR; } ELSE {
+    EQ [OP, PLUSC] isplus;
+    BRANCH(isplus) {
+        ADD [CELL, ONE] V;  MOD [V, C256] NEWVAL;  ADD [ONE, ZERO] WFLAG;
+    } ELSE {
+    EQ [OP, MINUSC] isminus;
+    BRANCH(isminus) {
+        ADD [CELL, C255] V;  MOD [V, C256] NEWVAL;  ADD [ONE, ZERO] WFLAG;
+    } ELSE {
+    EQ [OP, DOTC] isdot;
+    BRANCH(isdot) {
+        CHR [CELL, NULL] OCH;  CONCAT [OUT, OCH] OUT;
+    } ELSE {
+    EQ [OP, LBC] islb;
+    BRANCH(islb) {
+        EQ [CELL, ZERO] zero;
+        BRANCH(zero) {
+            // jump forward past the matching ']'
+            ADD [ONE, ZERO] DEPTH;
+            ADD [PC, ONE] SI;
+            GT [DEPTH, ZERO] SCAN;
+            ~ATH(SCAN) {
+                PROG[SI] SC;  ORD [SC, NULL] SO;
+                EQ [SO, LBC] sl;  BRANCH(sl) { ADD [DEPTH, ONE] DEPTH; } ELSE { }
+                EQ [SO, RBC] sr;  BRANCH(sr) { SUB [DEPTH, ONE] DEPTH; } ELSE { }
+                ADD [SI, ONE] SI;
+                GT [DEPTH, ZERO] SCAN;
+            }
+            SUB [SI, ONE] PC;          // PC := matching ']' (++ moves past)
+        } ELSE { }
+    } ELSE {
+    EQ [OP, RBC] isrb;
+    BRANCH(isrb) {
+        GT [CELL, ZERO] nonzero;
+        BRANCH(nonzero) {
+            // jump back to the matching '['
+            ADD [ONE, ZERO] DEPTH;
+            SUB [PC, ONE] SI;
+            GT [DEPTH, ZERO] SCAN;
+            ~ATH(SCAN) {
+                PROG[SI] SC;  ORD [SC, NULL] SO;
+                EQ [SO, RBC] sr;  BRANCH(sr) { ADD [DEPTH, ONE] DEPTH; } ELSE { }
+                EQ [SO, LBC] sl;  BRANCH(sl) { SUB [DEPTH, ONE] DEPTH; } ELSE { }
+                SUB [SI, ONE] SI;
+                GT [DEPTH, ZERO] SCAN;
+            }
+            ADD [SI, ONE] PC;          // PC := matching '[' (++ re-enters body)
+        } ELSE { }
+    } ELSE { }
+    } } } } } }
+
+    // commit a cell write if + or - asked for one. Rebuild the tape cons by
+    // cons (right to left) with plain compose, which installs NO lifetime
+    // deps — and CLONE each char atom to strip the subscript snapshot's deps.
+    // Without this, repeated slice/concat rebuilds pile up dependency chains
+    // that ath_is_alive walks recursively, blowing up to quadratic/exponential.
+    EQ [WFLAG, ONE] dowrite;
+    BRANCH(dowrite) {
+        CHR [NEWVAL, NULL] NCHS;  NCHS[ZERO] NA0;  CLONE NA0 as NEWATOM;
+        BIFURCATE NULL[jx, ACC];      // ACC := NULL (empty)
+        SUB [TLEN, ONE] TM;           // TM = TLEN - 1
+        ADD [ZERO, ZERO] RJ;
+        LT [RJ, TLEN] RGO;
+        ~ATH(RGO) {
+            SUB [TM, RJ] IDX;          // IDX counts down: TLEN-1, ..., 0
+            EQ [IDX, PTR] ishere;
+            BRANCH(ishere) {
+                BIFURCATE [NEWATOM, ACC] ACC;
+            } ELSE {
+                TAPE[IDX] OA;  CLONE OA as CA;  BIFURCATE [CA, ACC] ACC;
+            }
+            ADD [RJ, ONE] RJ;
+            LT [RJ, TLEN] RGO;
+        }
+        BIFURCATE ACC[AH, AT];  BIFURCATE [AH, AT] TAPE;   // TAPE := ACC
+    } ELSE { }
+
+    ADD [PC, ONE] PC;
+    LT [PC, PLEN] RUN;
+}
+
+print $OUT;
+THIS.DIE();
