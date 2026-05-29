@@ -187,7 +187,9 @@ A single space before `AS` — do not pad into aligned columns.
 - **`//` only.** Do not use `/* */`. A multi-line note is a run of `//` lines.
 - A **space follows** `//`.
 - Comments sit on **their own line above** the code they describe. A short note
-  may trail a statement, separated from the `;` by one space.
+  may trail a statement, separated from the `;` by at least one space (align a
+  column of trailing notes when several cluster). Keep the line within 80
+  columns; if a trailing note would overflow, move it to its own line above.
 - A **file header is optional**: when present it is `//` lines giving the
   purpose, then the build/run invocation and expected output.
 
