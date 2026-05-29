@@ -1,0 +1,192 @@
+// Sudoku solver by iterative backtracking. The 9x9 board is one 81-char
+// string ('0' = blank); a second copy GIVEN remembers the clues so we never
+// overwrite them. We walk cells in row-major order carrying a direction DIR
+// (+1 forward, -1 backtracking): on a blank we try the smallest digit greater
+// than its current value that breaks no row/column/box constraint — placing it
+// and stepping forward, or zeroing the cell and stepping back when none fits.
+// POS reaching 81 means solved; POS falling below 0 means unsolvable. There
+// are no 2-D arrays and no in-place mutation: each write rebuilds the board
+// cons-by-cons with plain compose + CLONE (dep-less), the same trick the
+// Brainfuck tape uses, so lifetime-dependency chains never pile up.
+//
+//   athc examples/sudoku.ath -o sudoku
+//   ./sudoku
+
+importf <add>    as ADD;
+importf <sub>    as SUB;
+importf <mul>    as MUL;
+importf <div>    as DIV;
+importf <mod>    as MOD;
+importf <lt>     as LT;
+importf <le>     as LE;
+importf <gt>     as GT;
+importf <ge>     as GE;
+importf <eq>     as EQ;
+importf <ord>    as ORD;
+importf <chr>    as CHR;
+importf <concat> as CONCAT;
+
+import number 0  as ZERO;
+import number 1  as ONE;
+import number 3  as THREE;
+import number 9  as NINE;
+import number 81 as N81;
+import number 48 as C48;
+
+text "." as DOT;
+text "" as MT;
+
+// An easy puzzle (45 clues, unique solution). Naive row-major backtracking is
+// exponential in the worst case, so the example sticks to a puzzle the solver
+// clears with little search; harder grids work too, just slower.
+text "000078912002195300198340000859000023400003791000924850061537000287400005340000179" as GIVEN;
+text "000078912002195300198340000859000023400003791000924850061537000287400005340000179" as GRID;
+
+// --- print a board (reads GRID; blanks shown as '.') -----------------------
+text "puzzle:" as HDR1;
+print $HDR1;
+import number 0 as PR;
+LT [PR, NINE] PRL;
+~ATH(PRL) {
+    text "" as ROW;
+    ADD [ZERO, ZERO] PC;
+    LT [PC, NINE] PCL;
+    ~ATH(PCL) {
+        MUL [PR, NINE] prb;  ADD [prb, PC] pidx;
+        GRID[pidx] pcc;  ORD [pcc, NULL] pco;  SUB [pco, C48] pv;
+        EQ [pv, ZERO] blank;
+        BRANCH(blank) { CONCAT [ROW, DOT] ROW; } ELSE {
+            CHR [pco, NULL] dcs;  CONCAT [ROW, dcs] ROW;
+        }
+        ADD [PC, ONE] PC;
+        LT [PC, NINE] PCL;
+    }
+    print $ROW;
+    ADD [PR, ONE] PR;
+    LT [PR, NINE] PRL;
+}
+
+// --- solve: row-major iterative backtracking -------------------------------
+import number 0 as POS;
+import number 1 as DIR;
+LT [POS, N81] RUN;            // POS in [0,81); falls dead at 81 (solved) or <0
+~ATH(RUN) {
+    GIVEN[POS] gch;  ORD [gch, NULL] go;  SUB [go, C48] gv;
+    GT [gv, ZERO] isgiven;
+    BRANCH(isgiven) {
+        ADD [POS, DIR] POS;          // clue: keep moving the way we came
+    } ELSE {
+        DIV [POS, NINE] r;  MOD [POS, NINE] c;
+        GRID[POS] cch;  ORD [cch, NULL] co;  SUB [co, C48] cur;
+
+        // smallest digit > cur that fits, if any
+        ADD [ZERO, ZERO] placed;  ADD [ZERO, ZERO] foundd;
+        ADD [cur, ONE] d;
+        LE [d, NINE] TRYL;
+        ~ATH(TRYL) {
+            ADD [ZERO, ZERO] conflict;
+            // row r
+            ADD [ZERO, ZERO] sc;
+            LT [sc, NINE] ROWL;
+            ~ATH(ROWL) {
+                MUL [r, NINE] rb;  ADD [rb, sc] ri;
+                GRID[ri] rgc;  ORD [rgc, NULL] rgo;  SUB [rgo, C48] rgv;
+                EQ [rgv, d] rhit;
+                BRANCH(rhit) { ADD [conflict, ONE] conflict; } ELSE { }
+                ADD [sc, ONE] sc;  LT [sc, NINE] ROWL;
+            }
+            // column c
+            ADD [ZERO, ZERO] sr;
+            LT [sr, NINE] COLL;
+            ~ATH(COLL) {
+                MUL [sr, NINE] cb;  ADD [cb, c] ci;
+                GRID[ci] cgc;  ORD [cgc, NULL] cgo;  SUB [cgo, C48] cgv;
+                EQ [cgv, d] chit;
+                BRANCH(chit) { ADD [conflict, ONE] conflict; } ELSE { }
+                ADD [sr, ONE] sr;  LT [sr, NINE] COLL;
+            }
+            // 3x3 box
+            DIV [r, THREE] r3;  MUL [r3, THREE] br;
+            DIV [c, THREE] c3;  MUL [c3, THREE] bc;
+            ADD [ZERO, ZERO] bi;
+            LT [bi, THREE] BIL;
+            ~ATH(BIL) {
+                ADD [ZERO, ZERO] bj;
+                LT [bj, THREE] BJL;
+                ~ATH(BJL) {
+                    ADD [br, bi] brow;  MUL [brow, NINE] bbase;
+                    ADD [bc, bj] bcol;  ADD [bbase, bcol] bidx;
+                    GRID[bidx] bgc;  ORD [bgc, NULL] bgo;  SUB [bgo, C48] bgv;
+                    EQ [bgv, d] bhit;
+                    BRANCH(bhit) { ADD [conflict, ONE] conflict; } ELSE { }
+                    ADD [bj, ONE] bj;  LT [bj, THREE] BJL;
+                }
+                ADD [bi, ONE] bi;  LT [bi, THREE] BIL;
+            }
+
+            EQ [conflict, ZERO] fits;
+            BRANCH(fits) {
+                ADD [ONE, ZERO] placed;  ADD [d, ZERO] foundd;
+                ADD [NINE, NINE] d;          // force-exit the digit loop
+            } ELSE { ADD [d, ONE] d; }
+            LE [d, NINE] TRYL;
+        }
+
+        // NEWDIG = chosen digit (forward) or 0 (backtrack). BRANCH is one-shot
+        // (it consumes its verdict), so each use of the placed/not-placed test
+        // recomputes a fresh verdict.
+        ADD [ZERO, ZERO] NEWDIG;
+        GT [placed, ZERO] didplace;
+        BRANCH(didplace) { ADD [foundd, ZERO] NEWDIG; } ELSE { }
+
+        // write NEWDIG at POS, rebuilding GRID dep-lessly
+        ADD [NEWDIG, C48] ndc;  CHR [ndc, NULL] NDS;  NDS[ZERO] NDA0;  CLONE NDA0 as NDATOM;
+        BIFURCATE NULL[gjx, GACC];
+        SUB [N81, ONE] GTM;
+        ADD [ZERO, ZERO] GJ;
+        LT [GJ, N81] GRGO;
+        ~ATH(GRGO) {
+            SUB [GTM, GJ] GIDX;
+            EQ [GIDX, POS] gishere;
+            BRANCH(gishere) {
+                BIFURCATE [NDATOM, GACC] GACC;
+            } ELSE {
+                GRID[GIDX] GOA;  CLONE GOA as GCA;  BIFURCATE [GCA, GACC] GACC;
+            }
+            ADD [GJ, ONE] GJ;  LT [GJ, N81] GRGO;
+        }
+        BIFURCATE GACC[GAH, GAT];  BIFURCATE [GAH, GAT] GRID;
+
+        // step: forward on a placement, backtrack otherwise (fresh verdict)
+        GT [placed, ZERO] dostep;
+        BRANCH(dostep) {
+            ADD [ONE, ZERO] DIR;  ADD [POS, ONE] POS;
+        } ELSE {
+            SUB [ZERO, ONE] DIR;  SUB [POS, ONE] POS;
+        }
+    }
+    LT [POS, N81] RUN;
+}
+
+// --- print the solution ----------------------------------------------------
+text "solved:" as HDR2;
+print $HDR2;
+ADD [ZERO, ZERO] PR;
+LT [PR, NINE] PRL2;
+~ATH(PRL2) {
+    text "" as ROW2;
+    ADD [ZERO, ZERO] PC;
+    LT [PC, NINE] PCL2;
+    ~ATH(PCL2) {
+        MUL [PR, NINE] prb;  ADD [prb, PC] pidx;
+        GRID[pidx] pcc;  ORD [pcc, NULL] pco;
+        CHR [pco, NULL] dcs;  CONCAT [ROW2, dcs] ROW2;
+        ADD [PC, ONE] PC;
+        LT [PC, NINE] PCL2;
+    }
+    print $ROW2;
+    ADD [PR, ONE] PR;
+    LT [PR, NINE] PRL2;
+}
+
+THIS.DIE();
