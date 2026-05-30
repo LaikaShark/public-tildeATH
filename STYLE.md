@@ -75,7 +75,10 @@ by meaning — never bind them.
 
 One rule covers every bracketed form:
 
-- **`[` is always tight** against whatever precedes it — a name, or a keyword.
+- **`[` is tight against a preceding name** — a call, subscript, slice, or a
+  decompose source (`ADD[X, Y]`, `SRC[I]`, `BIFURCATE NULL[J, V]`). The lone
+  exception is the `BIFURCATE` **compose** form, where `[` follows the keyword
+  directly: it takes a space like any keyword operand — `BIFURCATE [A, B] T`.
 - **No padding inside brackets**: `[A, B]`, never `[ A, B ]`.
 - **One space after each comma**, none before: `[A, B]`.
 - **`..` in a slice is tight**: `SRC[LO..HI]`.
@@ -93,7 +96,7 @@ ORD[CH, NULL] N;        // unary call: pad the second slot with NULL
 FOO ARG[L, R];          // call on ARG, decompose the result -> L, R
 SRC[I] CH;              // subscript
 SRC[LO..HI] PART;       // slice
-BIFURCATE[A, B] T;      // compose -> T   (tight, even after the keyword)
+BIFURCATE [A, B] T;     // compose -> T   (space after the keyword)
 BIFURCATE SRC[L, R];    // decompose SRC -> L, R
 CLONE SRC AS DST;       // dep-free shallow copy
 THIS.DIE();             // end the program (or VAR.DIE() to kill one object)

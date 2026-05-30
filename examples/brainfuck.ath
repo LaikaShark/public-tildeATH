@@ -196,19 +196,19 @@ LT[PC, PLEN] RUN;
             EQ[IDX, PTR] ISHERE;
             BRANCH(ISHERE)
             {
-                BIFURCATE[NEWATOM, ACC] ACC;
+                BIFURCATE [NEWATOM, ACC] ACC;
             }
             ELSE
             {
                 TAPE[IDX] OA;
                 CLONE OA AS CA;
-                BIFURCATE[CA, ACC] ACC;
+                BIFURCATE [CA, ACC] ACC;
             }
             ADD[RJ, ONE] RJ;
             LT[RJ, TLEN] RGO;
         }
         BIFURCATE ACC[AH, AT];
-        BIFURCATE[AH, AT] TAPE;
+        BIFURCATE [AH, AT] TAPE;
     }
 
     ADD[PC, ONE] PC;

@@ -9,7 +9,7 @@ V.DIE();
     PRINT V is currently dead;
     // rebind V to a fresh alive composite to exit the inverted loop
     // without disturbing the dead sentinel above.
-    BIFURCATE[NULL, NULL] V;
+    BIFURCATE [NULL, NULL] V;
 }
 PRINT after the loop;
 THIS.DIE();

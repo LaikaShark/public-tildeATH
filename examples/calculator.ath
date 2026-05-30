@@ -118,7 +118,7 @@ LT[I, NT] TLOOP;
                         }
                     }
                 }
-                BIFURCATE[RES, VALUES] VALUES; // push result
+                BIFURCATE [RES, VALUES] VALUES; // push result
                 CLONE OPS AS DRAINCHK; // loop iff OPS non-empty
             }
             ELSE
@@ -126,12 +126,12 @@ LT[I, NT] TLOOP;
                 BIFURCATE NULL[JB, DRAINCHK]; // prec too low: stop
             }
         }
-        BIFURCATE[C, OPS] OPS;               // push this operator
+        BIFURCATE [C, OPS] OPS;               // push this operator
     }
     ELSE
     {
         PARSE[T, NULL] V;
-        BIFURCATE[V, VALUES] VALUES;         // push operand
+        BIFURCATE [V, VALUES] VALUES;         // push operand
     }
 
     ADD[I, ONE] I;
@@ -170,7 +170,7 @@ CLONE OPS AS FIN;
             }
         }
     }
-    BIFURCATE[RES, VALUES] VALUES;
+    BIFURCATE [RES, VALUES] VALUES;
     CLONE OPS AS FIN;
 }
 

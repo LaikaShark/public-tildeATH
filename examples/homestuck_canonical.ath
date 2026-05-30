@@ -7,7 +7,7 @@ U.DIE();
 ~ATH(!U)
 {
     PRINT the universe has ended.;
-    BIFURCATE[NULL, NULL] U;
+    BIFURCATE [NULL, NULL] U;
 }
 EXECUTE(NULL);
 PRINT and yet, the program continues.;

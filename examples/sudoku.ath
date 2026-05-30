@@ -219,19 +219,19 @@ LT[POS, N81] RUN;
             EQ[GIDX, POS] GISHERE;
             BRANCH(GISHERE)
             {
-                BIFURCATE[NDATOM, GACC] GACC;
+                BIFURCATE [NDATOM, GACC] GACC;
             }
             ELSE
             {
                 GRID[GIDX] GOA;
                 CLONE GOA AS GCA;
-                BIFURCATE[GCA, GACC] GACC;
+                BIFURCATE [GCA, GACC] GACC;
             }
             ADD[GJ, ONE] GJ;
             LT[GJ, N81] GRGO;
         }
         BIFURCATE GACC[GAH, GAT];
-        BIFURCATE[GAH, GAT] GRID;
+        BIFURCATE [GAH, GAT] GRID;
 
         // step: forward on a placement, backtrack otherwise (fresh verdict)
         GT[PLACED, ZERO] DOSTEP;

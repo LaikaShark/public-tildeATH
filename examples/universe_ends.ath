@@ -15,7 +15,7 @@ IMPORT UNIVERSE U;
 ~ATH(!U)
 {
     PRINT this cannot print while the universe lives;
-    BIFURCATE[NULL, NULL] U;
+    BIFURCATE [NULL, NULL] U;
 }
 PRINT the universe is alive\; we wait.;
 
@@ -25,7 +25,7 @@ U.DIE();
 ~ATH(!U)
 {
     PRINT the universe has ended.;
-    BIFURCATE[NULL, NULL] U;     // revive U to break out (one pass)
+    BIFURCATE [NULL, NULL] U;     // revive U to break out (one pass)
 }
 
 PRINT and yet, the program continues.;

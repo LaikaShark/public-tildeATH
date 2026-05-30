@@ -243,7 +243,7 @@ BIFURCATE NULL[JX0, STK];
 // pushed char is subscripted to an atom first; the +1 keeps cell 0 off NUL.
 CHR[ONE, NULL] S0S;
 S0S[ZERO] S0;
-BIFURCATE[S0, STK] STK; // push cell 0
+BIFURCATE [S0, STK] STK; // push cell 0
 ADD[ONE, ZERO] SP;
 SHL[ONE, ZERO] VM0;
 BOR[ZERO, VM0] VIS; // mark cell 0 visited
@@ -290,7 +290,7 @@ LT[ZERO, SP] GO;
                         ADD[NB, ONE] NBE;
                         CHR[NBE, NULL] NCHS;
                         NCHS[ZERO] NCH;
-                        BIFURCATE[NCH, STK] STK;
+                        BIFURCATE [NCH, STK] STK;
                         ADD[SP, ONE] SP;
                         ADD[ONE, ZERO] MOVED;
                     }
@@ -322,7 +322,7 @@ LT[ZERO, SP] GO;
                         ADD[WNB, ONE] WNBE;
                         CHR[WNBE, NULL] WCHS;
                         WCHS[ZERO] WCH;
-                        BIFURCATE[WCH, STK] STK;
+                        BIFURCATE [WCH, STK] STK;
                         ADD[SP, ONE] SP;
                         ADD[ONE, ZERO] MOVED;
                     }
@@ -350,7 +350,7 @@ LT[ZERO, SP] GO;
                         ADD[NNB, ONE] NNBE;
                         CHR[NNBE, NULL] NCH2S;
                         NCH2S[ZERO] NCH2;
-                        BIFURCATE[NCH2, STK] STK;
+                        BIFURCATE [NCH2, STK] STK;
                         ADD[SP, ONE] SP;
                         ADD[ONE, ZERO] MOVED;
                     }
@@ -382,7 +382,7 @@ LT[ZERO, SP] GO;
                         ADD[SNB, ONE] SNBE;
                         CHR[SNBE, NULL] SCHS;
                         SCHS[ZERO] SCH;
-                        BIFURCATE[SCH, STK] STK;
+                        BIFURCATE [SCH, STK] STK;
                         ADD[SP, ONE] SP;
                         ADD[ONE, ZERO] MOVED;
                     }

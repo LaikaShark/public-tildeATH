@@ -61,7 +61,7 @@ LT[I, L] GOING;
         {
             ADD[C, TWO] EC;
         }
-        BIFURCATE[EC, STACK] STACK;            // push
+        BIFURCATE [EC, STACK] STACK;            // push
     }
     ELSE
     {
