@@ -428,7 +428,7 @@ def test_looptest_sample_tokenizes():
 
     assert toks[-1].kind is TokenKind.EOF
     assert toks[0].kind is TokenKind.KW_IMPORT
-    assert (toks[1].kind, toks[1].value) == (TokenKind.IDENT, "blah")
+    assert (toks[1].kind, toks[1].value) == (TokenKind.IDENT, "BLAH")
     assert (toks[2].kind, toks[2].value) == (TokenKind.IDENT, "A")
     assert toks[3].kind is TokenKind.SEMI
 
