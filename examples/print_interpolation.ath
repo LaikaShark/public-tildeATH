@@ -8,13 +8,13 @@
 //   # plain line
 //   # a $literal dollar and world again
 
-importf <to_string> as TO_STRING;
+IMPORTF <to_string> AS TO_STRING;
 
-import number 7 as N;
-TO_STRING [N, N] NS;
-text "world" as W;
+IMPORT NUMBER 7 AS N;
+TO_STRING[N, N] NS;
+TEXT "world" AS W;
 
-print Hello, $W! N is $NS.;
-print plain line;
-print a \$literal dollar and $W again;
+PRINT Hello, $W! N is $NS.;
+PRINT plain line;
+PRINT a \$literal dollar and $W again;
 THIS.DIE();

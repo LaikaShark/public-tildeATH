@@ -1,10 +1,11 @@
-// The "instant" library entry has lifetime [0, 0] — born dead — so the
-// ~ATH body never runs. Demonstrates that import metadata is now
+// the "instant" library entry has lifetime [0, 0] — born dead — so the
+// ~ATH body never runs. demonstrates that import metadata is now
 // semantically meaningful when it matches a library concept.
 
-import instant V;
-~ATH(V) {
-    print never reached;
+IMPORT INSTANT V;
+~ATH(V)
+{
+    PRINT never reached;
 }
-print fell through;
+PRINT fell through;
 THIS.DIE();

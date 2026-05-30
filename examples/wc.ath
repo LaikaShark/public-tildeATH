@@ -11,32 +11,33 @@
 //   # words: 5
 //   # chars: 24
 
-importf <add>    as ADD;
-importf <length> as LENGTH;
-importf <split>  as SPLIT;
+IMPORTF <add> AS ADD;
+IMPORTF <length> AS LENGTH;
+IMPORTF <split> AS SPLIT;
 
-import number 0 as LINES;
-import number 0 as WORDS;
-import number 0 as CHARS;
-import number 1 as ONE;
-text " " as SPACE;
+IMPORT NUMBER 0 AS LINES;
+IMPORT NUMBER 0 AS WORDS;
+IMPORT NUMBER 0 AS CHARS;
+IMPORT NUMBER 1 AS ONE;
+TEXT " " AS SPACE;
 
 INPUT LINE;
-~ATH(LINE) {
-    ADD [LINES, ONE] LINES;
+~ATH(LINE)
+{
+    ADD[LINES, ONE] LINES;
 
-    LENGTH [LINE, NULL] LL;
-    ADD [CHARS, LL] CHARS;
-    ADD [CHARS, ONE] CHARS;          // count the newline too
+    LENGTH[LINE, NULL] LL;
+    ADD[CHARS, LL] CHARS;
+    ADD[CHARS, ONE] CHARS;          // count the newline too
 
-    SPLIT [LINE, SPACE] PARTS;
-    LENGTH [PARTS, NULL] NW;
-    ADD [WORDS, NW] WORDS;
+    SPLIT[LINE, SPACE] PARTS;
+    LENGTH[PARTS, NULL] NW;
+    ADD[WORDS, NW] WORDS;
 
     INPUT LINE;
 }
 
-print lines: $LINES;
-print words: $WORDS;
-print chars: $CHARS;
+PRINT lines: $LINES;
+PRINT words: $WORDS;
+PRINT chars: $CHARS;
 THIS.DIE();

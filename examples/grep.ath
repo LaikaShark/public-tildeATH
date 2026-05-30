@@ -8,13 +8,18 @@
 //   # error 1
 //   # error 2
 
-importf <contains> as CONTAINS;
+IMPORTF <contains> AS CONTAINS;
 
 INPUT PAT;                       // first line: the search pattern
 INPUT LINE;
-~ATH(LINE) {
-    CONTAINS [LINE, PAT] HIT;
-    BRANCH(HIT) { print $LINE; } ELSE { }
+~ATH(LINE)
+{
+    CONTAINS[LINE, PAT] HIT;
+    BRANCH(HIT)
+    {
+        PRINT $LINE;
+    }
+
     INPUT LINE;
 }
 THIS.DIE();

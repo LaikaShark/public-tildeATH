@@ -1,7 +1,8 @@
-import dead grandmother G;
-~ATH(G) {
-    print speaking once before she dies;
+IMPORT DEAD GRANDMOTHER G;
+~ATH(G)
+{
+    PRINT speaking once before she dies;
     G.DIE();
 }
-print silence;
+PRINT silence;
 THIS.DIE();

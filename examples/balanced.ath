@@ -10,66 +10,103 @@
 //   echo '([)]'   | ./balanced   # => unbalanced
 //   echo '(()'    | ./balanced   # => unbalanced
 
-importf <add>    as ADD;
-importf <lt>     as LT;
-importf <eq>     as EQ;
-importf <or>     as OR;
-importf <length> as LENGTH;
-importf <ord>    as ORD;
+IMPORTF <add> AS ADD;
+IMPORTF <lt> AS LT;
+IMPORTF <eq> AS EQ;
+IMPORTF <or> AS OR;
+IMPORTF <length> AS LENGTH;
+IMPORTF <ord> AS ORD;
 
 INPUT LINE;
-import balanced BAL;             // alive = still balanced
-BIFURCATE NULL[junk, STACK];    // STACK := NULL (empty)
+IMPORT BALANCED BAL;             // alive = still balanced
+BIFURCATE NULL[JUNK, STACK];    // STACK := NULL (empty)
 
-import number 0   as I;
-import number 1   as ONE;
-import number 2   as TWO;
-import number 40  as OPAREN;    // (
-import number 91  as OBRACK;    // [
-import number 123 as OBRACE;    // {
-import number 41  as CPAREN;    // )
-import number 93  as CBRACK;    // ]
-import number 125 as CBRACE;    // }
+IMPORT NUMBER 0 AS I;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 2 AS TWO;
+IMPORT NUMBER 40 AS OPAREN;    // (
+IMPORT NUMBER 91 AS OBRACK;    // [
+IMPORT NUMBER 123 AS OBRACE;    // {
+IMPORT NUMBER 41 AS CPAREN;    // )
+IMPORT NUMBER 93 AS CBRACK;    // ]
+IMPORT NUMBER 125 AS CBRACE;    // }
 
-LENGTH [LINE, NULL] L;
-LT [I, L] GOING;
-~ATH(GOING) {
+LENGTH[LINE, NULL] L;
+LT[I, L] GOING;
+~ATH(GOING)
+{
     LINE[I] CH;
-    ORD [CH, NULL] C;
+    ORD[CH, NULL] C;
 
-    EQ [C, OPAREN] o1;  EQ [C, OBRACK] o2;  EQ [C, OBRACE] o3;
-    OR [o1, o2] oo;  OR [oo, o3] ISOPEN;
-    EQ [C, CPAREN] c1;  EQ [C, CBRACK] c2;  EQ [C, CBRACE] c3;
-    OR [c1, c2] cc;  OR [cc, c3] ISCLOSE;
+    EQ[C, OPAREN] O1;
+    EQ[C, OBRACK] O2;
+    EQ[C, OBRACE] O3;
+    OR[O1, O2] OO;
+    OR[OO, O3] ISOPEN;
+    EQ[C, CPAREN] C1;
+    EQ[C, CBRACK] C2;
+    EQ[C, CBRACE] C3;
+    OR[C1, C2] CC;
+    OR[CC, C3] ISCLOSE;
 
-    BRANCH(ISOPEN) {
+    BRANCH(ISOPEN)
+    {
         // expected closing code: '(' -> +1, '[' / '{' -> +2
-        EQ [C, OPAREN] isp;
-        BRANCH(isp) { ADD [C, ONE] EC; } ELSE { ADD [C, TWO] EC; }
-        BIFURCATE [EC, STACK] STACK;            // push
-    } ELSE {
-        BRANCH(ISCLOSE) {
-            CLONE STACK as SC;
-            BRANCH(SC) {
+        EQ[C, OPAREN] ISP;
+        BRANCH(ISP)
+        {
+            ADD[C, ONE] EC;
+        }
+        ELSE
+        {
+            ADD[C, TWO] EC;
+        }
+        BIFURCATE[EC, STACK] STACK;            // push
+    }
+    ELSE
+    {
+        BRANCH(ISCLOSE)
+        {
+            CLONE STACK AS SC;
+            BRANCH(SC)
+            {
                 BIFURCATE STACK[TOP, STACK];    // pop
-                EQ [TOP, C] OK;
-                CLONE OK as OKC;
-                BRANCH(OKC) { } ELSE { BAL.DIE(); }   // wrong closer
-            } ELSE {
+                EQ[TOP, C] OK;
+                CLONE OK AS OKC;
+                BRANCH(OKC)
+                {
+                }
+                ELSE
+                {
+                    BAL.DIE();
+                }   // wrong closer
+            }
+            ELSE
+            {
                 BAL.DIE();                      // close with empty stack
             }
-        } ELSE { }                              // other char: ignore
+        }
     }
 
-    ADD [I, ONE] I;
-    LT [I, L] GOING;
+    ADD[I, ONE] I;
+    LT[I, L] GOING;
 }
 
-CLONE BAL as BCHK;
-BRANCH(BCHK) {
-    CLONE STACK as SCHK;
-    BRANCH(SCHK) { print unbalanced; } ELSE { print balanced; }
-} ELSE {
-    print unbalanced;
+CLONE BAL AS BCHK;
+BRANCH(BCHK)
+{
+    CLONE STACK AS SCHK;
+    BRANCH(SCHK)
+    {
+        PRINT unbalanced;
+    }
+    ELSE
+    {
+        PRINT balanced;
+    }
+}
+ELSE
+{
+    PRINT unbalanced;
 }
 THIS.DIE();

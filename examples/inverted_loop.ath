@@ -1,14 +1,15 @@
-// The ~ATH(!V) form: run while V is *dead*. Since objects can't come back
+// the ~ATH(!V) form: run while V is *dead*. since objects can't come back
 // to life, the body either runs at-most-once (if V is dead at entry) and
 // must rebind V to break out, or never runs (if V is alive at entry).
 
-import x V;
+IMPORT X V;
 V.DIE();
-~ATH(!V) {
-    print V is currently dead;
-    // Rebind V to a fresh alive composite to exit the inverted loop
+~ATH(!V)
+{
+    PRINT V is currently dead;
+    // rebind V to a fresh alive composite to exit the inverted loop
     // without disturbing the dead sentinel above.
-    BIFURCATE [NULL, NULL] V;
+    BIFURCATE[NULL, NULL] V;
 }
-print after the loop;
+PRINT after the loop;
 THIS.DIE();

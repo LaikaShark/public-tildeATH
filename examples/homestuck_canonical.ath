@@ -1,12 +1,14 @@
-// The canonical Homestuck-flavored shape: a concept is imported, killed
+// the canonical homestuck-flavored shape: a concept is imported, killed
 // (so the inverted loop fires), and an EXECUTE clause sits at the tail.
 // EXECUTE(NULL) is currently a syntactic no-op (SPEC §4.4.4).
 
-import dead universe U;
+IMPORT DEAD UNIVERSE U;
 U.DIE();
-~ATH(!U) {
-    print the universe has ended.;
-    BIFURCATE [NULL, NULL] U;
-} EXECUTE(NULL);
-print and yet, the program continues.;
+~ATH(!U)
+{
+    PRINT the universe has ended.;
+    BIFURCATE[NULL, NULL] U;
+}
+EXECUTE(NULL);
+PRINT and yet, the program continues.;
 THIS.DIE();

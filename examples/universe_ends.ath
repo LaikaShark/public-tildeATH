@@ -9,22 +9,24 @@
 //   # the universe has ended.
 //   # and yet, the program continues.
 
-import universe U;
+IMPORT UNIVERSE U;
 
 // A ~ATH(!U) loop runs while U is *dead*. U is alive, so it is skipped...
-~ATH(!U) {
-    print this cannot print while the universe lives;
-    BIFURCATE [NULL, NULL] U;
+~ATH(!U)
+{
+    PRINT this cannot print while the universe lives;
+    BIFURCATE[NULL, NULL] U;
 }
-print the universe is alive\; we wait.;
+PRINT the universe is alive\; we wait.;
 
 // ...until we end it. Now the inverted loop's body would run, so we guard
 // it to fire exactly once.
 U.DIE();
-~ATH(!U) {
-    print the universe has ended.;
-    BIFURCATE [NULL, NULL] U;   // revive U to break out (one pass)
+~ATH(!U)
+{
+    PRINT the universe has ended.;
+    BIFURCATE[NULL, NULL] U;     // revive U to break out (one pass)
 }
 
-print and yet, the program continues.;
+PRINT and yet, the program continues.;
 THIS.DIE();

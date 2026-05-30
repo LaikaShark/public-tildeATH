@@ -9,18 +9,22 @@
 //   # square / big = 99999999999999999999
 //   # big - (big-1) = 1
 
-importf <add> as ADD;
-importf <sub> as SUB;
-importf <mul> as MUL;
-importf <div> as DIV;
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mul> AS MUL;
+IMPORTF <div> AS DIV;
 
-import number 99999999999999999999 as BIG;
-import number 99999999999999999998 as BIGM1;
-import number 1 as ONE;
+IMPORT NUMBER 99999999999999999999 AS BIG;
+IMPORT NUMBER 99999999999999999998 AS BIGM1;
+IMPORT NUMBER 1 AS ONE;
 
-ADD [BIG, ONE] PLUS;   print 99999999999999999999 + 1 = $PLUS;
-MUL [BIG, BIG] SQ;     print square = $SQ;
-DIV [SQ, BIG] BACK;    print square / big = $BACK;
-SUB [BIG, BIGM1] DIFF; print big - (big-1) = $DIFF;
+ADD[BIG, ONE] PLUS;
+PRINT 99999999999999999999 + 1 = $PLUS;
+MUL[BIG, BIG] SQ;
+PRINT square = $SQ;
+DIV[SQ, BIG] BACK;
+PRINT square / big = $BACK;
+SUB[BIG, BIGM1] DIFF;
+PRINT big - (big-1) = $DIFF;
 
 THIS.DIE();

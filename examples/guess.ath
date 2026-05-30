@@ -7,31 +7,38 @@
 //   athc examples/guess.ath -o guess
 //   ATH_SEED=1 ./guess     # then type guesses; e.g. 50, 25, 37, ...
 
-importf <random> as RANDOM;
-importf <parse>  as PARSE;
-importf <lt>     as LT;
-importf <gt>     as GT;
+IMPORTF <random> AS RANDOM;
+IMPORTF <parse> AS PARSE;
+IMPORTF <lt> AS LT;
+IMPORTF <gt> AS GT;
 
-import number 1   as LO;
-import number 101 as HI;            // exclusive → 1..100
-RANDOM [LO, HI] SECRET;
+IMPORT NUMBER 1 AS LO;
+IMPORT NUMBER 101 AS HI;            // exclusive → 1..100
+RANDOM[LO, HI] SECRET;
 
-print I am thinking of a number from 1 to 100.;
+PRINT I am thinking of a number from 1 to 100.;
 
-import playing PLAYING;             // alive = game in progress
-~ATH(PLAYING) {
-    print your guess?;
+IMPORT PLAYING PLAYING;             // alive = game in progress
+~ATH(PLAYING)
+{
+    PRINT your guess?;
     INPUT G;
-    PARSE [G, NULL] GUESS;
-    LT [GUESS, SECRET] LOW;
-    BRANCH(LOW) {
-        print too low;
-    } ELSE {
-        GT [GUESS, SECRET] HIGH;
-        BRANCH(HIGH) {
-            print too high;
-        } ELSE {
-            print correct!;
+    PARSE[G, NULL] GUESS;
+    LT[GUESS, SECRET] LOW;
+    BRANCH(LOW)
+    {
+        PRINT too low;
+    }
+    ELSE
+    {
+        GT[GUESS, SECRET] HIGH;
+        BRANCH(HIGH)
+        {
+            PRINT too high;
+        }
+        ELSE
+        {
+            PRINT correct!;
             PLAYING.DIE();          // win → end the loop
         }
     }

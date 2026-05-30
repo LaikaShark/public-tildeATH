@@ -9,38 +9,40 @@
 //   # expected:
 //   # 123456789 ^ 20 mod 98765432109876543211 = 82630247944240163692
 
-importf <int_to_bignum> as TO_BIG;
-importf <mul> as MUL;
-importf <mod> as MOD;
-importf <div> as DIV;
-importf <gt>  as GT;
-importf <eq>  as EQ;
+IMPORTF <int_to_bignum> AS TO_BIG;
+IMPORTF <mul> AS MUL;
+IMPORTF <mod> AS MOD;
+IMPORTF <div> AS DIV;
+IMPORTF <gt> AS GT;
+IMPORTF <eq> AS EQ;
 
-import number 123456789 as BASE;
-import number 20 as EXP;
-import number 98765432109876543211 as M;     // bignum modulus
-import number 0 as ZERO;
-import number 1 as ONE;
-import number 2 as TWO;
+IMPORT NUMBER 123456789 AS BASE;
+IMPORT NUMBER 20 AS EXP;
+IMPORT NUMBER 98765432109876543211 AS M;     // bignum modulus
+IMPORT NUMBER 0 AS ZERO;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 2 AS TWO;
 
-import number 1 as RESULT;
-TO_BIG [RESULT, RESULT] RESULT;               // RESULT := sticky bignum 1
-MOD [BASE, M] B;                              // B := base mod m (bignum)
+IMPORT NUMBER 1 AS RESULT;
+TO_BIG[RESULT, RESULT] RESULT;               // RESULT := sticky bignum 1
+MOD[BASE, M] B;                              // B := base mod m (bignum)
 
-import number 20 as E;                        // working copy of the exponent
-GT [E, ZERO] GOING;
-~ATH(GOING) {
-    MOD [E, TWO] BIT;
-    EQ [BIT, ONE] ODD;
-    BRANCH(ODD) {
-        MUL [RESULT, B] T;
-        MOD [T, M] RESULT;                    // RESULT := RESULT*B mod m
-    } ELSE { }
-    MUL [B, B] BB;
-    MOD [BB, M] B;                            // B := B*B mod m
-    DIV [E, TWO] E;                           // E := E / 2
-    GT [E, ZERO] GOING;
+IMPORT NUMBER 20 AS E;                        // working copy of the exponent
+GT[E, ZERO] GOING;
+~ATH(GOING)
+{
+    MOD[E, TWO] BIT;
+    EQ[BIT, ONE] ODD;
+    BRANCH(ODD)
+    {
+        MUL[RESULT, B] T;
+        MOD[T, M] RESULT;                    // RESULT := RESULT*B mod m
+    }
+    MUL[B, B] BB;
+    MOD[BB, M] B;                            // B := B*B mod m
+    DIV[E, TWO] E;                           // E := E / 2
+    GT[E, ZERO] GOING;
 }
 
-print $BASE ^ $EXP mod $M = $RESULT;
+PRINT $BASE ^ $EXP mod $M = $RESULT;
 THIS.DIE();

@@ -1,347 +1,546 @@
-// Maze generator + solver. A W*H grid of cells is generated with the
-// binary-tree algorithm (each cell carves a passage NORTH or EAST, chosen by
-// an in-language LCG so the output is deterministic — no RNG seed needed), then
+// maze generator + solver. a W*H grid of cells is generated with the
+// binary-tree algorithm (each cell carves a passage north or east, chosen by
+// an in-language LCG so the output is deterministic (no rng seed), then
 // solved from the top-left to the bottom-right with an iterative depth-first
-// search whose stack *is* the current path (a perfect maze has exactly one
-// route, so DFS finds it). There are no 2-D arrays: the grid is one string of
+// search whose stack is the current path (a perfect maze has exactly one
+// route, so dfs finds it). there are no 2-D arrays: the grid is one string of
 // cells, each char encoding two passage bits (north<<1 | east); visited-cells
 // and the solution path are int bitmasks (shl/bor/band), so nothing mutates a
-// string in place. The maze prints once plain, then again with the path as '*'.
+// string in place. the maze prints once plain, then again with the path as '*'.
 //
 //   athc examples/maze.ath -o maze
 //   ./maze
 //
-// Cells are 8 wide by 6 tall (48 <= 63 bits, so the masks stay in an int64).
+// cells are 8 wide by 6 tall (48 <= 63 bits, so the masks stay in an int64).
 
-importf <add>    as ADD;
-importf <sub>    as SUB;
-importf <mul>    as MUL;
-importf <div>    as DIV;
-importf <mod>    as MOD;
-importf <lt>     as LT;
-importf <gt>     as GT;
-importf <eq>     as EQ;
-importf <ord>    as ORD;
-importf <chr>    as CHR;
-importf <shl>    as SHL;
-importf <bor>    as BOR;
-importf <band>   as BAND;
-importf <concat> as CONCAT;
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mul> AS MUL;
+IMPORTF <div> AS DIV;
+IMPORTF <mod> AS MOD;
+IMPORTF <lt> AS LT;
+IMPORTF <gt> AS GT;
+IMPORTF <eq> AS EQ;
+IMPORTF <ord> AS ORD;
+IMPORTF <chr> AS CHR;
+IMPORTF <shl> AS SHL;
+IMPORTF <bor> AS BOR;
+IMPORTF <band> AS BAND;
+IMPORTF <concat> AS CONCAT;
 
-import number 0 as ZERO;
-import number 1 as ONE;
-import number 2 as TWO;
-import number 8 as W;
-import number 6 as H;
-import number 48 as N;        // W*H cells
-import number 7 as WM1;       // W-1
-import number 5 as HM1;       // H-1
-import number 47 as GOAL;     // N-1, bottom-right cell
-import number 48 as C48;      // '0', the digit base for cell encoding
+IMPORT NUMBER 0 AS ZERO;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 2 AS TWO;
+IMPORT NUMBER 8 AS W;
+IMPORT NUMBER 6 AS H;
+IMPORT NUMBER 48 AS N; // W*H cells
+IMPORT NUMBER 7 AS WM1; // W-1
+IMPORT NUMBER 5 AS HM1; // H-1
+IMPORT NUMBER 47 AS GOAL; // N-1, bottom-right cell
+IMPORT NUMBER 48 AS C48; // '0', the digit base for cell encoding
 
-text "" as MT;
-text "#" as HS;
-text " " as SPC;
-text "*" as STAR;
+TEXT "" AS MT;
+TEXT "#" AS HS;
+TEXT " " AS SPC;
+TEXT "*" AS STAR;
 
-// --- LCG state and constants (glibc rand parameters) -----------------------
-import number 1103515245 as LCGA;
-import number 12345      as LCGC;
-import number 2147483648 as LCGM;     // 2^31
-import number 65536      as SH16;
-import number 7          as X;        // seed
+// LCG state and constants (glibc rand parameters)
+IMPORT NUMBER 1103515245 AS LCGA;
+IMPORT NUMBER 12345 AS LCGC;
+IMPORT NUMBER 2147483648 AS LCGM; // 2^31
+IMPORT NUMBER 65536 AS SH16;
+IMPORT NUMBER 7 AS X; // seed
 
 // --- generate the maze into CELLS ------------------------------------------
-// Each cell's char is chr(48 + north*2 + east).
-text "" as CELLS;
-import number 0 as K;
-LT [K, N] GENL;
-~ATH(GENL) {
-    DIV [K, W] r;  MOD [K, W] c;
-    ADD [ZERO, ZERO] east;  ADD [ZERO, ZERO] north;
-    EQ [r, ZERO] top;
-    LT [c, WM1] notright;
-    BRANCH(top) {
+// each cell's char is chr(48 + north*2 + east).
+TEXT "" AS CELLS;
+IMPORT NUMBER 0 AS K;
+LT[K, N] GENL;
+~ATH(GENL)
+{
+    DIV[K, W] R;
+    MOD[K, W] C;
+    ADD[ZERO, ZERO] EAST;
+    ADD[ZERO, ZERO] NORTH;
+    EQ[R, ZERO] TOP;
+    LT[C, WM1] NOTRIGHT;
+    BRANCH(TOP)
+    {
         // top row: carve east unless we are the rightmost cell
-        BRANCH(notright) { ADD [ONE, ZERO] east; } ELSE { }
-    } ELSE {
-        BRANCH(notright) {
-            // interior cell: flip an LCG coin -> north or east
-            MUL [LCGA, X] t1;  ADD [t1, LCGC] t2;  MOD [t2, LCGM] X;
-            DIV [X, SH16] hd;  MOD [hd, TWO] coin;
-            EQ [coin, ZERO] cn;
-            BRANCH(cn) { ADD [ONE, ZERO] north; } ELSE { ADD [ONE, ZERO] east; }
-        } ELSE {
-            // rightmost column (not top): carve north
-            ADD [ONE, ZERO] north;
+        BRANCH(NOTRIGHT)
+        {
+            ADD[ONE, ZERO] EAST;
         }
     }
-    MUL [north, TWO] nn;  ADD [nn, east] val;
-    ADD [val, C48] vco;  CHR [vco, NULL] vch;
-    CONCAT [CELLS, vch] CELLS;
-    ADD [K, ONE] K;
-    LT [K, N] GENL;
+    ELSE
+    {
+        BRANCH(NOTRIGHT)
+        {
+            // interior cell: flip an LCG coin -> north or east
+            MUL[LCGA, X] T1;
+            ADD[T1, LCGC] T2;
+            MOD[T2, LCGM] X;
+            DIV[X, SH16] HD;
+            MOD[HD, TWO] COIN;
+            EQ[COIN, ZERO] CN;
+            BRANCH(CN)
+            {
+                ADD[ONE, ZERO] NORTH;
+            }
+            ELSE
+            {
+                ADD[ONE, ZERO] EAST;
+            }
+        }
+        ELSE
+        {
+            // rightmost column (not top): carve north
+            ADD[ONE, ZERO] NORTH;
+        }
+    }
+    MUL[NORTH, TWO] NN;
+    ADD[NN, EAST] VAL;
+    ADD[VAL, C48] VCO;
+    CHR[VCO, NULL] VCH;
+    CONCAT[CELLS, VCH] CELLS;
+    ADD[K, ONE] K;
+    LT[K, N] GENL;
 }
 
 // --- render (used twice; reads CELLS + the PATH bitmask) -------------------
-import number 0 as PATH;       // no path marked yet
+IMPORT NUMBER 0 AS PATH; // no path marked yet
 
-text "generated:" as HDR1;
-print $HDR1;
+TEXT "generated:" AS HDR1;
+PRINT $HDR1;
 
-import number 13 as DRMAX;     // 2H+1 display rows
-import number 17 as DCMAX;     // 2W+1 display cols
-import number 0 as DR;
-LT [DR, DRMAX] RR;
-~ATH(RR) {
-    text "" as LINE;
-    import number 0 as DC;
-    ADD [ZERO, ZERO] DC;
-    LT [DC, DCMAX] CIN;
-    ~ATH(CIN) {
-        MOD [DR, TWO] drodd;  MOD [DC, TWO] dcodd;
-        CONCAT [HS, MT] CHV;                       // default wall '#'
-        EQ [drodd, ZERO] evenrow;
-        BRANCH(evenrow) {
-            EQ [dcodd, ZERO] evencol;
-            BRANCH(evencol) { } ELSE {
-                // horizontal wall slot above cell row r2, column c
-                DIV [DR, TWO] r2;  SUB [DC, ONE] dcm;  DIV [dcm, TWO] c;
-                EQ [r2, ZERO] r2top;  EQ [r2, H] r2bot;
-                ADD [ZERO, ZERO] isb;
-                BRANCH(r2top) { ADD [ONE, ZERO] isb; } ELSE { }
-                BRANCH(r2bot) { ADD [ONE, ZERO] isb; } ELSE { }
-                EQ [isb, ZERO] interiorH;
-                BRANCH(interiorH) {
-                    MUL [r2, W] base;  ADD [base, c] k;
-                    CELLS[k] cc;  ORD [cc, NULL] co;  SUB [co, C48] cv;
-                    DIV [cv, TWO] cnorth;
-                    EQ [cnorth, ONE] openN;
-                    BRANCH(openN) { CONCAT [SPC, MT] CHV; } ELSE { }
-                } ELSE { }
+IMPORT NUMBER 13 AS DRMAX; // 2H+1 display rows
+IMPORT NUMBER 17 AS DCMAX; // 2W+1 display cols
+IMPORT NUMBER 0 AS DR;
+LT[DR, DRMAX] RR;
+~ATH(RR)
+{
+    TEXT "" AS LINE;
+    ADD[ZERO, ZERO] DC;
+    LT[DC, DCMAX] CIN;
+    ~ATH(CIN)
+    {
+        MOD[DR, TWO] DRODD;
+        MOD[DC, TWO] DCODD;
+        CONCAT[HS, MT] CHV; // default wall '#'
+        EQ[DRODD, ZERO] EVENROW;
+        BRANCH(EVENROW)
+        {
+            EQ[DCODD, ZERO] EVENCOL;
+            BRANCH(EVENCOL)
+            {
             }
-        } ELSE {
-            EQ [dcodd, ZERO] evencol2;
-            BRANCH(evencol2) {
-                // vertical wall slot left of cell column c2, row r
-                DIV [DC, TWO] c2;  SUB [DR, ONE] drm;  DIV [drm, TWO] r;
-                EQ [c2, ZERO] c2l;  EQ [c2, W] c2r;
-                ADD [ZERO, ZERO] isb2;
-                BRANCH(c2l) { ADD [ONE, ZERO] isb2; } ELSE { }
-                BRANCH(c2r) { ADD [ONE, ZERO] isb2; } ELSE { }
-                EQ [isb2, ZERO] interiorV;
-                BRANCH(interiorV) {
-                    SUB [c2, ONE] cl;  MUL [r, W] base2;  ADD [base2, cl] k2;
-                    CELLS[k2] cc2;  ORD [cc2, NULL] co2;  SUB [co2, C48] cv2;
-                    MOD [cv2, TWO] ceast;
-                    EQ [ceast, ONE] openE;
-                    BRANCH(openE) { CONCAT [SPC, MT] CHV; } ELSE { }
-                } ELSE { }
-            } ELSE {
-                // cell center: a space, or '*' if this cell is on the path
-                SUB [DR, ONE] drm2;  DIV [drm2, TWO] rc;
-                SUB [DC, ONE] dcm2;  DIV [dcm2, TWO] cc3;
-                MUL [rc, W] baseC;  ADD [baseC, cc3] kc;
-                CONCAT [SPC, MT] CHV;
-                SHL [ONE, kc] mk;  BAND [PATH, mk] pk;
-                GT [pk, ZERO] onpath;
-                BRANCH(onpath) { CONCAT [STAR, MT] CHV; } ELSE { }
+            ELSE
+            {
+                // horizontal wall slot above cell row R2, column C
+                DIV[DR, TWO] R2;
+                SUB[DC, ONE] DCM;
+                DIV[DCM, TWO] C;
+                EQ[R2, ZERO] R2TOP;
+                EQ[R2, H] R2BOT;
+                ADD[ZERO, ZERO] ISB;
+                BRANCH(R2TOP)
+                {
+                    ADD[ONE, ZERO] ISB;
+                }
+                BRANCH(R2BOT)
+                {
+                    ADD[ONE, ZERO] ISB;
+                }
+                EQ[ISB, ZERO] INTERIORH;
+                BRANCH(INTERIORH)
+                {
+                    MUL[R2, W] BASE;
+                    ADD[BASE, C] KH;
+                    CELLS[KH] CC;
+                    ORD[CC, NULL] CO;
+                    SUB[CO, C48] CV;
+                    DIV[CV, TWO] CNORTH;
+                    EQ[CNORTH, ONE] OPENN;
+                    BRANCH(OPENN)
+                    {
+                        CONCAT[SPC, MT] CHV;
+                    }
+                }
             }
         }
-        CONCAT [LINE, CHV] LINE;
-        ADD [DC, ONE] DC;
-        LT [DC, DCMAX] CIN;
+        ELSE
+        {
+            EQ[DCODD, ZERO] EVENCOL2;
+            BRANCH(EVENCOL2)
+            {
+                // vertical wall slot left of cell column C2, row R
+                DIV[DC, TWO] C2;
+                SUB[DR, ONE] DRM;
+                DIV[DRM, TWO] R;
+                EQ[C2, ZERO] C2L;
+                EQ[C2, W] C2R;
+                ADD[ZERO, ZERO] ISB2;
+                BRANCH(C2L)
+                {
+                    ADD[ONE, ZERO] ISB2;
+                }
+                BRANCH(C2R)
+                {
+                    ADD[ONE, ZERO] ISB2;
+                }
+                EQ[ISB2, ZERO] INTERIORV;
+                BRANCH(INTERIORV)
+                {
+                    SUB[C2, ONE] CL;
+                    MUL[R, W] BASE2;
+                    ADD[BASE2, CL] K2;
+                    CELLS[K2] CC2;
+                    ORD[CC2, NULL] CO2;
+                    SUB[CO2, C48] CV2;
+                    MOD[CV2, TWO] CEAST;
+                    EQ[CEAST, ONE] OPENE;
+                    BRANCH(OPENE)
+                    {
+                        CONCAT[SPC, MT] CHV;
+                    }
+                }
+            }
+            ELSE
+            {
+                // cell center: a space, or '*' if this cell is on the path
+                SUB[DR, ONE] DRM2;
+                DIV[DRM2, TWO] RC;
+                SUB[DC, ONE] DCM2;
+                DIV[DCM2, TWO] CC3;
+                MUL[RC, W] BASEC;
+                ADD[BASEC, CC3] KC;
+                CONCAT[SPC, MT] CHV;
+                SHL[ONE, KC] MK;
+                BAND[PATH, MK] PK;
+                GT[PK, ZERO] ONPATH;
+                BRANCH(ONPATH)
+                {
+                    CONCAT[STAR, MT] CHV;
+                }
+            }
+        }
+        CONCAT[LINE, CHV] LINE;
+        ADD[DC, ONE] DC;
+        LT[DC, DCMAX] CIN;
     }
-    print $LINE;
-    ADD [DR, ONE] DR;
-    LT [DR, DRMAX] RR;
+    PRINT $LINE;
+    ADD[DR, ONE] DR;
+    LT[DR, DRMAX] RR;
 }
 
 // --- solve: iterative DFS, the stack holds the current root->node path ------
-import number 0 as VIS;        // visited bitmask
-import number 0 as SP;         // stack depth
-import number 0 as FOUND;
-BIFURCATE NULL[jx0, STK];
+IMPORT NUMBER 0 AS VIS; // visited bitmask
+IMPORT NUMBER 0 AS SP; // stack depth
+IMPORT NUMBER 0 AS FOUND;
+BIFURCATE NULL[JX0, STK];
 // cell indices ride the stack as chr(index+1) atoms: ord wants a character
 // *atom* (what S[I] yields), not the length-1 string chr() returns, so each
 // pushed char is subscripted to an atom first; the +1 keeps cell 0 off NUL.
-CHR [ONE, NULL] s0s;  s0s[ZERO] s0;  BIFURCATE [s0, STK] STK;   // push cell 0
-ADD [ONE, ZERO] SP;
-SHL [ONE, ZERO] vm0;  BOR [ZERO, vm0] VIS;       // mark cell 0 visited
+CHR[ONE, NULL] S0S;
+S0S[ZERO] S0;
+BIFURCATE[S0, STK] STK; // push cell 0
+ADD[ONE, ZERO] SP;
+SHL[ONE, ZERO] VM0;
+BOR[ZERO, VM0] VIS; // mark cell 0 visited
 
-LT [ZERO, SP] GO;
-~ATH(GO) {
-    BIFURCATE STK[TOPC, RST];  ORD [TOPC, NULL] CURENC;  SUB [CURENC, ONE] CUR;
-    EQ [CUR, GOAL] atgoal;
-    BRANCH(atgoal) { ADD [ONE, ZERO] FOUND; } ELSE {
-        DIV [CUR, W] r;  MOD [CUR, W] c;
-        CELLS[CUR] cc;  ORD [cc, NULL] co;  SUB [co, C48] cv;
-        MOD [cv, TWO] east;  DIV [cv, TWO] north;
-        ADD [ZERO, ZERO] MOVED;
+LT[ZERO, SP] GO;
+~ATH(GO)
+{
+    BIFURCATE STK[TOPC, RST];
+    ORD[TOPC, NULL] CURENC;
+    SUB[CURENC, ONE] CUR;
+    EQ[CUR, GOAL] ATGOAL;
+    BRANCH(ATGOAL)
+    {
+        ADD[ONE, ZERO] FOUND;
+    }
+    ELSE
+    {
+        DIV[CUR, W] R;
+        MOD[CUR, W] C;
+        CELLS[CUR] CC;
+        ORD[CC, NULL] CO;
+        SUB[CO, C48] CV;
+        MOD[CV, TWO] EAST;
+        DIV[CV, TWO] NORTH;
+        ADD[ZERO, ZERO] MOVED;
 
         // East
-        EQ [MOVED, ZERO] tE;
-        BRANCH(tE) {
-            LT [c, WM1] okE;
-            BRANCH(okE) {
-                EQ [east, ONE] opE;
-                BRANCH(opE) {
-                    ADD [CUR, ONE] nb;
-                    SHL [ONE, nb] nm;  BAND [VIS, nm] vb;  EQ [vb, ZERO] freshE;
-                    BRANCH(freshE) {
-                        BOR [VIS, nm] VIS;
-                        ADD [nb, ONE] nbe;  CHR [nbe, NULL] nchs;  nchs[ZERO] nch;  BIFURCATE [nch, STK] STK;
-                        ADD [SP, ONE] SP;  ADD [ONE, ZERO] MOVED;
-                    } ELSE { }
-                } ELSE { }
-            } ELSE { }
-        } ELSE { }
+        EQ[MOVED, ZERO] TE;
+        BRANCH(TE)
+        {
+            LT[C, WM1] OKE;
+            BRANCH(OKE)
+            {
+                EQ[EAST, ONE] OPE;
+                BRANCH(OPE)
+                {
+                    ADD[CUR, ONE] NB;
+                    SHL[ONE, NB] NM;
+                    BAND[VIS, NM] VB;
+                    EQ[VB, ZERO] FRESHE;
+                    BRANCH(FRESHE)
+                    {
+                        BOR[VIS, NM] VIS;
+                        ADD[NB, ONE] NBE;
+                        CHR[NBE, NULL] NCHS;
+                        NCHS[ZERO] NCH;
+                        BIFURCATE[NCH, STK] STK;
+                        ADD[SP, ONE] SP;
+                        ADD[ONE, ZERO] MOVED;
+                    }
+                }
+            }
+        }
 
         // West (open iff the west cell's east bit is set)
-        EQ [MOVED, ZERO] tW;
-        BRANCH(tW) {
-            GT [c, ZERO] okW;
-            BRANCH(okW) {
-                SUB [CUR, ONE] wnb;
-                CELLS[wnb] wcc;  ORD [wcc, NULL] wco;  SUB [wco, C48] wcv;
-                MOD [wcv, TWO] weast;
-                EQ [weast, ONE] opW;
-                BRANCH(opW) {
-                    SHL [ONE, wnb] wm;  BAND [VIS, wm] wvb;  EQ [wvb, ZERO] freshW;
-                    BRANCH(freshW) {
-                        BOR [VIS, wm] VIS;
-                        ADD [wnb, ONE] wnbe;  CHR [wnbe, NULL] wchs;  wchs[ZERO] wch;  BIFURCATE [wch, STK] STK;
-                        ADD [SP, ONE] SP;  ADD [ONE, ZERO] MOVED;
-                    } ELSE { }
-                } ELSE { }
-            } ELSE { }
-        } ELSE { }
+        EQ[MOVED, ZERO] TW;
+        BRANCH(TW)
+        {
+            GT[C, ZERO] OKW;
+            BRANCH(OKW)
+            {
+                SUB[CUR, ONE] WNB;
+                CELLS[WNB] WCC;
+                ORD[WCC, NULL] WCO;
+                SUB[WCO, C48] WCV;
+                MOD[WCV, TWO] WEAST;
+                EQ[WEAST, ONE] OPW;
+                BRANCH(OPW)
+                {
+                    SHL[ONE, WNB] WM;
+                    BAND[VIS, WM] WVB;
+                    EQ[WVB, ZERO] FRESHW;
+                    BRANCH(FRESHW)
+                    {
+                        BOR[VIS, WM] VIS;
+                        ADD[WNB, ONE] WNBE;
+                        CHR[WNBE, NULL] WCHS;
+                        WCHS[ZERO] WCH;
+                        BIFURCATE[WCH, STK] STK;
+                        ADD[SP, ONE] SP;
+                        ADD[ONE, ZERO] MOVED;
+                    }
+                }
+            }
+        }
 
         // North (open iff this cell's north bit is set)
-        EQ [MOVED, ZERO] tN;
-        BRANCH(tN) {
-            GT [r, ZERO] okN;
-            BRANCH(okN) {
-                EQ [north, ONE] opN;
-                BRANCH(opN) {
-                    SUB [CUR, W] nnb;
-                    SHL [ONE, nnb] nmm;  BAND [VIS, nmm] nvb;  EQ [nvb, ZERO] freshN;
-                    BRANCH(freshN) {
-                        BOR [VIS, nmm] VIS;
-                        ADD [nnb, ONE] nnbe;  CHR [nnbe, NULL] nch2s;  nch2s[ZERO] nch2;  BIFURCATE [nch2, STK] STK;
-                        ADD [SP, ONE] SP;  ADD [ONE, ZERO] MOVED;
-                    } ELSE { }
-                } ELSE { }
-            } ELSE { }
-        } ELSE { }
+        EQ[MOVED, ZERO] TN;
+        BRANCH(TN)
+        {
+            GT[R, ZERO] OKN;
+            BRANCH(OKN)
+            {
+                EQ[NORTH, ONE] OPN;
+                BRANCH(OPN)
+                {
+                    SUB[CUR, W] NNB;
+                    SHL[ONE, NNB] NMM;
+                    BAND[VIS, NMM] NVB;
+                    EQ[NVB, ZERO] FRESHN;
+                    BRANCH(FRESHN)
+                    {
+                        BOR[VIS, NMM] VIS;
+                        ADD[NNB, ONE] NNBE;
+                        CHR[NNBE, NULL] NCH2S;
+                        NCH2S[ZERO] NCH2;
+                        BIFURCATE[NCH2, STK] STK;
+                        ADD[SP, ONE] SP;
+                        ADD[ONE, ZERO] MOVED;
+                    }
+                }
+            }
+        }
 
         // South (open iff the south cell's north bit is set)
-        EQ [MOVED, ZERO] tS;
-        BRANCH(tS) {
-            LT [r, HM1] okS;
-            BRANCH(okS) {
-                ADD [CUR, W] snb;
-                CELLS[snb] scc;  ORD [scc, NULL] sco;  SUB [sco, C48] scv;
-                DIV [scv, TWO] snorth;
-                EQ [snorth, ONE] opS;
-                BRANCH(opS) {
-                    SHL [ONE, snb] sm;  BAND [VIS, sm] svb;  EQ [svb, ZERO] freshS;
-                    BRANCH(freshS) {
-                        BOR [VIS, sm] VIS;
-                        ADD [snb, ONE] snbe;  CHR [snbe, NULL] schs;  schs[ZERO] sch;  BIFURCATE [sch, STK] STK;
-                        ADD [SP, ONE] SP;  ADD [ONE, ZERO] MOVED;
-                    } ELSE { }
-                } ELSE { }
-            } ELSE { }
-        } ELSE { }
+        EQ[MOVED, ZERO] TS;
+        BRANCH(TS)
+        {
+            LT[R, HM1] OKS;
+            BRANCH(OKS)
+            {
+                ADD[CUR, W] SNB;
+                CELLS[SNB] SCC;
+                ORD[SCC, NULL] SCO;
+                SUB[SCO, C48] SCV;
+                DIV[SCV, TWO] SNORTH;
+                EQ[SNORTH, ONE] OPS;
+                BRANCH(OPS)
+                {
+                    SHL[ONE, SNB] SM;
+                    BAND[VIS, SM] SVB;
+                    EQ[SVB, ZERO] FRESHS;
+                    BRANCH(FRESHS)
+                    {
+                        BOR[VIS, SM] VIS;
+                        ADD[SNB, ONE] SNBE;
+                        CHR[SNBE, NULL] SCHS;
+                        SCHS[ZERO] SCH;
+                        BIFURCATE[SCH, STK] STK;
+                        ADD[SP, ONE] SP;
+                        ADD[ONE, ZERO] MOVED;
+                    }
+                }
+            }
+        }
 
         // dead end: backtrack
-        EQ [MOVED, ZERO] deadend;
-        BRANCH(deadend) {
-            BIFURCATE STK[PTC, PRST];  CLONE PRST as STK;  SUB [SP, ONE] SP;
-        } ELSE { }
+        EQ[MOVED, ZERO] DEADEND;
+        BRANCH(DEADEND)
+        {
+            BIFURCATE STK[PTC, PRST];
+            CLONE PRST AS STK;
+            SUB[SP, ONE] SP;
+        }
     }
 
     // continue while not found and the stack is non-empty
-    ADD [SP, ZERO] CONT;
-    GT [FOUND, ZERO] isf;
-    BRANCH(isf) { ADD [ZERO, ZERO] CONT; } ELSE { }
-    LT [ZERO, CONT] GO;
+    ADD[SP, ZERO] CONT;
+    GT[FOUND, ZERO] ISF;
+    BRANCH(ISF)
+    {
+        ADD[ZERO, ZERO] CONT;
+    }
+    LT[ZERO, CONT] GO;
 }
 
 // --- mark the path: consume the stack into the PATH bitmask -----------------
-LT [ZERO, SP] MGO;
-~ATH(MGO) {
-    BIFURCATE STK[MC, MR];  ORD [MC, NULL] mienc;  SUB [mienc, ONE] mi;
-    SHL [ONE, mi] mmk;  BOR [PATH, mmk] PATH;
-    CLONE MR as STK;  SUB [SP, ONE] SP;
-    LT [ZERO, SP] MGO;
+LT[ZERO, SP] MGO;
+~ATH(MGO)
+{
+    BIFURCATE STK[MC, MR];
+    ORD[MC, NULL] MIENC;
+    SUB[MIENC, ONE] MI;
+    SHL[ONE, MI] MMK;
+    BOR[PATH, MMK] PATH;
+    CLONE MR AS STK;
+    SUB[SP, ONE] SP;
+    LT[ZERO, SP] MGO;
 }
 
 // --- render again, now with the path marked --------------------------------
-text "solved:" as HDR2;
-print $HDR2;
+TEXT "solved:" AS HDR2;
+PRINT $HDR2;
 
-ADD [ZERO, ZERO] DR;
-LT [DR, DRMAX] RR2;
-~ATH(RR2) {
-    text "" as LINE2;
-    ADD [ZERO, ZERO] DC;
-    LT [DC, DCMAX] CIN2;
-    ~ATH(CIN2) {
-        MOD [DR, TWO] drodd;  MOD [DC, TWO] dcodd;
-        CONCAT [HS, MT] CHV;
-        EQ [drodd, ZERO] evenrow;
-        BRANCH(evenrow) {
-            EQ [dcodd, ZERO] evencol;
-            BRANCH(evencol) { } ELSE {
-                DIV [DR, TWO] r2;  SUB [DC, ONE] dcm;  DIV [dcm, TWO] c;
-                EQ [r2, ZERO] r2top;  EQ [r2, H] r2bot;
-                ADD [ZERO, ZERO] isb;
-                BRANCH(r2top) { ADD [ONE, ZERO] isb; } ELSE { }
-                BRANCH(r2bot) { ADD [ONE, ZERO] isb; } ELSE { }
-                EQ [isb, ZERO] interiorH;
-                BRANCH(interiorH) {
-                    MUL [r2, W] base;  ADD [base, c] k;
-                    CELLS[k] cc;  ORD [cc, NULL] co;  SUB [co, C48] cv;
-                    DIV [cv, TWO] cnorth;
-                    EQ [cnorth, ONE] openN;
-                    BRANCH(openN) { CONCAT [SPC, MT] CHV; } ELSE { }
-                } ELSE { }
+ADD[ZERO, ZERO] DR;
+LT[DR, DRMAX] RR2;
+~ATH(RR2)
+{
+    TEXT "" AS LINE2;
+    ADD[ZERO, ZERO] DC;
+    LT[DC, DCMAX] CIN2;
+    ~ATH(CIN2)
+    {
+        MOD[DR, TWO] DRODD;
+        MOD[DC, TWO] DCODD;
+        CONCAT[HS, MT] CHV;
+        EQ[DRODD, ZERO] EVENROW;
+        BRANCH(EVENROW)
+        {
+            EQ[DCODD, ZERO] EVENCOL;
+            BRANCH(EVENCOL)
+            {
             }
-        } ELSE {
-            EQ [dcodd, ZERO] evencol2;
-            BRANCH(evencol2) {
-                DIV [DC, TWO] c2;  SUB [DR, ONE] drm;  DIV [drm, TWO] r;
-                EQ [c2, ZERO] c2l;  EQ [c2, W] c2r;
-                ADD [ZERO, ZERO] isb2;
-                BRANCH(c2l) { ADD [ONE, ZERO] isb2; } ELSE { }
-                BRANCH(c2r) { ADD [ONE, ZERO] isb2; } ELSE { }
-                EQ [isb2, ZERO] interiorV;
-                BRANCH(interiorV) {
-                    SUB [c2, ONE] cl;  MUL [r, W] base2;  ADD [base2, cl] k2;
-                    CELLS[k2] cc2;  ORD [cc2, NULL] co2;  SUB [co2, C48] cv2;
-                    MOD [cv2, TWO] ceast;
-                    EQ [ceast, ONE] openE;
-                    BRANCH(openE) { CONCAT [SPC, MT] CHV; } ELSE { }
-                } ELSE { }
-            } ELSE {
-                SUB [DR, ONE] drm2;  DIV [drm2, TWO] rc;
-                SUB [DC, ONE] dcm2;  DIV [dcm2, TWO] cc3;
-                MUL [rc, W] baseC;  ADD [baseC, cc3] kc;
-                CONCAT [SPC, MT] CHV;
-                SHL [ONE, kc] mk;  BAND [PATH, mk] pk;
-                GT [pk, ZERO] onpath;
-                BRANCH(onpath) { CONCAT [STAR, MT] CHV; } ELSE { }
+            ELSE
+            {
+                DIV[DR, TWO] R2;
+                SUB[DC, ONE] DCM;
+                DIV[DCM, TWO] C;
+                EQ[R2, ZERO] R2TOP;
+                EQ[R2, H] R2BOT;
+                ADD[ZERO, ZERO] ISB;
+                BRANCH(R2TOP)
+                {
+                    ADD[ONE, ZERO] ISB;
+                }
+                BRANCH(R2BOT)
+                {
+                    ADD[ONE, ZERO] ISB;
+                }
+                EQ[ISB, ZERO] INTERIORH;
+                BRANCH(INTERIORH)
+                {
+                    MUL[R2, W] BASE;
+                    ADD[BASE, C] KH;
+                    CELLS[KH] CC;
+                    ORD[CC, NULL] CO;
+                    SUB[CO, C48] CV;
+                    DIV[CV, TWO] CNORTH;
+                    EQ[CNORTH, ONE] OPENN;
+                    BRANCH(OPENN)
+                    {
+                        CONCAT[SPC, MT] CHV;
+                    }
+                }
             }
         }
-        CONCAT [LINE2, CHV] LINE2;
-        ADD [DC, ONE] DC;
-        LT [DC, DCMAX] CIN2;
+        ELSE
+        {
+            EQ[DCODD, ZERO] EVENCOL2;
+            BRANCH(EVENCOL2)
+            {
+                DIV[DC, TWO] C2;
+                SUB[DR, ONE] DRM;
+                DIV[DRM, TWO] R;
+                EQ[C2, ZERO] C2L;
+                EQ[C2, W] C2R;
+                ADD[ZERO, ZERO] ISB2;
+                BRANCH(C2L)
+                {
+                    ADD[ONE, ZERO] ISB2;
+                }
+                BRANCH(C2R)
+                {
+                    ADD[ONE, ZERO] ISB2;
+                }
+                EQ[ISB2, ZERO] INTERIORV;
+                BRANCH(INTERIORV)
+                {
+                    SUB[C2, ONE] CL;
+                    MUL[R, W] BASE2;
+                    ADD[BASE2, CL] K2;
+                    CELLS[K2] CC2;
+                    ORD[CC2, NULL] CO2;
+                    SUB[CO2, C48] CV2;
+                    MOD[CV2, TWO] CEAST;
+                    EQ[CEAST, ONE] OPENE;
+                    BRANCH(OPENE)
+                    {
+                        CONCAT[SPC, MT] CHV;
+                    }
+                }
+            }
+            ELSE
+            {
+                SUB[DR, ONE] DRM2;
+                DIV[DRM2, TWO] RC;
+                SUB[DC, ONE] DCM2;
+                DIV[DCM2, TWO] CC3;
+                MUL[RC, W] BASEC;
+                ADD[BASEC, CC3] KC;
+                CONCAT[SPC, MT] CHV;
+                SHL[ONE, KC] MK;
+                BAND[PATH, MK] PK;
+                GT[PK, ZERO] ONPATH;
+                BRANCH(ONPATH)
+                {
+                    CONCAT[STAR, MT] CHV;
+                }
+            }
+        }
+        CONCAT[LINE2, CHV] LINE2;
+        ADD[DC, ONE] DC;
+        LT[DC, DCMAX] CIN2;
     }
-    print $LINE2;
-    ADD [DR, ONE] DR;
-    LT [DR, DRMAX] RR2;
+    PRINT $LINE2;
+    ADD[DR, ONE] DR;
+    LT[DR, DRMAX] RR2;
 }
 
 THIS.DIE();

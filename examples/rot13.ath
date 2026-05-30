@@ -8,54 +8,67 @@
 //   # => Uryyb, Jbeyq!
 //   echo 'Uryyb, Jbeyq!' | ./rot13   # round-trips back
 
-importf <add>    as ADD;
-importf <sub>    as SUB;
-importf <mod>    as MOD;
-importf <lt>     as LT;
-importf <le>     as LE;
-importf <ge>     as GE;
-importf <and>    as AND;
-importf <length> as LENGTH;
-importf <ord>    as ORD;
-importf <chr>    as CHR;
-importf <concat> as CONCAT;
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mod> AS MOD;
+IMPORTF <lt> AS LT;
+IMPORTF <le> AS LE;
+IMPORTF <ge> AS GE;
+IMPORTF <and> AS AND;
+IMPORTF <length> AS LENGTH;
+IMPORTF <ord> AS ORD;
+IMPORTF <chr> AS CHR;
+IMPORTF <concat> AS CONCAT;
 
 INPUT LINE;
-text "" as OUT;
+TEXT "" AS OUT;
 
-import number 0   as I;
-import number 0   as ZERO;
-import number 1   as ONE;
-import number 13  as SHIFT;
-import number 26  as MOD26;
-import number 65  as UA;     // 'A'
-import number 90  as UZ;     // 'Z'
-import number 97  as LA;     // 'a'
-import number 122 as LZ;     // 'z'
+IMPORT NUMBER 0 AS I;
+IMPORT NUMBER 0 AS ZERO;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 13 AS SHIFT;
+IMPORT NUMBER 26 AS MOD26;
+IMPORT NUMBER 65 AS UA;     // 'A'
+IMPORT NUMBER 90 AS UZ;     // 'Z'
+IMPORT NUMBER 97 AS LA;     // 'a'
+IMPORT NUMBER 122 AS LZ;     // 'z'
 
-LENGTH [LINE, NULL] L;
-LT [I, L] GOING;
-~ATH(GOING) {
+LENGTH[LINE, NULL] L;
+LT[I, L] GOING;
+~ATH(GOING)
+{
     LINE[I] CH;
-    ORD [CH, NULL] C;
-    ADD [C, ZERO] NC;                 // NC := C (default: unchanged)
+    ORD[CH, NULL] C;
+    ADD[C, ZERO] NC;                 // NC := C (default: unchanged)
 
-    GE [C, UA] GU;  LE [C, UZ] LU;  AND [GU, LU] ISUP;
-    BRANCH(ISUP) {
-        SUB [C, UA] T;  ADD [T, SHIFT] T;  MOD [T, MOD26] T;  ADD [T, UA] NC;
-    } ELSE { }
+    GE[C, UA] GU;
+    LE[C, UZ] LU;
+    AND[GU, LU] ISUP;
+    BRANCH(ISUP)
+    {
+        SUB[C, UA] T;
+        ADD[T, SHIFT] T;
+        MOD[T, MOD26] T;
+        ADD[T, UA] NC;
+    }
 
-    GE [C, LA] GL;  LE [C, LZ] LL;  AND [GL, LL] ISLO;
-    BRANCH(ISLO) {
-        SUB [C, LA] T;  ADD [T, SHIFT] T;  MOD [T, MOD26] T;  ADD [T, LA] NC;
-    } ELSE { }
+    GE[C, LA] GL;
+    LE[C, LZ] LL;
+    AND[GL, LL] ISLO;
+    BRANCH(ISLO)
+    {
+        SUB[C, LA] T;
+        ADD[T, SHIFT] T;
+        MOD[T, MOD26] T;
+        ADD[T, LA] NC;
+    }
 
-    CHR [NC, NULL] NCH;
-    CONCAT [OUT, NCH] OUT;
+    CHR[NC, NULL] NCH;
+    CONCAT[OUT, NCH] OUT;
 
-    ADD [I, ONE] I;
-    LT [I, L] GOING;
+    ADD[I, ONE] I;
+    LT[I, L] GOING;
 }
 
-print $OUT;
+PRINT $OUT;
 THIS.DIE();

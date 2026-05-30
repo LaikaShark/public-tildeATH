@@ -13,105 +13,167 @@
 //   echo '2 * 3 + 4 * 5'  | ./calc      # => 26
 //   echo '100 / 5 / 2'    | ./calc      # => 10
 
-importf <add>    as ADD;
-importf <sub>    as SUB;
-importf <mul>    as MUL;
-importf <div>    as DIV;
-importf <lt>     as LT;
-importf <eq>     as EQ;
-importf <ge>     as GE;
-importf <or>     as OR;
-importf <length> as LENGTH;
-importf <split>  as SPLIT;
-importf <ord>    as ORD;
-importf <parse>  as PARSE;
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mul> AS MUL;
+IMPORTF <div> AS DIV;
+IMPORTF <lt> AS LT;
+IMPORTF <eq> AS EQ;
+IMPORTF <ge> AS GE;
+IMPORTF <or> AS OR;
+IMPORTF <length> AS LENGTH;
+IMPORTF <split> AS SPLIT;
+IMPORTF <ord> AS ORD;
+IMPORTF <parse> AS PARSE;
 
 INPUT EXPR;
-text " " as SPACE;
-SPLIT [EXPR, SPACE] TOKENS;
-LENGTH [TOKENS, NULL] NT;
+TEXT " " AS SPACE;
+SPLIT[EXPR, SPACE] TOKENS;
+LENGTH[TOKENS, NULL] NT;
 
-import number 0  as ZERO;
-import number 1  as ONE;
-import number 2  as TWO;
-import number 42 as STAR;     // *
-import number 43 as PLUS;     // +
-import number 45 as MINUS;    // -
-import number 47 as SLASH;    // /
+IMPORT NUMBER 0 AS ZERO;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 2 AS TWO;
+IMPORT NUMBER 42 AS STAR;     // *
+IMPORT NUMBER 43 AS PLUS;     // +
+IMPORT NUMBER 45 AS MINUS;    // -
+IMPORT NUMBER 47 AS SLASH;    // /
 
-BIFURCATE NULL[j1, VALUES];   // value stack := empty
-BIFURCATE NULL[j2, OPS];      // operator stack := empty
+BIFURCATE NULL[J1, VALUES];   // value stack := empty
+BIFURCATE NULL[J2, OPS];      // operator stack := empty
 
-import number 0 as I;
-LT [I, NT] TLOOP;
-~ATH(TLOOP) {
+IMPORT NUMBER 0 AS I;
+LT[I, NT] TLOOP;
+~ATH(TLOOP)
+{
     TOKENS[I] T;
-    T[ZERO] T0;  ORD [T0, NULL] C;        // first-char code
+    T[ZERO] T0;
+    ORD[T0, NULL] C;        // first-char code
 
-    EQ [C, STAR] e1;  EQ [C, PLUS] e2;  EQ [C, MINUS] e3;  EQ [C, SLASH] e4;
-    OR [e1, e2] o1;  OR [o1, e3] o2;  OR [o2, e4] ISOP;
+    EQ[C, STAR] E1;
+    EQ[C, PLUS] E2;
+    EQ[C, MINUS] E3;
+    EQ[C, SLASH] E4;
+    OR[E1, E2] O1;
+    OR[O1, E3] O2;
+    OR[O2, E4] ISOP;
 
-    BRANCH(ISOP) {
+    BRANCH(ISOP)
+    {
         // precedence of this operator: * / = 2, + - = 1
-        EQ [C, STAR] s1;  EQ [C, SLASH] s2;  OR [s1, s2] HI;
-        ADD [ONE, ZERO] PCUR;  BRANCH(HI) { ADD [TWO, ZERO] PCUR; } ELSE { }
+        EQ[C, STAR] S1;
+        EQ[C, SLASH] S2;
+        OR[S1, S2] HI;
+        ADD[ONE, ZERO] PCUR;
+        BRANCH(HI)
+        {
+            ADD[TWO, ZERO] PCUR;
+        }
 
         // drain operators whose precedence >= this one's. The loop runs while
         // OPS is non-empty (a clone is alive iff non-empty); inside, if the
         // top's precedence is too low we stop by killing the guard.
-        CLONE OPS as DRAINCHK;
-        ~ATH(DRAINCHK) {
-            CLONE OPS as PK;  BIFURCATE PK[PV, jp];      // peek top op code
-            EQ [PV, STAR] q1;  EQ [PV, SLASH] q2;  OR [q1, q2] QHI;
-            ADD [ONE, ZERO] QT;  BRANCH(QHI) { ADD [TWO, ZERO] QT; } ELSE { }
-            GE [QT, PCUR] KEEP;
-            CLONE KEEP as KEEPC;
-            BRANCH(KEEPC) {
+        CLONE OPS AS DRAINCHK;
+        ~ATH(DRAINCHK)
+        {
+            CLONE OPS AS PK;
+            BIFURCATE PK[PV, JP];      // peek top op code
+            EQ[PV, STAR] Q1;
+            EQ[PV, SLASH] Q2;
+            OR[Q1, Q2] QHI;
+            ADD[ONE, ZERO] QT;
+            BRANCH(QHI)
+            {
+                ADD[TWO, ZERO] QT;
+            }
+            GE[QT, PCUR] KEEP;
+            CLONE KEEP AS KEEPC;
+            BRANCH(KEEPC)
+            {
                 BIFURCATE OPS[OPC, OPS];          // pop operator
                 BIFURCATE VALUES[BV, VALUES];     // pop b
                 BIFURCATE VALUES[AV, VALUES];     // pop a
-                EQ [OPC, PLUS] a1;
-                BRANCH(a1) { ADD [AV, BV] RES; } ELSE {
-                    EQ [OPC, MINUS] a2;
-                    BRANCH(a2) { SUB [AV, BV] RES; } ELSE {
-                        EQ [OPC, STAR] a3;
-                        BRANCH(a3) { MUL [AV, BV] RES; } ELSE { DIV [AV, BV] RES; }
+                EQ[OPC, PLUS] A1;
+                BRANCH(A1)
+                {
+                    ADD[AV, BV] RES;
+                }
+                ELSE
+                {
+                    EQ[OPC, MINUS] A2;
+                    BRANCH(A2)
+                    {
+                        SUB[AV, BV] RES;
+                    }
+                    ELSE
+                    {
+                        EQ[OPC, STAR] A3;
+                        BRANCH(A3)
+                        {
+                            MUL[AV, BV] RES;
+                        }
+                        ELSE
+                        {
+                            DIV[AV, BV] RES;
+                        }
                     }
                 }
-                BIFURCATE [RES, VALUES] VALUES;   // push result
-                CLONE OPS as DRAINCHK;             // continue iff OPS still non-empty
-            } ELSE {
-                BIFURCATE NULL[jb, DRAINCHK];      // precedence too low: stop draining
+                BIFURCATE[RES, VALUES] VALUES; // push result
+                CLONE OPS AS DRAINCHK; // loop iff OPS non-empty
+            }
+            ELSE
+            {
+                BIFURCATE NULL[JB, DRAINCHK]; // prec too low: stop
             }
         }
-        BIFURCATE [C, OPS] OPS;               // push this operator
-    } ELSE {
-        PARSE [T, NULL] V;
-        BIFURCATE [V, VALUES] VALUES;         // push operand
+        BIFURCATE[C, OPS] OPS;               // push this operator
+    }
+    ELSE
+    {
+        PARSE[T, NULL] V;
+        BIFURCATE[V, VALUES] VALUES;         // push operand
     }
 
-    ADD [I, ONE] I;
-    LT [I, NT] TLOOP;
+    ADD[I, ONE] I;
+    LT[I, NT] TLOOP;
 }
 
 // drain the rest
-CLONE OPS as FIN;
-~ATH(FIN) {
+CLONE OPS AS FIN;
+~ATH(FIN)
+{
     BIFURCATE OPS[OPC, OPS];
     BIFURCATE VALUES[BV, VALUES];
     BIFURCATE VALUES[AV, VALUES];
-    EQ [OPC, PLUS] f1;
-    BRANCH(f1) { ADD [AV, BV] RES; } ELSE {
-        EQ [OPC, MINUS] f2;
-        BRANCH(f2) { SUB [AV, BV] RES; } ELSE {
-            EQ [OPC, STAR] f3;
-            BRANCH(f3) { MUL [AV, BV] RES; } ELSE { DIV [AV, BV] RES; }
+    EQ[OPC, PLUS] F1;
+    BRANCH(F1)
+    {
+        ADD[AV, BV] RES;
+    }
+    ELSE
+    {
+        EQ[OPC, MINUS] F2;
+        BRANCH(F2)
+        {
+            SUB[AV, BV] RES;
+        }
+        ELSE
+        {
+            EQ[OPC, STAR] F3;
+            BRANCH(F3)
+            {
+                MUL[AV, BV] RES;
+            }
+            ELSE
+            {
+                DIV[AV, BV] RES;
+            }
         }
     }
-    BIFURCATE [RES, VALUES] VALUES;
-    CLONE OPS as FIN;
+    BIFURCATE[RES, VALUES] VALUES;
+    CLONE OPS AS FIN;
 }
 
-BIFURCATE VALUES[ANSWER, jrest];
-print $ANSWER;
+BIFURCATE VALUES[ANSWER, JREST];
+PRINT $ANSWER;
 THIS.DIE();

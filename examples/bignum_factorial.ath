@@ -8,21 +8,22 @@
 //   # expected:
 //   # 25! = 15511210043330985984000000
 
-importf <int_to_bignum> as INT_TO_BIGNUM;
-importf <mul> as MUL;
-importf <add> as ADD;
-importf <to_string> as TS;
+IMPORTF <int_to_bignum> AS INT_TO_BIGNUM;
+IMPORTF <mul> AS MUL;
+IMPORTF <add> AS ADD;
+IMPORTF <to_string> AS TS;
 
-import number 1 as ONE;
-INT_TO_BIGNUM [ONE, ONE] ACC;     // ACC := sticky bignum 1
-import number 0 as K;
-import number 25 as N;
+IMPORT NUMBER 1 AS ONE;
+INT_TO_BIGNUM[ONE, ONE] ACC;      // ACC := sticky bignum 1
+IMPORT NUMBER 0 AS K;
+IMPORT NUMBER 25 AS N;
 
-loop N {
-  ADD [K, ONE] K;                 // K := 1, 2, ..., 25
-  MUL [ACC, K] ACC;               // ACC *= K (stays bignum)
+LOOP N
+{
+    ADD[K, ONE] K;                // K := 1, 2, ..., 25
+    MUL[ACC, K] ACC;              // ACC *= K (stays bignum)
 }
 
-TS [ACC, ACC] R;
-print 25! = $R;
+TS[ACC, ACC] R;
+PRINT 25! = $R;
 THIS.DIE();

@@ -8,26 +8,33 @@
 //   # expected:
 //   # sqrt(2) ~ 1.414213562373095
 
-importf <add> as ADD;
-importf <sub> as SUB;
-importf <mul> as MUL;
-importf <div> as DIV;
-importf <abs> as ABS;
-importf <gt>  as GT;
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mul> AS MUL;
+IMPORTF <div> AS DIV;
+IMPORTF <abs> AS ABS;
+IMPORTF <gt> AS GT;
 
-import number 2.0 as A;             // take the square root of 2
-import number 1.0 as X;             // initial guess
-import number 0.000000000000001 as EPS;  // 1e-15
-import number 2.0 as TWO;
+IMPORT NUMBER 2.0 AS A;             // take the square root of 2
+IMPORT NUMBER 1.0 AS X;             // initial guess
+IMPORT NUMBER 0.000000000000001 AS EPS;  // 1e-15
+IMPORT NUMBER 2.0 AS TWO;
 
 // not-converged := |x*x - a| > eps
-MUL [X, X] XSQ;  SUB [XSQ, A] D;  ABS [D, NULL] AD;  GT [AD, EPS] GOING;
-~ATH(GOING) {
-    DIV [A, X] AX;            // a / x
-    ADD [X, AX] S;           // x + a/x
-    DIV [S, TWO] X;          // x := (x + a/x) / 2
-    MUL [X, X] XSQ;  SUB [XSQ, A] D;  ABS [D, NULL] AD;  GT [AD, EPS] GOING;
+MUL[X, X] XSQ;
+SUB[XSQ, A] D;
+ABS[D, NULL] AD;
+GT[AD, EPS] GOING;
+~ATH(GOING)
+{
+    DIV[A, X] AX;            // a / x
+    ADD[X, AX] S;           // x + a/x
+    DIV[S, TWO] X;          // x := (x + a/x) / 2
+    MUL[X, X] XSQ;
+    SUB[XSQ, A] D;
+    ABS[D, NULL] AD;
+    GT[AD, EPS] GOING;
 }
 
-print sqrt(2) ~ $X;
+PRINT sqrt(2) ~ $X;
 THIS.DIE();

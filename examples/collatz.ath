@@ -17,36 +17,40 @@
 //   # 1
 //   # reached 1 in 8 steps
 
-importf <mod> as MOD;
-importf <div> as DIV;
-importf <mul> as MUL;
-importf <add> as ADD;
-importf <eq>  as EQ;
-importf <ne>  as NE;
+IMPORTF <mod> AS MOD;
+IMPORTF <div> AS DIV;
+IMPORTF <mul> AS MUL;
+IMPORTF <add> AS ADD;
+IMPORTF <eq> AS EQ;
+IMPORTF <ne> AS NE;
 
-import number 6 as N;
-import number 0 as STEPS;
-import number 0 as ZERO;
-import number 1 as ONE;
-import number 2 as TWO;
-import number 3 as THREE;
+IMPORT NUMBER 6 AS N;
+IMPORT NUMBER 0 AS STEPS;
+IMPORT NUMBER 0 AS ZERO;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 2 AS TWO;
+IMPORT NUMBER 3 AS THREE;
 
-print $N;
+PRINT $N;
 
-NE [N, ONE] GOING;
-~ATH(GOING) {
-    MOD [N, TWO] R;
-    EQ [R, ZERO] EVEN;
-    BRANCH(EVEN) {
-        DIV [N, TWO] N;
-    } ELSE {
-        MUL [N, THREE] M;
-        ADD [M, ONE] N;
+NE[N, ONE] GOING;
+~ATH(GOING)
+{
+    MOD[N, TWO] R;
+    EQ[R, ZERO] EVEN;
+    BRANCH(EVEN)
+    {
+        DIV[N, TWO] N;
     }
-    ADD [STEPS, ONE] STEPS;
-    print $N;
-    NE [N, ONE] GOING;
+    ELSE
+    {
+        MUL[N, THREE] M;
+        ADD[M, ONE] N;
+    }
+    ADD[STEPS, ONE] STEPS;
+    PRINT $N;
+    NE[N, ONE] GOING;
 }
 
-print reached 1 in $STEPS steps;
+PRINT reached 1 in $STEPS steps;
 THIS.DIE();

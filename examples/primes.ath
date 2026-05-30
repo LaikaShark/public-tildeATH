@@ -9,41 +9,49 @@
 //   ./primes
 //   # expected: 2 3 5 7 11 13 17 19 23 29  (one per line)
 
-importf <mod> as MOD;
-importf <lt>  as LT;
-importf <le>  as LE;
-importf <eq>  as EQ;
-importf <add> as ADD;
-importf <mul> as MUL;
+IMPORTF <mod> AS MOD;
+IMPORTF <lt> AS LT;
+IMPORTF <le> AS LE;
+IMPORTF <eq> AS EQ;
+IMPORTF <add> AS ADD;
+IMPORTF <mul> AS MUL;
 
-import number 2  as C;
-import number 31 as LIMIT;
-import number 0  as ZERO;
-import number 1  as ONE;
-import number 2  as TWO;
-import number 0  as DIVISORS;     // reset each candidate
-import number 2  as D;            // reset to 2 each candidate
+IMPORT NUMBER 2 AS C;
+IMPORT NUMBER 31 AS LIMIT;
+IMPORT NUMBER 0 AS ZERO;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 2 AS TWO;
+IMPORT NUMBER 0 AS DIVISORS;     // reset each candidate
+IMPORT NUMBER 2 AS D;            // reset to 2 each candidate
 
-LT [C, LIMIT] OUTER;
-~ATH(OUTER) {
-    ADD [ZERO, ZERO] DIVISORS;        // DIVISORS := 0
-    ADD [TWO, ZERO] D;                // D := 2
+LT[C, LIMIT] OUTER;
+~ATH(OUTER)
+{
+    ADD[ZERO, ZERO] DIVISORS;        // DIVISORS := 0
+    ADD[TWO, ZERO] D;                // D := 2
 
-    MUL [D, D] DSQ;
-    LE [DSQ, C] INNER;                // D*D <= C ?
-    ~ATH(INNER) {
-        MOD [C, D] R;
-        EQ [R, ZERO] DIVIDES;
-        BRANCH(DIVIDES) { ADD [DIVISORS, ONE] DIVISORS; } ELSE { }
-        ADD [D, ONE] D;
-        MUL [D, D] DSQ;
-        LE [DSQ, C] INNER;
+    MUL[D, D] DSQ;
+    LE[DSQ, C] INNER;                // D*D <= C ?
+    ~ATH(INNER)
+    {
+        MOD[C, D] R;
+        EQ[R, ZERO] DIVIDES;
+        BRANCH(DIVIDES)
+        {
+            ADD[DIVISORS, ONE] DIVISORS;
+        }
+        ADD[D, ONE] D;
+        MUL[D, D] DSQ;
+        LE[DSQ, C] INNER;
     }
 
-    EQ [DIVISORS, ZERO] ISPRIME;
-    BRANCH(ISPRIME) { print $C; } ELSE { }
+    EQ[DIVISORS, ZERO] ISPRIME;
+    BRANCH(ISPRIME)
+    {
+        PRINT $C;
+    }
 
-    ADD [C, ONE] C;
-    LT [C, LIMIT] OUTER;
+    ADD[C, ONE] C;
+    LT[C, LIMIT] OUTER;
 }
 THIS.DIE();

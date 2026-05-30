@@ -10,22 +10,39 @@
 //   # trunc(3.14) = 3
 //   # parse 2.5e3 = 2500.0
 
-importf <to_string> as TO_STRING;
-importf <add> as ADD;
-importf <div> as DIV;
-importf <floor> as FLOOR;
-importf <float_to_int> as FLOAT_TO_INT;
-importf <parse> as PARSE;
+IMPORTF <to_string> AS TO_STRING;
+IMPORTF <add> AS ADD;
+IMPORTF <div> AS DIV;
+IMPORTF <floor> AS FLOOR;
+IMPORTF <float_to_int> AS FLOAT_TO_INT;
+IMPORTF <parse> AS PARSE;
 
-import number 3.14 as PI;
-import number 7 as SEVEN;
-import number 2.0 as TWO;
+IMPORT NUMBER 3.14 AS PI;
+IMPORT NUMBER 7 AS SEVEN;
+IMPORT NUMBER 2.0 AS TWO;
 
-TO_STRING [PI, PI] PS;                     print pi = $PS;
-ADD [PI, SEVEN] SUM;  TO_STRING [SUM, SUM] SUMS;    print 3.14 + 7 = $SUMS;
-DIV [SEVEN, TWO] HALF; TO_STRING [HALF, HALF] HS;   print 7 / 2.0 = $HS;
-FLOOR [PI, PI] FL;    TO_STRING [FL, FL] FLS;       print floor(3.14) = $FLS;
-FLOAT_TO_INT [PI, PI] TI; TO_STRING [TI, TI] TIS;   print trunc(3.14) = $TIS;
-text "2.5e3" as STR; PARSE [STR, STR] P; TO_STRING [P, P] PPS; print parse 2.5e3 = $PPS;
+TO_STRING[PI, PI] PS;
+PRINT pi = $PS;
+
+ADD[PI, SEVEN] SUM;
+TO_STRING[SUM, SUM] SUMS;
+PRINT 3.14 + 7 = $SUMS;
+
+DIV[SEVEN, TWO] HALF;
+TO_STRING[HALF, HALF] HS;
+PRINT 7 / 2.0 = $HS;
+
+FLOOR[PI, PI] FL;
+TO_STRING[FL, FL] FLS;
+PRINT floor(3.14) = $FLS;
+
+FLOAT_TO_INT[PI, PI] TI;
+TO_STRING[TI, TI] TIS;
+PRINT trunc(3.14) = $TIS;
+
+TEXT "2.5e3" AS STR;
+PARSE[STR, STR] P;
+TO_STRING[P, P] PPS;
+PRINT parse 2.5e3 = $PPS;
 
 THIS.DIE();
