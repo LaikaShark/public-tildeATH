@@ -54,7 +54,7 @@ Useful command-line flags:
 Two environment variables are consulted at runtime:
 
 - `ATH_PATH` — colon-separated directories searched by the angle-bracket
-  form of `importf` (§4.4.9) before the compiler-adjacent `stdlib/`
+  form of `IMPORTF` (§4.4.9) before the compiler-adjacent `stdlib/`
   directory.
 - `ATH_SEED` — decimal unsigned integer used to seed the runtime random
   source. Setting it makes lifetime sampling and `RANDOM` calls
@@ -71,16 +71,16 @@ For exploring interactively, start the REPL with `python -m athc.cli --repl`
 is identical; bindings persist across lines.
 
 ```
-~ATH> import number 5 as N;
-~ATH> importf <add> as ADD;
-~ATH> ADD [N, N] R;
-~ATH> print $N doubled is $R;
+~ATH> IMPORT NUMBER 5 AS N;
+~ATH> IMPORTF <add> AS ADD;
+~ATH> ADD[N, N] R;
+~ATH> PRINT $N doubled is $R;
 5 doubled is 10
 ~ATH> :inspect R
 R: live · int · 10
 ```
 
-Statements end with `;`; a block (`~ATH(…){ … }`, `BRANCH`, `loop`) spans
+Statements end with `;`; a block (`~ATH(…){ … }`, `BRANCH`, `LOOP`) spans
 lines until its `}`. Meta-commands start with `:` — `:inspect VAR`, `:env`,
 `:load FILE`, `:reset`, `:compose fresh|intern`, `:help`, `:quit` (also
 Ctrl-D). Parse errors render with the same carets and suggestions the
@@ -97,15 +97,15 @@ shared libraries the REPL loads.
 ## 2. A first program
 
 ```ath
-print Hello, ~ATH!;
+PRINT Hello, ~ATH!;
 THIS.DIE();
 ```
 
 The program contains two statements.
 
-`print` writes its payload to standard output followed by a single
+`PRINT` writes its payload to standard output followed by a single
 newline. The payload begins immediately after the one required space
-following the keyword `print` and ends at the next unescaped `;`.
+following the keyword `PRINT` and ends at the next unescaped `;`.
 Bytes are copied through verbatim, including literal newlines in
 source. A `$VAR` marker in the payload **interpolates** the string
 object bound to `VAR` (covered in §13.1); everything else is literal.
@@ -128,10 +128,10 @@ write `\\`. To emit a literal `$` (rather than start an
 interpolation), write `\$`.
 
 String literals `"..."` recognize `\"`, `\\`, `\n`, `\t`, `\r`
-(§2.3) — the same set as `print` minus `\;` (which is unnecessary
+(§2.3) — the same set as `PRINT` minus `\;` (which is unnecessary
 inside a quoted literal). Unknown escapes are likewise a
 compile-time error. String literals are consumed by file-path
-statements (§4.4.9 and related) and by the `text` statement (§13.x).
+statements (§4.4.9 and related) and by the `TEXT` statement (§13.x).
 
 `THIS.DIE();` terminates the program. Every activation — the top-level
 program and every function call — owns a predefined object named
@@ -200,31 +200,34 @@ read is well-defined and produces `NULL`.
 
 ## 4. Importing objects
 
-A new alive object is introduced into the environment with `import`:
+A new alive object is introduced into the environment with `IMPORT`:
 
 ```ath
-import V;
+IMPORT OBJECT V;
 ```
 
 The variable `V` is bound to a fresh alive object whose `left` and
 `right` are unset (§4.4.1).
 
-`import` accepts one or more identifiers before the target name. All
-but the last are joined with single spaces into a **concept name**
-that the runtime looks up in the lifetime library (§11). If no library
-entry matches, the import behaves as above and allocates a plain alive
+`IMPORT` takes one or more identifiers before the target name — at least
+one is required, so `IMPORT V;` alone is a compile error. All but the
+last are joined with single spaces into a **concept name** that the
+runtime looks up in the lifetime library (§11). If no library entry
+matches — as with `OBJECT` above — the import allocates a plain alive
 object. If an entry matches, the object's lifetime is governed by the
 matched entry — for example:
 
 ```ath
-import mayfly M;          // alive for somewhere between 5 minutes and 1 day
-import dead grandmother G; // matches no entry: plain alive object
+IMPORT MAYFLY M;
+// alive for somewhere between 5 minutes and 1 day
+IMPORT DEAD GRANDMOTHER G;
+// matches no entry: plain alive object
 ```
 
-The first identifier after `import` must not be the contextual marker
-`builtin` or `number`; those dispatch to separate forms (§9, §10).
+The first identifier after `IMPORT` must not be the contextual marker
+`BUILTIN` or `NUMBER`; those dispatch to separate forms (§9, §10).
 
-If the target variable is already bound, `import` is a no-op.
+If the target variable is already bound, `IMPORT` is a no-op.
 
 ---
 
@@ -277,8 +280,10 @@ The token immediately after `BIFURCATE` distinguishes the forms: an
 `IDENT` selects decompose, a `[` selects compose.
 
 ```ath
-BIFURCATE A[B, C];   // decompose A into B and C
-BIFURCATE [B, C] A;  // compose B and C into A
+BIFURCATE A[B, C];
+// decompose A into B and C
+BIFURCATE [B, C] A;
+// compose B and C into A
 ```
 
 ---
@@ -301,7 +306,7 @@ A second form, `V.DIE(RET);`, sets the activation's pending return
 value to `RET`'s current binding *before* killing `V`. When used as
 `THIS.DIE(RET);`, this is how a function returns a value (§8.3).
 
-When the killed object owns a file (see §16 on `read`), the runtime
+When the killed object owns a file (see §16 on `READ`), the runtime
 also calls `unlink` on the file path before flipping `alive`. This is
 the only path in the runtime that deletes files.
 
@@ -310,7 +315,8 @@ the only path in the runtime that deletes files.
 ## 7. The `~ATH` loop
 
 ```ath
-~ATH(V) {
+~ATH(V)
+{
     statements
 }
 ```
@@ -328,7 +334,9 @@ exit a loop without killing the object originally bound to `V` — see
 The body may be empty:
 
 ```ath
-~ATH(V) { }
+~ATH(V)
+{
+}
 ```
 
 If `V` is alive at entry the loop runs forever; if dead, the
@@ -339,7 +347,8 @@ construct exits immediately.
 A leading `!` inverts the condition:
 
 ```ath
-~ATH(!V) {
+~ATH(!V)
+{
     statements
 }
 ```
@@ -354,10 +363,12 @@ never runs.
 An optional `EXECUTE(IDENT)` may follow the closing brace:
 
 ```ath
-importf "cleanup.ath" as CLEANUP;
-~ATH(V) {
+IMPORTF "cleanup.ath" AS CLEANUP;
+~ATH(V)
+{
     statements
-} EXECUTE(CLEANUP);
+}
+EXECUTE(CLEANUP);
 ```
 
 `EXECUTE(F)` calls the function `F` once, when the loop exits by its
@@ -366,7 +377,12 @@ argument. It is the Homestuck "when the subject dies, do the action"
 hook — handy for an after-loop report or cleanup.
 
 ```ath
-~ATH(V) { ... } EXECUTE(NULL);   // the canonical no-op
+~ATH(V)
+{
+    ...
+}
+EXECUTE(NULL);
+// the canonical no-op
 ```
 
 `EXECUTE(NULL)` runs nothing — `NULL` is the empty object, not a
@@ -398,8 +414,11 @@ to `V` untouched.
 A clearer idiom for the same purpose:
 
 ```ath
-BIFURCATE V[L, R];   // observe the halves
-V.DIE();             // kill V; halves and other aliases unaffected
+BIFURCATE V[L, R];
+// observe the halves
+V.DIE();
+// kill V;
+halves and other aliases unaffected
 ```
 
 The right idiom depends on whether other aliases of `V` need to stay
@@ -421,8 +440,12 @@ and the loop exits.
 Two loops are driven by a count and a clock rather than by liveness.
 
 ```ath
-import number 3 as N;
-loop N { print tick; }       // runs the body 3 times
+IMPORT NUMBER 3 AS N;
+LOOP N
+{
+    PRINT tick;
+}
+// runs the body 3 times
 ```
 
 `loop N { body }` (§4.4.26) runs `body` exactly `N.value` times; a
@@ -431,20 +454,22 @@ snapshotted on entry, so rebinding `N` in the body does not change the
 remaining iterations. Unlike `~ATH`, it never consults liveness.
 
 ```ath
-import number 1000 as SEC;
-every SEC {                  // every second, forever
-    print poll;
+IMPORT NUMBER 1000 AS SEC;
+EVERY SEC
+{
+    // every second, forever
+    PRINT poll;
 }
 ```
 
 `every N { body }` (§4.4.27) runs `body`, sleeps `N.value` ms, and
 repeats forever — the "do this every N ms" daemon. Its only exits are
 the body ending the activation (`THIS.DIE()`) or a signal; code after
-an `every` with a non-terminating body is unreachable. Recurrence is a
+an `EVERY` with a non-terminating body is unreachable. Recurrence is a
 property of the *loop*, never of an object — an object cannot come back
 alive (§6).
 
-(Do not confuse `loop` with the string built-in `repeat`, §13.2, which
+(Do not confuse `LOOP` with the string built-in `repeat`, §13.2, which
 repeats a string. They share no syntax.)
 
 ---
@@ -452,7 +477,7 @@ repeats a string. They share no syntax.)
 ## 8. Functions
 
 A function is a separate `.ath` file registered into the current
-program by `importf`. There is no inline function definition syntax.
+program by `IMPORTF`. There is no inline function definition syntax.
 
 ### 8.1 Defining a function
 
@@ -463,31 +488,31 @@ value:
 
 ```ath
 // hello.ath
-print Hello from a function.;
+PRINT Hello from a function.;
 THIS.DIE();
 ```
 
 ### 8.2 Registering and calling
 
 ```ath
-importf "hello.ath" as HELLO;
-import a A;
-import b B;
-HELLO [A, B] R;
+IMPORTF "hello.ath" AS HELLO;
+IMPORT A A;
+IMPORT B B;
+HELLO[A, B] R;
 THIS.DIE();
 ```
 
-`importf "PATH" as NAME;` (§4.4.9) is a compile-time directive: it
+`IMPORTF "PATH" AS NAME;` (§4.4.9) is a compile-time directive: it
 parses the file at `PATH`, resolved relative to the importing file,
 and registers it under `NAME`. Function names are matched
 case-insensitively. The statement emits no runtime code.
 
 A function call has two surface forms:
 
-- **Compose-argument form**: `FN [L, R] V;` composes `L` and `R` into
+- **Compose-argument form**: `FN[L, R] V;` composes `L` and `R` into
   a single argument object, calls `FN`, and binds `V` to the result
   (§4.4.10).
-- **Decompose-result form**: `FN A [L, R];` calls `FN` with `A`,
+- **Decompose-result form**: `FN A[L, R];` calls `FN` with `A`,
   decomposes the result, and binds `L` and `R` to its halves
   (§4.4.11).
 
@@ -503,16 +528,17 @@ explicit `DIE(RET)`, the return value is `NULL`.
 
 ```ath
 // return_args.ath
-THIS.DIE(ARGS);   // returns the argument unchanged
+THIS.DIE(ARGS);
+// returns the argument unchanged
 ```
 
 ### 8.4 Search-path imports
 
-A second form of `importf` consults the `ATH_PATH` environment
+A second form of `IMPORTF` consults the `ATH_PATH` environment
 variable:
 
 ```ath
-importf <add> as ADD;
+IMPORTF <add> AS ADD;
 ```
 
 The bare identifier between angle brackets is the file *stem* (without
@@ -536,7 +562,7 @@ any function body.
 A function whose body is implemented in C is declared with:
 
 ```ath
-import builtin SYMBOL as NAME;
+IMPORT BUILTIN SYMBOL AS NAME;
 ```
 
 This registers `NAME` in the function registry as a direct call to
@@ -551,14 +577,14 @@ shim files:
 
 ```ath
 // stdlib/add.ath
-import builtin ath_add as ATH_ADD;
-BIFURCATE ARGS [X, Y];
-ATH_ADD [X, Y] R;
+IMPORT BUILTIN ath_add AS ATH_ADD;
+BIFURCATE ARGS[X, Y];
+ATH_ADD[X, Y] R;
 THIS.DIE(R);
 ```
 
-A user program then brings the shim in via `importf <add> as ADD;`
-(§8.4) and calls `ADD [X, Y] R;` like any other function. The
+A user program then brings the shim in via `IMPORTF <add> AS ADD;`
+(§8.4) and calls `ADD[X, Y] R;` like any other function. The
 indirection through a shim file lets the standard library evolve
 independently of the runtime ABI.
 
@@ -574,8 +600,10 @@ value. "Has a payload" means `num_kind` is not `NONE`.
 A new number object is introduced with:
 
 ```ath
-import number 42 as N;       // int64 payload
-import number 3.14 as PI;    // double payload
+IMPORT NUMBER 42 AS N;
+// int64 payload
+IMPORT NUMBER 3.14 AS PI;
+// double payload
 ```
 
 A bare integer literal gives an INT payload; a literal with a `.` or an
@@ -589,8 +617,8 @@ no watch path, no awaited signal. It outlives the program. To give a
 number a finite lifetime, compose it with a mortal carrier:
 
 ```ath
-import number 42 as N;
-import mayfly M;
+IMPORT NUMBER 42 AS N;
+IMPORT MAYFLY M;
 BIFURCATE [N, M] MORTAL;
 ```
 
@@ -605,13 +633,13 @@ Seven arithmetic functions are shipped as stdlib shims (§4.8.2):
 
 | Surface call            | Result                                |
 |-------------------------|---------------------------------------|
-| `ADD [X, Y] R;`         | `X + Y`                               |
-| `SUB [X, Y] R;`         | `X - Y`                               |
-| `MUL [X, Y] R;`         | `X * Y`                               |
-| `DIV [X, Y] R;`         | `X / Y` (int: toward zero; float: true division) |
-| `MOD [X, Y] R;`         | `X % Y` (float: `fmod`)               |
-| `TO_STRING [N, _] S;`   | decimal string of `N` (§13)           |
-| `PARSE [S, _] N;`       | number parsed from the string `S`     |
+| `ADD[X, Y] R;`         | `X + Y`                               |
+| `SUB[X, Y] R;`         | `X - Y`                               |
+| `MUL[X, Y] R;`         | `X * Y`                               |
+| `DIV[X, Y] R;`         | `X / Y` (int: toward zero; float: true division) |
+| `MOD[X, Y] R;`         | `X % Y` (float: `fmod`)               |
+| `TO_STRING[N, _] S;`   | decimal string of `N` (§13)           |
+| `PARSE[S, _] N;`       | number parsed from the string `S`     |
 
 These promote per the tower (§10.2): the result is an int for int⊕int,
 a float if either operand is a float.
@@ -621,18 +649,18 @@ A numeric **second wave** adds the usual maths and bit-twiddling
 
 | Surface call            | Result                                |
 |-------------------------|---------------------------------------|
-| `POW [X, Y] R;`         | `X` to the power `Y` (`Y >= 0`)       |
-| `ABS [X, _] R;`         | magnitude of `X`                      |
-| `NEG [X, _] R;`         | `-X`                                  |
-| `MIN [X, Y] R;` / `MAX` | lesser / greater of `X`, `Y`          |
-| `GCD [X, Y] R;`         | greatest common divisor               |
-| `SIGN [X, _] R;`        | `-1`, `0`, or `1`                     |
+| `POW[X, Y] R;`         | `X` to the power `Y` (`Y >= 0`)       |
+| `ABS[X, _] R;`         | magnitude of `X`                      |
+| `NEG[X, _] R;`         | `-X`                                  |
+| `MIN[X, Y] R;` / `MAX` | lesser / greater of `X`, `Y`          |
+| `GCD[X, Y] R;`         | greatest common divisor               |
+| `SIGN[X, _] R;`        | `-1`, `0`, or `1`                     |
 | `BAND`/`BOR`/`BXOR`     | bitwise `&` / `\|` / `^`              |
-| `BNOT [X, _] R;`        | bitwise `~X`                          |
-| `SHL [X, Y] R;` / `SHR` | left / arithmetic-right shift (0..63) |
-| `CLAMP [X, PAIR] R;`    | `X` confined to `[LO, HI]`            |
+| `BNOT[X, _] R;`        | bitwise `~X`                          |
+| `SHL[X, Y] R;` / `SHR` | left / arithmetic-right shift (0..63) |
+| `CLAMP[X, PAIR] R;`    | `X` confined to `[LO, HI]`            |
 
-`CLAMP` packs its bounds with `ENTANGLE [LO, HI] PAIR;` (the compose-pair
+`CLAMP` packs its bounds with `ENTANGLE[LO, HI] PAIR;` (the compose-pair
 pattern, §13.2.3). For integers, `POW` rejects negative exponents and
 `ABS`/`NEG`/`GCD` reject `INT64_MIN`; shifts require a count of 0..63.
 The arithmetic ops (`POW`/`ABS`/`NEG`/`MIN`/`MAX`/`SIGN`/`CLAMP`) promote
@@ -642,8 +670,8 @@ born-die on a float operand.
 All are brought in by name:
 
 ```ath
-importf <add> as ADD;
-importf <to_string> as TO_STRING;
+IMPORTF <add> AS ADD;
+IMPORTF <to_string> AS TO_STRING;
 ```
 
 Each call returns a fresh object that is alive on success and **born
@@ -674,11 +702,13 @@ the integer `3` but `7 / 2.0` is the float `3.5`, and `SUM` over a list
 containing any float yields a float.
 
 ```ath
-import number 7 as SEVEN;
-import number 2.0 as TWO;
-DIV [SEVEN, TWO] HALF;        // 3.5 (float: true division)
-TO_STRING [HALF, _] HS;
-print 7 / 2.0 = $HS;          // => 7 / 2.0 = 3.5
+IMPORT NUMBER 7 AS SEVEN;
+IMPORT NUMBER 2.0 AS TWO;
+DIV[SEVEN, TWO] HALF;
+// 3.5 (float: true division)
+TO_STRING[HALF, _] HS;
+PRINT 7 / 2.0 = $HS;
+// => 7 / 2.0 = 3.5
 ```
 
 `TO_STRING` of a float prints the shortest decimal that round-trips,
@@ -696,14 +726,14 @@ on any float operand. Helpers convert and round explicitly:
 
 | Surface call            | Result                                       |
 |-------------------------|----------------------------------------------|
-| `INT_TO_FLOAT [X, _] R;`| `X` as a float                               |
-| `FLOAT_TO_INT [X, _] R;`| `X` truncated toward zero to an int (nan/overflow → dead) |
+| `INT_TO_FLOAT[X, _] R;`| `X` as a float                               |
+| `FLOAT_TO_INT[X, _] R;`| `X` truncated toward zero to an int (nan/overflow → dead) |
 | `FLOOR`/`CEIL`/`ROUND`  | round a float down / up / to nearest (still a float) |
 
 The usual transcendentals are stdlib shims too, each returning a float
 (an int operand promotes): `SQRT`, `CBRT`, `EXP`, `LOG`/`LOG2`/`LOG10`,
-`SIN`/`COS`/`TAN`, `ASIN`/`ACOS`/`ATAN`, plus the binary `ATAN2 [Y, X] R;`
-and `HYPOT [X, Y] R;`. An out-of-domain argument (e.g. `SQRT` of a
+`SIN`/`COS`/`TAN`, `ASIN`/`ACOS`/`ATAN`, plus the binary `ATAN2[Y, X] R;`
+and `HYPOT[X, Y] R;`. An out-of-domain argument (e.g. `SQRT` of a
 negative) yields a live `nan` rather than a dead object.
 
 ### 10.3 Bignums
@@ -712,10 +742,12 @@ An integer literal too large for int64 becomes an **arbitrary-precision
 bignum** (§4.8.7), and bignum arithmetic is exact and never overflows:
 
 ```ath
-importf <mul> as MUL;
-import number 99999999999999999999 as BIG;   // beyond int64 → bignum
-MUL [BIG, BIG] SQ;
-print $SQ;     // => 9999999999999999999800000000000000000001
+IMPORTF <mul> AS MUL;
+IMPORT NUMBER 99999999999999999999 AS BIG;
+// beyond int64 → bignum
+MUL[BIG, BIG] SQ;
+PRINT $SQ;
+// => 9999999999999999999800000000000000000001
 ```
 
 Bignums sit between ints and floats in the tower (FLOAT > BIG > INT): an
@@ -731,12 +763,18 @@ precision. That makes a non-overflowing factorial writable — seed the
 accumulator as a bignum and multiply:
 
 ```ath
-importf <int_to_bignum> as TO_BIG;
-importf <mul> as MUL;
-import number 1 as ONE;
-TO_BIG [ONE, ONE] ACC;          // ACC is now a (sticky) bignum 1
-import number 25 as K;
-loop K { MUL [ACC, K] ACC; ... } // 25! exactly, no overflow
+IMPORTF <int_to_bignum> AS TO_BIG;
+IMPORTF <mul> AS MUL;
+IMPORT NUMBER 1 AS ONE;
+TO_BIG[ONE, ONE] ACC;
+// ACC is now a (sticky) bignum 1
+IMPORT NUMBER 25 AS K;
+LOOP K
+{
+    MUL[ACC, K] ACC;
+    ...
+}
+// 25! exactly, no overflow
 ```
 
 A bignum compares and prints identically to the equal integer (`2`,
@@ -756,19 +794,19 @@ first that fails flips `alive` to false.
 
 | Extension      | Set by                                                | Effect                                                         |
 |----------------|-------------------------------------------------------|----------------------------------------------------------------|
-| Deadline       | `import <library-entry>`, `TIMER N as T;`             | Dies when the monotonic clock reaches the timestamp.           |
-| Watched path   | `watch "PATH" as V;`, `read "PATH" as V;`             | Dies when `access(F_OK)` on the path fails.                    |
-| Awaited signal | `watch signal NAME as V;`                             | Dies when the named POSIX signal is received.                  |
-| Watched pid    | `watch pid N as V;`                                   | Dies when process `N` exits (and is reaped) — `kill(pid,0)` ESRCH. |
-| Watched mtime  | `watch mtime "PATH" as V;`                            | Dies when the file's modification time changes, or it is gone. |
-| One-shot       | `import once V;`                                      | First observation returns alive; subsequent observations dead. |
-| `owns_path`    | `read "PATH" as V;` only                              | Combined with watch_path, direct kill calls `unlink`.          |
+| Deadline       | `import <library-entry>`, `TIMER N AS T;`             | Dies when the monotonic clock reaches the timestamp.           |
+| Watched path   | `WATCH "PATH" AS V;`, `READ "PATH" AS V;`             | Dies when `access(F_OK)` on the path fails.                    |
+| Awaited signal | `WATCH SIGNAL NAME AS V;`                             | Dies when the named POSIX signal is received.                  |
+| Watched pid    | `WATCH PID N AS V;`                                   | Dies when process `N` exits (and is reaped) — `kill(pid,0)` ESRCH. |
+| Watched mtime  | `WATCH MTIME "PATH" AS V;`                            | Dies when the file's modification time changes, or it is gone. |
+| One-shot       | `IMPORT ONCE V;`                                      | First observation returns alive; subsequent observations dead. |
+| `owns_path`    | `READ "PATH" AS V;` only                              | Combined with watch_path, direct kill calls `unlink`.          |
 
 All death is one-way (§4.1); a dead object never becomes alive.
 
 ### 11.1 The lifetime library
 
-`import NAME... VAR;` matches the joined concept name (case-insensitive)
+`IMPORT NAME... VAR;` matches the joined concept name (case-insensitive)
 against a fixed runtime table. A match samples a uniformly-random
 deadline from the matched range. A miss falls through to a plain
 alive object.
@@ -777,17 +815,17 @@ The full table is in §5.3 of the spec. A representative selection:
 
 | Concept name      | Range (seconds)        |
 |-------------------|------------------------|
-| `instant`         | 0 (born dead)          |
-| `tick`            | 0.001 – 0.01           |
-| `blink`           | 0.1 – 0.4              |
-| `second`          | 1 – 1                  |
-| `minute`          | 60 – 60                |
-| `mayfly`          | 300 – 86 400           |
-| `fly`             | 86 400 – 259 200       |
-| `human`           | 1.58e9 – 3.79e9        |
-| `universe`        | 3e100 – 3e110          |
-| `forever`         | 1e308 – 1e308          |
-| `once`            | special — see §11.2    |
+| `INSTANT`         | 0 (born dead)          |
+| `TICK`            | 0.001 – 0.01           |
+| `BLINK`           | 0.1 – 0.4              |
+| `SECOND`          | 1 – 1                  |
+| `MINUTE`          | 60 – 60                |
+| `MAYFLY`          | 300 – 86 400           |
+| `FLY`             | 86 400 – 259 200       |
+| `HUMAN`           | 1.58e9 – 3.79e9        |
+| `UNIVERSE`        | 3e100 – 3e110          |
+| `FOREVER`         | 1e308 – 1e308          |
+| `ONCE`            | special — see §11.2    |
 
 Names with `min == max` have zero variance. Names with `min == 0` may
 be born dead.
@@ -806,12 +844,13 @@ the built-in table, so a user entry overrides any built-in of the
 same name. The reference runtime permits at most 64 user entries per
 program.
 
-### 11.2 The `once` entry
+### 11.2 The `ONCE` entry
 
 ```ath
-import once V;
-~ATH(V) {
-    print runs exactly once.;
+IMPORT ONCE V;
+~ATH(V)
+{
+    PRINT runs exactly once.;
 }
 ```
 
@@ -823,12 +862,13 @@ executes exactly once.
 ### 11.3 Watching signals
 
 ```ath
-watch signal SIGUSR1 as V;
-~ATH(V) {
-    print waiting for SIGUSR1;
-    sleep ONE_SEC;
+WATCH SIGNAL SIGUSR1 AS V;
+~ATH(V)
+{
+    PRINT waiting for SIGUSR1;
+    SLEEP ONE_SEC;
 }
-print signal received;
+PRINT signal received;
 ```
 
 The signal name is matched case-insensitively against this set
@@ -841,16 +881,17 @@ process-global. All watchers of the same signal die together when the
 signal arrives. A watcher allocated after a signal has already
 arrived is born dead.
 
-The contextual marker `signal` is recognized only as the second token
-after `watch`; elsewhere it is a normal identifier.
+The contextual marker `SIGNAL` is recognized only as the second token
+after `WATCH`; elsewhere it is a normal identifier.
 
 ### 11.4 Watching files
 
 ```ath
-watch "/tmp/keep_alive" as V;
-~ATH(V) {
-    print file still present;
-    sleep ONE_SEC;
+WATCH "/tmp/keep_alive" AS V;
+~ATH(V)
+{
+    PRINT file still present;
+    SLEEP ONE_SEC;
 }
 ```
 
@@ -859,28 +900,32 @@ not, it is born dead. Every `ath_is_alive(V)` call runs
 `access(F_OK)` on the path. The check is one-way: recreating a deleted
 file does not revive the object.
 
-`watch` is purely observational. It does **not** create, delete, or
-take ownership of the file. The owning equivalent is `read` (§16).
+`WATCH` is purely observational. It does **not** create, delete, or
+take ownership of the file. The owning equivalent is `READ` (§16).
 
 ### 11.5 Watching processes and file changes
 
-Two more `watch` forms tie liveness to external state (§4.4.12):
+Two more `WATCH` forms tie liveness to external state (§4.4.12):
 
 ```ath
-import number 4242 as PID;
-watch pid PID as PROC;          // alive while process 4242 runs
-~ATH(PROC) {
-    print worker still up;
-    sleep ONE_SEC;
+IMPORT NUMBER 4242 AS PID;
+WATCH PID PID AS PROC;
+// alive while process 4242 runs
+~ATH(PROC)
+{
+    PRINT worker still up;
+    SLEEP ONE_SEC;
 }
-print worker exited;
+PRINT worker exited;
 
-watch mtime "config.toml" as CFG;   // alive until the file changes
-~ATH(CFG) {
-    print config unchanged;
-    sleep ONE_SEC;
+WATCH MTIME "config.toml" AS CFG;
+// alive until the file changes
+~ATH(CFG)
+{
+    PRINT config unchanged;
+    SLEEP ONE_SEC;
 }
-print config changed;
+PRINT config changed;
 ```
 
 `watch pid N` reads `N`'s payload as a pid and dies when `kill(pid, 0)`
@@ -889,8 +934,8 @@ still counts as alive, and a permission error does not). `watch mtime
 "PATH"` captures the file's modification time at allocation and dies the
 moment a `stat()` shows a different mtime — change detection — or the
 file disappears. Both are monotonic: once dead they stay dead, so they
-honor one-way death like every other lifetime source. `pid` and `mtime`
-are contextual markers, special only right after `watch`.
+honor one-way death like every other lifetime source. `PID` and `MTIME`
+are contextual markers, special only right after `WATCH`.
 
 ---
 
@@ -905,12 +950,12 @@ Six primitive comparisons are shipped (§4.8.3):
 
 | Surface call    | Alive when            |
 |-----------------|-----------------------|
-| `LT [X, Y] V;`  | `X.value < Y.value`   |
-| `LE [X, Y] V;`  | `X.value <= Y.value`  |
-| `EQ [X, Y] V;`  | `X.value == Y.value`  |
-| `NE [X, Y] V;`  | `X.value != Y.value`  |
-| `GE [X, Y] V;`  | `X.value >= Y.value`  |
-| `GT [X, Y] V;`  | `X.value > Y.value`   |
+| `LT[X, Y] V;`  | `X.value < Y.value`   |
+| `LE[X, Y] V;`  | `X.value <= Y.value`  |
+| `EQ[X, Y] V;`  | `X.value == Y.value`  |
+| `NE[X, Y] V;`  | `X.value != Y.value`  |
+| `GE[X, Y] V;`  | `X.value >= Y.value`  |
+| `GT[X, Y] V;`  | `X.value > Y.value`   |
 
 A verdict is born dead if the comparison is false, if either operand
 is dead, or if either operand lacks a payload.
@@ -924,9 +969,13 @@ the one-way-death rule — see §12.3).
 site, and is the right choice when the negated verdict is consumed
 immediately:
 
-```
-GT [X, Y] V;
-~ATH(!V) { ... }    // body runs while X <= Y (i.e. NOT X > Y)
+```ath
+GT[X, Y] V;
+~ATH(!V)
+{
+    ...
+}
+// body runs while X <= Y (i.e. NOT X > Y)
 ```
 
 ### 12.1 Lifetime inheritance
@@ -949,19 +998,21 @@ re-evaluated.
 ### 12.2 A complete example
 
 ```ath
-importf <add> as ADD;
-importf <lt> as LT;
+IMPORTF <add> AS ADD;
+IMPORTF <lt> AS LT;
 
-import number 0 as ZERO;
-import number 5 as FIVE;
-import number 1 as ONE;
-import number 0 as I;
+IMPORT NUMBER 0 AS ZERO;
+IMPORT NUMBER 5 AS FIVE;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 0 AS I;
 
-LT [I, FIVE] COND;
-~ATH(COND) {
-    print iteration;
-    ADD [I, ONE] I;
-    LT [I, FIVE] COND;     // re-evaluate
+LT[I, FIVE] COND;
+~ATH(COND)
+{
+    PRINT iteration;
+    ADD[I, ONE] I;
+    LT[I, FIVE] COND;
+    // re-evaluate
 }
 THIS.DIE();
 ```
@@ -979,8 +1030,8 @@ new verdict. Both are stdlib shims over runtime builtins
 
 | Surface call    | Alive when                                                | Born dead when                |
 |-----------------|-----------------------------------------------------------|-------------------------------|
-| `AND [X, Y] V;` | both `X` and `Y` are alive at every observation           | either operand dead at call   |
-| `OR  [X, Y] V;` | at least one of `X`, `Y` is alive at every observation    | both operands dead at call    |
+| `AND[X, Y] V;` | both `X` and `Y` are alive at every observation           | either operand dead at call   |
+| `OR[X, Y] V;` | at least one of `X`, `Y` is alive at every observation    | both operands dead at call    |
 
 `AND` uses the conjunctive dependency machinery from §12.1: the
 result inherits both operands as deps, so it becomes dead at the
@@ -993,16 +1044,23 @@ dead does the OR-result flip to dead permanently (consistent with
 the one-way-death rule, §6).
 
 ```ath
-importf <gt>  as GT;
-importf <and> as AND;
-importf <or>  as OR;
+IMPORTF <gt>  AS GT;
+IMPORTF <and> AS AND;
+IMPORTF <or>  AS OR;
 
-import number 0 as ZERO;
+IMPORT NUMBER 0 AS ZERO;
 
-GT [X, ZERO] X_POS;          // X > 0
-GT [Y, ZERO] Y_POS;          // Y > 0
-AND [X_POS, Y_POS] BOTH;     // X > 0 AND Y > 0
-~ATH(BOTH) { print both positive; BOTH.DIE(); }
+GT[X, ZERO] X_POS;
+// X > 0
+GT[Y, ZERO] Y_POS;
+// Y > 0
+AND[X_POS, Y_POS] BOTH;
+// X > 0 AND Y > 0
+~ATH(BOTH)
+{
+    PRINT both positive;
+    BOTH.DIE();
+}
 ```
 
 The OR-result's runtime check evaluates its two deps on every
@@ -1025,7 +1083,7 @@ Negation is expressed in two places instead:
   truth value without materializing a NOT-object.
 - When the negated verdict must be combined with `AND` or `OR`, use
   the contrapositive comparison primitive. For "X < Y is false AND
-  Z != 0," write `GE [X, Y] V1; NE [Z, ZERO] V2; AND [V1, V2] V;`
+  Z != 0," write `GE[X, Y] V1; NE[Z, ZERO] V2; AND[V1, V2] V;`
   rather than trying to negate `LT`. This is why `LE`, `GE`, `NE`
   are primitive — they fill the gap that `NOT` would otherwise need
   to bridge.
@@ -1045,15 +1103,15 @@ A character atom is an alive object allocated by the runtime, exactly
 one per distinct byte value (0..255). Two strings sharing a character
 share the same atom by pointer identity.
 
-Strings enter a program through `INPUT`, `read`, `TO_STRING`, or the
-`text` statement (§13.3), and are written out through `print $VAR`
-interpolation, `write`, or `append`.
+Strings enter a program through `INPUT`, `READ`, `TO_STRING`, or the
+`TEXT` statement (§13.3), and are written out through `print $VAR`
+interpolation, `WRITE`, or `APPEND`.
 
 ### 13.1 `INPUT` and `print $VAR`
 
 ```ath
-INPUT line;
-print $line;
+INPUT LINE;
+PRINT $LINE;
 THIS.DIE();
 ```
 
@@ -1064,24 +1122,24 @@ end-of-file or read error, the line is treated as empty. Lines longer
 than the implementation's input buffer (at least 4096 bytes) are
 returned in successive `INPUT` calls.
 
-`print` does double duty (§2, §4.4.6). Its payload is raw literal text,
+`PRINT` does double duty (§2, §4.4.6). Its payload is raw literal text,
 but a `$VAR` marker **interpolates** the object bound to `VAR`. If `VAR`
 holds a **number**, it renders as its decimal form (just what `TO_STRING`
-would give — so `print $N;` prints a number directly, no conversion
+would give — so `PRINT $N;` prints a number directly, no conversion
 step). Otherwise the runtime walks `VAR`'s right-spine as a string,
 writing the byte represented by each left-half atom and terminating at
-the first dead cell, `NULL`, or non-character left half. A whole `print`
+the first dead cell, `NULL`, or non-character left half. A whole `PRINT`
 emits one trailing line feed, no matter how many literal and interpolated
 parts it has.
 
 ```ath
-import number 42 as N;
-INPUT name;
-print Hello, $name! Your number is $N.;
+IMPORT NUMBER 42 AS N;
+INPUT NAME;
+PRINT Hello, $NAME! Your number is $N.;
 ```
 
-So `print static text;` prints a constant, `print $line;` prints a
-dynamically constructed string, `print $N;` prints a number, and they
+So `PRINT static text;` prints a constant, `PRINT $LINE;` prints a
+dynamically constructed string, `PRINT $N;` prints a number, and they
 mix freely on one line. Write a literal dollar sign as `\$`. Because
 `$VAR` is a read, a mistyped interpolation variable is a compile error —
 unlike literal text, which prints verbatim.
@@ -1090,17 +1148,17 @@ unlike literal text, which prints verbatim.
 
 The runtime ships string operations in two waves (§4.8.4). Two are
 dedicated statement forms, surfaced by the parser; the rest are stdlib
-shims brought in by `importf`.
+shims brought in by `IMPORTF`.
 
 The first wave — access, measurement, search-and-edit:
 
 | Operation     | Surface form                              |
 |---------------|-------------------------------------------|
-| `length`      | `LENGTH [S, _] N;`                        |
-| `concat`      | `CONCAT [A, B] R;`                        |
-| `find`        | `FIND [HAY, NEEDLE] IDX;`                 |
-| `replace`     | `REPLACE [S, PAIR] R;` (compose-pair)     |
-| `replace_all` | `REPLACE_ALL [S, PAIR] R;` (compose-pair) |
+| `length`      | `LENGTH[S, _] N;`                        |
+| `concat`      | `CONCAT[A, B] R;`                        |
+| `find`        | `FIND[HAY, NEEDLE] IDX;`                 |
+| `replace`     | `REPLACE[S, PAIR] R;` (compose-pair)     |
+| `replace_all` | `REPLACE_ALL[S, PAIR] R;` (compose-pair) |
 | subscript     | `S[N] X;`                                 |
 | slice         | `S[I..J] X;`                              |
 
@@ -1109,33 +1167,33 @@ structural reshaping. Each is a stdlib shim over the two-operand ABI:
 
 | Operation    | Surface form                | Yields                          |
 |--------------|-----------------------------|---------------------------------|
-| `streq`      | `STREQ [A, B] V;`           | verdict: `A` byte-equals `B`    |
-| `startswith` | `STARTSWITH [HAY, PRE] V;`  | verdict: `HAY` begins with `PRE`|
-| `endswith`   | `ENDSWITH [HAY, SUF] V;`    | verdict: `HAY` ends with `SUF`  |
-| `strlt`      | `STRLT [A, B] V;`           | verdict: `A` < `B` (byte order) |
-| `strgt`      | `STRGT [A, B] V;`           | verdict: `A` > `B` (byte order) |
-| `lower`      | `LOWER [S, _] R;`           | `S` with `A`–`Z` lowercased     |
-| `upper`      | `UPPER [S, _] R;`           | `S` with `a`–`z` uppercased     |
-| `trim`       | `TRIM [S, _] R;`            | `S` without outer whitespace    |
-| `lstrip`     | `LSTRIP [S, _] R;`          | `S` without leading whitespace  |
-| `rstrip`     | `RSTRIP [S, _] R;`          | `S` without trailing whitespace |
-| `split`      | `SPLIT [S, SEP] LIST;`      | cons-list of substrings         |
-| `join`       | `JOIN [LIST, SEP] R;`       | substrings joined by `SEP`      |
-| `contains`   | `CONTAINS [HAY, NEEDLE] V;` | verdict: `NEEDLE` occurs in `HAY`|
-| `count`      | `COUNT [HAY, NEEDLE] N;`    | # non-overlapping occurrences   |
-| `rfind`      | `RFIND [HAY, NEEDLE] IDX;`  | index of the *last* occurrence  |
-| `repeat`     | `REPEAT [S, N] R;`          | `S` repeated `N` times          |
-| `reverse`    | `REVERSE [S, _] R;`         | `S` with characters reversed    |
-| `pad_left`   | `PAD_LEFT [S, N] R;`        | `S` space-padded to width `N`   |
-| `pad_right`  | `PAD_RIGHT [S, N] R;`       | `S` space-padded to width `N`   |
-| `ord`        | `ORD [A, _] N;`             | code (0..255) of char atom `A`  |
-| `chr`        | `CHR [N, _] S;`             | length-1 string for code `N`    |
-| `compare`    | `COMPARE [A, B] N;`         | three-way `-1`/`0`/`1`          |
-| `char_at`    | `CHAR_AT [S, N] STR;`       | Nth char as a length-1 string   |
-| `find_from`  | `FIND_FROM [S, PAIR] IDX;`  | find from an offset (packed)    |
-| `capitalize` | `CAPITALIZE [S, _] R;`      | first char up, rest down        |
-| `title`      | `TITLE [S, _] R;`           | titlecase each word             |
-| `strip_chars`| `STRIP_CHARS [S, CHARS] R;` | strip a custom char set         |
+| `streq`      | `STREQ[A, B] V;`           | verdict: `A` byte-equals `B`    |
+| `startswith` | `STARTSWITH[HAY, PRE] V;`  | verdict: `HAY` begins with `PRE`|
+| `endswith`   | `ENDSWITH[HAY, SUF] V;`    | verdict: `HAY` ends with `SUF`  |
+| `strlt`      | `STRLT[A, B] V;`           | verdict: `A` < `B` (byte order) |
+| `strgt`      | `STRGT[A, B] V;`           | verdict: `A` > `B` (byte order) |
+| `lower`      | `LOWER[S, _] R;`           | `S` with `A`–`Z` lowercased     |
+| `upper`      | `UPPER[S, _] R;`           | `S` with `a`–`z` uppercased     |
+| `trim`       | `TRIM[S, _] R;`            | `S` without outer whitespace    |
+| `lstrip`     | `LSTRIP[S, _] R;`          | `S` without leading whitespace  |
+| `rstrip`     | `RSTRIP[S, _] R;`          | `S` without trailing whitespace |
+| `split`      | `SPLIT[S, SEP] LIST;`      | cons-list of substrings         |
+| `join`       | `JOIN[LIST, SEP] R;`       | substrings joined by `SEP`      |
+| `contains`   | `CONTAINS[HAY, NEEDLE] V;` | verdict: `NEEDLE` occurs in `HAY`|
+| `count`      | `COUNT[HAY, NEEDLE] N;`    | # non-overlapping occurrences   |
+| `rfind`      | `RFIND[HAY, NEEDLE] IDX;`  | index of the *last* occurrence  |
+| `repeat`     | `REPEAT[S, N] R;`          | `S` repeated `N` times          |
+| `reverse`    | `REVERSE[S, _] R;`         | `S` with characters reversed    |
+| `pad_left`   | `PAD_LEFT[S, N] R;`        | `S` space-padded to width `N`   |
+| `pad_right`  | `PAD_RIGHT[S, N] R;`       | `S` space-padded to width `N`   |
+| `ord`        | `ORD[A, _] N;`             | code (0..255) of char atom `A`  |
+| `chr`        | `CHR[N, _] S;`             | length-1 string for code `N`    |
+| `compare`    | `COMPARE[A, B] N;`         | three-way `-1`/`0`/`1`          |
+| `char_at`    | `CHAR_AT[S, N] STR;`       | Nth char as a length-1 string   |
+| `find_from`  | `FIND_FROM[S, PAIR] IDX;`  | find from an offset (packed)    |
+| `capitalize` | `CAPITALIZE[S, _] R;`      | first char up, rest down        |
+| `title`      | `TITLE[S, _] R;`           | titlecase each word             |
+| `strip_chars`| `STRIP_CHARS[S, CHARS] R;` | strip a custom char set         |
 | `lstrip_chars`/`rstrip_chars` | `… [S, CHARS] R;` | one-sided custom strip     |
 | `pad_left_with`/`pad_right_with` | `… [S, PAIR] R;` | pad with a custom fill char |
 
@@ -1178,7 +1236,7 @@ It is born dead if either operand is dead.
 #### 13.2.1 Subscript and slice
 
 ```ath
-import number 0 as IDX;
+IMPORT NUMBER 0 AS IDX;
 S[IDX] C;
 ```
 
@@ -1214,7 +1272,7 @@ printable single-character string:
 ```ath
 S[IDX] C;
 BIFURCATE [C, NULL] STR;
-print $STR;
+PRINT $STR;
 ```
 
 #### 13.2.3 The compose-pair pattern
@@ -1226,10 +1284,10 @@ the builtin decomposes internally. The recommended packer is
 `ENTANGLE`:
 
 ```ath
-importf <entangle> as ENTANGLE;
+IMPORTF <entangle> AS ENTANGLE;
 
-ENTANGLE [NEEDLE, REPLACEMENT] PAIR;
-REPLACE [S, PAIR] R;
+ENTANGLE[NEEDLE, REPLACEMENT] PAIR;
+REPLACE[S, PAIR] R;
 ```
 
 `ENTANGLE` does the same composition as `BIFURCATE [L, R] V;` and
@@ -1246,7 +1304,7 @@ composition — the slice statement emits it.
 
 ```ath
 BIFURCATE [NEEDLE, REPLACEMENT] PAIR;
-REPLACE [S, PAIR] R;
+REPLACE[S, PAIR] R;
 ```
 
 `BIFURCATE` composition does **not** install deps. `PAIR` has no
@@ -1264,43 +1322,43 @@ an empty `NEEDLE` return a born-dead result: "replace nothing with
 something" is deliberately undefined. Use `CONCAT` to prepend or
 append.
 
-### 13.3 Building strings: the `text` statement
+### 13.3 Building strings: the `TEXT` statement
 
-The `text` statement is the surface form for constructing strings in
+The `TEXT` statement is the surface form for constructing strings in
 source code (§4.4.25). It has two forms — a single string literal
 (primitive) and an interpolation (sugar) — distinguished only by the
-number and kinds of parts before `as`.
+number and kinds of parts before `AS`.
 
 #### 13.3.1 Primitive form
 
 ```ath
-text "hello world" as GREETING;
-print $GREETING;
+TEXT "hello world" AS GREETING;
+PRINT $GREETING;
 ```
 
-`text "..." as VAR;` decodes the string literal (with the §2.3
+`TEXT "..." AS VAR;` decodes the string literal (with the §2.3
 escapes applied) and binds `VAR` to the resulting cons-list of
-character atoms. An empty literal `text "" as VAR;` binds `VAR` to
+character atoms. An empty literal `TEXT "" AS VAR;` binds `VAR` to
 `NULL` (which is the empty string per §13).
 
 Source-level newlines inside the literal are taken literally too —
 either embed them directly or use the `\n` escape:
 
 ```ath
-text "first line\nsecond line" as TWO;
-print $TWO;
+TEXT "first line\nsecond line" AS TWO;
+PRINT $TWO;
 ```
 
 #### 13.3.2 Interpolation form
 
 ```ath
-import number 42 as N;
-text "value: " N " (end)" as MSG;
-print $MSG;
+IMPORT NUMBER 42 AS N;
+TEXT "value: " N " (end)" AS MSG;
+PRINT $MSG;
 ```
 
-A `text` statement may contain any sequence of STRING literals and
-identifiers before `as`. Each part is reduced to a string and the
+A `TEXT` statement may contain any sequence of STRING literals and
+identifiers before `AS`. Each part is reduced to a string and the
 parts are concatenated left to right.
 
 - A **STRING part** contributes its decoded byte sequence (per §2.3).
@@ -1311,30 +1369,30 @@ parts are concatenated left to right.
 
 The final value installs operand dependencies via `ath_concat`'s dep
 machinery (§12.1): killing any of the source identifiers after the
-`text` statement runs invalidates `MSG` at the next observation.
+`TEXT` statement runs invalidates `MSG` at the next observation.
 
 #### 13.3.3 Single-IDENT case
 
 ```ath
-text N as M;
+TEXT N AS M;
 ```
 
-Equivalent to `TO_STRING [N, NULL] M;` when `N` carries a payload.
+Equivalent to `TO_STRING[N, NULL] M;` when `N` carries a payload.
 When `N` is already a string, `M` becomes a pointer-alias of `N` (no
 copy). Rarely useful on its own, but consistent with the
 interpolation rule.
 
-#### 13.3.4 What `text` is and is not
+#### 13.3.4 What `TEXT` is and is not
 
-`text` is the only source-level way to introduce a string value.
-It is **not** the same as `print`:
+`TEXT` is the only source-level way to introduce a string value.
+It is **not** the same as `PRINT`:
 
 | Form        | Source contains              | Result                       |
 |-------------|------------------------------|------------------------------|
-| `print TEXT;` | raw bytes up to `;`        | written to stdout immediately, no value bound |
-| `text "..." as V;` | a string literal      | a string-cons-list bound to V |
+| `PRINT TEXT;` | raw bytes up to `;`        | written to stdout immediately, no value bound |
+| `TEXT "..." AS V;` | a string literal      | a string-cons-list bound to V |
 
-To print a constructed string, interpolate it: `print $V;`. To emit a
+To print a constructed string, interpolate it: `PRINT $V;`. To emit a
 fixed literal that needs no value, write the text directly: `print
 hello;`. A single `print` mixes both — `print Result: $V done;` — so
 reach for interpolation whenever any part of the line is dynamic.
@@ -1346,27 +1404,30 @@ the same shape with arbitrary elements. Build one with `BIFURCATE`,
 head first:
 
 ```ath
-import number 8 as N8;
-import number 3 as N3;
-import number 4 as N4;
-BIFURCATE [N8, NULL] L1;     // [8]
-BIFURCATE [N3, L1] L2;       // [3, 8]
-BIFURCATE [N4, L2] LIST;     // [4, 3, 8]
+IMPORT NUMBER 8 AS N8;
+IMPORT NUMBER 3 AS N3;
+IMPORT NUMBER 4 AS N4;
+BIFURCATE [N8, NULL] L1;
+// [8]
+BIFURCATE [N3, L1] L2;
+// [3, 8]
+BIFURCATE [N4, L2] LIST;
+// [4, 3, 8]
 ```
 
 A family of stdlib shims folds and slices number lists (§4.8.6):
 
 | Surface call            | Result                                  |
 |-------------------------|-----------------------------------------|
-| `SUM [LIST, _] N;`      | Σ of element payloads (empty → `0`)     |
-| `PRODUCT [LIST, _] N;`  | Π of element payloads (empty → `1`)     |
-| `MAXIMUM [LIST, _] N;`  | greatest element (empty → dead)         |
-| `MINIMUM [LIST, _] N;`  | least element (empty → dead)            |
-| `MEMBER [LIST, X] V;`   | verdict: some element payload equals `X`|
-| `TAKE [LIST, N] R;`     | fresh list of the first `N` elements    |
-| `DROP [LIST, N] R;`     | fresh list of all but the first `N`     |
-| `ALL_OF [LIST, _] V;`   | verdict: every element alive (n-ary AND)|
-| `ANY_OF [LIST, _] V;`   | verdict: some element alive (n-ary OR)  |
+| `SUM[LIST, _] N;`      | Σ of element payloads (empty → `0`)     |
+| `PRODUCT[LIST, _] N;`  | Π of element payloads (empty → `1`)     |
+| `MAXIMUM[LIST, _] N;`  | greatest element (empty → dead)         |
+| `MINIMUM[LIST, _] N;`  | least element (empty → dead)            |
+| `MEMBER[LIST, X] V;`   | verdict: some element payload equals `X`|
+| `TAKE[LIST, N] R;`     | fresh list of the first `N` elements    |
+| `DROP[LIST, N] R;`     | fresh list of all but the first `N`     |
+| `ALL_OF[LIST, _] V;`   | verdict: every element alive (n-ary AND)|
+| `ANY_OF[LIST, _] V;`   | verdict: some element alive (n-ary OR)  |
 
 `ALL_OF`/`ANY_OF` read each element as a *lifetime* rather than a
 payload: they fold the `AND`/`OR` verdicts (§12) over the list, so the
@@ -1393,10 +1454,13 @@ original. They are typically used together.
 ### 14.1 `BRANCH`
 
 ```ath
-BRANCH(V) {
+BRANCH(V)
+{
     statements run when V is alive
-} ELSE {
-    statements run when V is dead
+}
+ELSE
+{
+    statements run when V is DEAD
 }
 ```
 
@@ -1411,9 +1475,12 @@ exit from a `BRANCH`, regardless of which arm ran (§4.4.17).
 The inverted form swaps which arm runs:
 
 ```ath
-BRANCH(!V) {
-    runs when V is dead
-} ELSE {
+BRANCH(!V)
+{
+    runs when V is DEAD
+}
+ELSE
+{
     runs when V is alive
 }
 ```
@@ -1427,7 +1494,7 @@ the activation immediately, and the post-dispatch kill never runs.
 ### 14.2 `CLONE`
 
 ```ath
-CLONE V as W;
+CLONE V AS W;
 ```
 
 `CLONE` allocates a fresh object `W` that copies, field by field,
@@ -1449,7 +1516,7 @@ from `V`'s current binding at clone time (§4.4.18):
 
 The clone of a one-shot is **not** consumed by the act of cloning.
 The non-mutating refresh used for the alive bit does not trip
-`is_oneshot`. So `CLONE V as W;` on a fresh one-shot leaves `V`
+`is_oneshot`. So `CLONE V AS W;` on a fresh one-shot leaves `V`
 unfired and produces `W` as an independent fresh one-shot.
 
 `W` does **not** copy `V`'s `dep1`/`dep2`, and does not copy the
@@ -1467,10 +1534,13 @@ Cloning `NULL` yields a fresh born-dead object.
 The canonical pattern for inspecting an object without killing it:
 
 ```ath
-CLONE V as VCHECK;
-BRANCH(VCHECK) {
+CLONE V AS VCHECK;
+BRANCH(VCHECK)
+{
     body
-} ELSE {
+}
+ELSE
+{
     body
 }
 // V is still alive (assuming it was) and untouched
@@ -1492,8 +1562,8 @@ allocator, and a uniform random source.
 ### 15.1 `NOW`
 
 ```ath
-importf <now> as NOW;
-NOW [NULL, NULL] T;
+IMPORTF <now> AS NOW;
+NOW[NULL, NULL] T;
 ```
 
 `NOW` returns a fresh number-payload object whose value is monotonic
@@ -1506,32 +1576,32 @@ The zero point is not a wall-clock epoch. `NOW` is useful only for
 measuring elapsed time:
 
 ```ath
-NOW [NULL, NULL] T0;
+NOW[NULL, NULL] T0;
 // ... work ...
-NOW [NULL, NULL] T1;
-SUB [T1, T0] ELAPSED;
+NOW[NULL, NULL] T1;
+SUB[T1, T0] ELAPSED;
 ```
 
-### 15.2 `sleep`
+### 15.2 `SLEEP`
 
 ```ath
-sleep N;
+SLEEP N;
 ```
 
-`sleep N;` blocks the current activation for `N.value` milliseconds
+`SLEEP N;` blocks the current activation for `N.value` milliseconds
 (§4.4.19). If `N` is `NULL`, dead, lacks a payload, or carries a
-non-positive value, `sleep` returns immediately as a no-op.
+non-positive value, `SLEEP` returns immediately as a no-op.
 
 The implementation uses `nanosleep`; interrupted sleeps may return
 early. The duration is read at the start of the call, so changing
 `N`'s binding mid-sleep has no effect.
 
-`sleep` does not consume `N` and has no return value.
+`SLEEP` does not consume `N` and has no return value.
 
 ### 15.3 `TIMER`
 
 ```ath
-TIMER N as T;
+TIMER N AS T;
 ```
 
 `TIMER` allocates a fresh alive object whose deadline is set to
@@ -1545,23 +1615,24 @@ consumed at allocation time.
 The combination of `TIMER` with `~ATH` gives a bounded loop:
 
 ```ath
-import number 5000 as FIVE_SEC;
-import number 1000 as ONE_SEC;
-TIMER FIVE_SEC as T;
-~ATH(T) {
-    print still running;
-    sleep ONE_SEC;
+IMPORT NUMBER 5000 AS FIVE_SEC;
+IMPORT NUMBER 1000 AS ONE_SEC;
+TIMER FIVE_SEC AS T;
+~ATH(T)
+{
+    PRINT still running;
+    SLEEP ONE_SEC;
 }
-print timed out;
+PRINT timed out;
 ```
 
 ### 15.4 `RANDOM`
 
 ```ath
-importf <random> as RANDOM;
-import number 0 as LO;
-import number 100 as HI;
-RANDOM [LO, HI] R;
+IMPORTF <random> AS RANDOM;
+IMPORT NUMBER 0 AS LO;
+IMPORT NUMBER 100 AS HI;
+RANDOM[LO, HI] R;
 ```
 
 `RANDOM` returns a fresh number-payload object whose value is
@@ -1583,24 +1654,24 @@ drawn, killing `LO` or `HI` does not invalidate the result.
 
 Four statements interact with the filesystem:
 
-- `read "PATH" as VAR;` — slurp a file into a string-cons-list and
+- `READ "PATH" AS VAR;` — slurp a file into a string-cons-list and
   take ownership.
-- `write SRC to "PATH" [as VERDICT];` — truncate-and-write a string.
-- `append SRC to "PATH" [as VERDICT];` — append a string.
-- `close VAR;` — release ownership and kill.
+- `WRITE SRC TO "PATH" [AS VERDICT];` — truncate-and-write a string.
+- `APPEND SRC TO "PATH" [AS VERDICT];` — append a string.
+- `CLOSE VAR;` — release ownership and kill.
 
-`watch "PATH" as V;` (§11.4) is also file-related but is observational
+`WATCH "PATH" AS V;` (§11.4) is also file-related but is observational
 only and was covered earlier.
 
-### 16.1 `read`
+### 16.1 `READ`
 
 ```ath
-read "input.txt" as F;
-print $F;
+READ "input.txt" AS F;
+PRINT $F;
 F.DIE();
 ```
 
-`read "PATH" as VAR;` (§4.4.21) opens `PATH` for reading (relative to
+`READ "PATH" AS VAR;` (§4.4.21) opens `PATH` for reading (relative to
 the program's current working directory) and binds `VAR` to a
 cons-list containing the file's bytes as character atoms. On any
 failure — missing file, permission denied, I/O error — `VAR` is bound
@@ -1615,7 +1686,7 @@ The head of the cons-list is a **wrapper** object carrying:
   file.
 
 The wrapper is **non-interned**: even under `--compose intern`, two
-`read` calls on the same path return distinct wrappers.
+`READ` calls on the same path return distinct wrappers.
 
 The combination of `watch_path` and `owns_path` triggers a special
 rule: when `VAR` is killed directly via `V.DIE()` or consumed by
@@ -1628,21 +1699,21 @@ watch-path observation, signal arrival, one-shot consumption — do not
 unlink. The unlink trigger fires only on direct kills of a still-alive
 owner.
 
-To release the file without deleting it, use `close` (§16.5).
+To release the file without deleting it, use `CLOSE` (§16.5).
 
 The `owns_path` flag does **not** propagate. Composing the wrapper
 with anything else (`BIFURCATE`, `CONCAT`, `REPLACE`, …) yields a
 result that observes the file through dependency tracking but does
 not own it; cloning the wrapper produces a non-owning copy. Only the
-original wrapper, the object returned by `read`, owns the file.
+original wrapper, the object returned by `READ`, owns the file.
 
-### 16.2 `write`
+### 16.2 `WRITE`
 
 ```ath
-write S to "out.txt";
+WRITE S TO "out.txt";
 ```
 
-`write SRC to "PATH" [as VERDICT];` (§4.4.22) opens `PATH` for
+`WRITE SRC TO "PATH" [AS VERDICT];` (§4.4.22) opens `PATH` for
 writing, truncating any existing file, walks `SRC`'s right-spine
 writing each character atom's byte, and closes the file. The walk
 follows the same termination rules as `print $VAR` interpolation: it stops at the
@@ -1658,53 +1729,57 @@ the verdict is allocated internally and discarded — failures are
 silent.
 
 ```ath
-write S to "out.txt" as OK;
-~ATH(!OK) {
-    print write failed;
+WRITE S TO "out.txt" AS OK;
+~ATH(!OK)
+{
+    PRINT write failed;
     BIFURCATE [NULL, NULL] OK;
 }
 ```
 
-The contextual marker `to` is recognized only in this position.
-Outside `write` and `append`, `to` is a normal identifier.
+The contextual marker `TO` is recognized only in this position.
+Outside `WRITE` and `APPEND`, `TO` is a normal identifier.
 
-### 16.3 `append`
+### 16.3 `APPEND`
 
 ```ath
-append S to "out.txt" [as VERDICT];
+APPEND S TO "out.txt" [AS VERDICT];
 ```
 
-Identical to `write` (§16.2) except the file is opened for appending:
+Identical to `WRITE` (§16.2) except the file is opened for appending:
 existing contents are preserved and new bytes are added after.
 Failure semantics and the optional verdict are the same.
 
-### 16.4 `close`
+### 16.4 `CLOSE`
 
 ```ath
-close F;
+CLOSE F;
 ```
 
-`close VAR;` (§4.4.24) clears `VAR`'s `owns_path` flag, then sets its
+`CLOSE VAR;` (§4.4.24) clears `VAR`'s `owns_path` flag, then sets its
 `alive` field to false. The cleared flag means the kill does not
 trigger `unlink`; the file persists. If `VAR` was already dead, the
 statement is a no-op.
 
-On an object that does not own a file, `close` is indistinguishable
+On an object that does not own a file, `CLOSE` is indistinguishable
 from `VAR.DIE();`.
 
 ### 16.5 Inspecting a read result without deleting
 
-Because `BRANCH(V)` consumes its subject, running a `read`-result
+Because `BRANCH(V)` consumes its subject, running a `READ`-result
 through `BRANCH` deletes the file. To check without releasing, clone
 first (§14.2):
 
 ```ath
-read "config.txt" as F;
-CLONE F as FCHECK;
-BRANCH(FCHECK) {
-    print $F;
-} ELSE {
-    print no config;
+READ "config.txt" AS F;
+CLONE F AS FCHECK;
+BRANCH(FCHECK)
+{
+    PRINT $F;
+}
+ELSE
+{
+    PRINT no config;
 }
 // F is still alive and still owns the file
 ```
@@ -1721,7 +1796,7 @@ There are two categories.
 **Compile-time errors** (§6.1):
 
 - Lexical: unterminated `/* */`, unterminated `"..."`, missing space
-  after `print`, illegal character.
+  after `PRINT`, illegal character.
 - Syntactic: any deviation from the grammar in §3.
 - Reference to an unbound name in a read position. The check is
   syntactic and conservative: a name is in scope if introduced by
@@ -1729,14 +1804,14 @@ There are two categories.
 - Reference to an unknown function name in a function-call statement.
 - Binding `NULL` (in any case variant of the surface form, since
   `NULL` is case-sensitive — `null` is a different name).
-- File-not-found or parse error in an `importf` target.
+- File-not-found or parse error in an `IMPORTF` target.
 - An `import number` literal that does not fit signed 64-bit range.
 
 Missing C symbols declared by `import builtin` surface as **link-time**
 errors, not compile-time. The compiler trusts the symbol will be
 resolved when the runtime archive is linked.
 
-`watch` paths are not validated at compile time; missing files cause
+`WATCH` paths are not validated at compile time; missing files cause
 the watching object to be born dead at runtime.
 
 **Run-time behavior** (§6.2):
@@ -1772,8 +1847,8 @@ The difference is visible only in programs that compose the same
 operand pair twice and then kill one result:
 
 ```ath
-import a A;
-import b B;
+IMPORT A A;
+IMPORT B B;
 BIFURCATE [A, B] X;
 BIFURCATE [A, B] Y;
 X.DIE();
@@ -1791,7 +1866,8 @@ modes. The recommended default is `fresh`.
 - `SPEC.md` is the authoritative reference. Section numbers cited
   throughout this tutorial point into it.
 - `examples/` contains a working program for every feature discussed
-  here, plus a few combined examples (`fizzbuzz`, `search_replace`).
+  here, plus several larger combined examples (`calculator`, `maze`,
+  `sudoku`, `brainfuck`).
 - `stdlib/` shows how runtime builtins are wrapped as ordinary `~ATH`
   function shims via `import builtin`.
 - `runtime/ath_runtime.h` is the C ABI that the compiler emits calls
