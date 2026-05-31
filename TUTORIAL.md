@@ -1866,8 +1866,9 @@ modes. The recommended default is `fresh`.
 - `SPEC.md` is the authoritative reference. Section numbers cited
   throughout this tutorial point into it.
 - `examples/` contains a working program for every feature discussed
-  here, plus several larger combined examples (`calculator`, `maze`,
-  `sudoku`, `brainfuck`).
+  here, plus multi-file combined examples (`fizzbuzz`, `search_replace`)
+  and larger single-file programs (`calculator`, `maze`, `sudoku`,
+  `brainfuck`).
 - `stdlib/` shows how runtime builtins are wrapped as ordinary `~ATH`
   function shims via `import builtin`.
 - `runtime/ath_runtime.h` is the C ABI that the compiler emits calls
