@@ -7,7 +7,7 @@
 // NEEDLE.length bytes of S). R is born dead if NEEDLE is empty, not
 // present anywhere in S, or if any operand is dead.
 
-import builtin ath_replace_all as ATH_REPLACE_ALL;
-BIFURCATE ARGS [S, PAIR];
-ATH_REPLACE_ALL [S, PAIR] R;
+IMPORT BUILTIN ath_replace_all AS ATH_REPLACE_ALL;
+BIFURCATE ARGS[S, PAIR];
+ATH_REPLACE_ALL[S, PAIR] R;
 THIS.DIE(R);

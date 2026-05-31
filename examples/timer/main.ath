@@ -22,14 +22,15 @@
 //
 // Random is deterministic with ATH_SEED=N set in the environment.
 
-import number 100 as DURATION_MS;
-import number 10  as TICK_MS;
+IMPORT NUMBER 100 AS DURATION_MS;
+IMPORT NUMBER 10  AS TICK_MS;
 
-TIMER DURATION_MS as T;
-print go;
-~ATH(T) {
-    sleep TICK_MS;
+TIMER DURATION_MS AS T;
+PRINT go;
+~ATH(T)
+{
+    SLEEP TICK_MS;
 }
-print stop;
+PRINT stop;
 
 THIS.DIE();

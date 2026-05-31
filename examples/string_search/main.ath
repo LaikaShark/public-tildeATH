@@ -10,30 +10,40 @@
 //   printf 'abracadabra\na\n' | ./ss
 //   # present / 5 / 10
 
-importf <contains>  as CONTAINS;
-importf <count>     as COUNT;
-importf <rfind>     as RFIND;
-importf <to_string> as TO_STRING;
+IMPORTF <contains>  AS CONTAINS;
+IMPORTF <count>     AS COUNT;
+IMPORTF <rfind>     AS RFIND;
+IMPORTF <to_string> AS TO_STRING;
 
 INPUT HAY;
 INPUT NEEDLE;
 
-CONTAINS [HAY, NEEDLE] HAS;
-BRANCH(HAS) { print present; } ELSE { print absent; }
+CONTAINS[HAY, NEEDLE] HAS;
+BRANCH(HAS)
+{
+    PRINT present;
+}
+ELSE
+{
+    PRINT absent;
+}
 
-COUNT [HAY, NEEDLE] N;
-TO_STRING [N, NULL] NS;
-print $NS;
+COUNT[HAY, NEEDLE] N;
+TO_STRING[N, NULL] NS;
+PRINT $NS;
 
 // RFIND is born dead when the needle is absent; CLONE to test liveness
 // before consuming the value with a BRANCH.
-RFIND [HAY, NEEDLE] R;
-CLONE R as RCHK;
-BRANCH(RCHK) {
-    TO_STRING [R, NULL] RS;
-    print $RS;
-} ELSE {
-    print no match;
+RFIND[HAY, NEEDLE] R;
+CLONE R AS RCHK;
+BRANCH(RCHK)
+{
+    TO_STRING[R, NULL] RS;
+    PRINT $RS;
+}
+ELSE
+{
+    PRINT no match;
 }
 
 THIS.DIE();

@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — confine X to the pair [LO, HI]. CLAMP [X, PAIR] R;
-import builtin ath_clamp as ATH_CLAMP;
-BIFURCATE ARGS [X, Y];
-ATH_CLAMP [X, Y] R;
+IMPORT BUILTIN ath_clamp AS ATH_CLAMP;
+BIFURCATE ARGS[X, Y];
+ATH_CLAMP[X, Y] R;
 THIS.DIE(R);

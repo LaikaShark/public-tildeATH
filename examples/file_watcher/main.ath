@@ -7,9 +7,10 @@
 //
 // and the program will exit shortly after rm.
 
-watch "target.txt" as F;
-~ATH(F) {
-    print watching;
+WATCH "target.txt" AS F;
+~ATH(F)
+{
+    PRINT watching;
 }
-print target is gone;
+PRINT target is gone;
 THIS.DIE();

@@ -13,29 +13,57 @@
 // its composite survives the operand's death; ENTANGLE installs deps,
 // so its composite becomes dead at the next observation.
 
-importf <entangle> as ENTANGLE;
+IMPORTF <entangle> AS ENTANGLE;
 
-import number 1 as A1;
-import number 2 as B1;
-import number 1 as A2;
-import number 2 as B2;
+IMPORT NUMBER 1 AS A1;
+IMPORT NUMBER 2 AS B1;
+IMPORT NUMBER 1 AS A2;
+IMPORT NUMBER 2 AS B2;
 
 BIFURCATE [A1, B1] P_BIF;
-ENTANGLE [A2, B2] P_ENT;
+ENTANGLE[A2, B2] P_ENT;
 
-CLONE P_BIF as B0;
-BRANCH(B0) { print bifurcate alive; } ELSE { print bifurcate fail; }
+CLONE P_BIF AS B0;
+BRANCH(B0)
+{
+    PRINT bifurcate alive;
+}
+ELSE
+{
+    PRINT bifurcate fail;
+}
 
-CLONE P_ENT as E0;
-BRANCH(E0) { print entangle hold;  } ELSE { print entangle fail; }
+CLONE P_ENT AS E0;
+BRANCH(E0)
+{
+    PRINT entangle hold;
+}
+ELSE
+{
+    PRINT entangle fail;
+}
 
 A1.DIE();
 A2.DIE();
 
-CLONE P_BIF as B1C;
-BRANCH(B1C) { print bifurcate still alive; } ELSE { print bifurcate dead; }
+CLONE P_BIF AS B1C;
+BRANCH(B1C)
+{
+    PRINT bifurcate still alive;
+}
+ELSE
+{
+    PRINT bifurcate dead;
+}
 
-CLONE P_ENT as E1C;
-BRANCH(E1C) { print entangle still alive; } ELSE { print entangle dead; }
+CLONE P_ENT AS E1C;
+BRANCH(E1C)
+{
+    PRINT entangle still alive;
+}
+ELSE
+{
+    PRINT entangle dead;
+}
 
 THIS.DIE();

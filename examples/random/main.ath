@@ -9,13 +9,14 @@
 //   ATH_SEED=99 ./roll
 //   # => 5
 
-importf <random>    as RANDOM;
-importf <to_string> as TO_STRING;
+IMPORTF <random>    AS RANDOM;
+IMPORTF <to_string> AS TO_STRING;
 
-import number 1 as LO;
-import number 7 as HI;        // exclusive — gives [1, 7) = 1..6
-RANDOM [LO, HI] ROLL;
-TO_STRING [ROLL, NULL] OUT;
-print $OUT;
+IMPORT NUMBER 1 AS LO;
+IMPORT NUMBER 7 AS HI;
+// exclusive — gives [1, 7) = 1..6
+RANDOM[LO, HI] ROLL;
+TO_STRING[ROLL, NULL] OUT;
+PRINT $OUT;
 
 THIS.DIE();

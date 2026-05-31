@@ -5,7 +5,7 @@
 // NULL operands are treated as the empty string. A non-NULL dead operand
 // produces a born-dead result.
 
-import builtin ath_concat as ATH_CONCAT;
-BIFURCATE ARGS [A, B];
-ATH_CONCAT [A, B] R;
+IMPORT BUILTIN ath_concat AS ATH_CONCAT;
+BIFURCATE ARGS[A, B];
+ATH_CONCAT[A, B] R;
 THIS.DIE(R);

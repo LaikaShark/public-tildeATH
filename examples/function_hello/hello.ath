@@ -1,2 +1,2 @@
-print hello from a function;
+PRINT hello from a function;
 THIS.DIE();

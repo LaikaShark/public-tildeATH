@@ -1,5 +1,5 @@
 // SPEC §4.8.4 — right-pad S to width with a fill char, packed (WIDTH, FILL). PAD_RIGHT_WITH [S, PAIR] R;
-import builtin ath_pad_right_with as ATH_PAD_RIGHT_WITH;
-BIFURCATE ARGS [X, Y];
-ATH_PAD_RIGHT_WITH [X, Y] R;
+IMPORT BUILTIN ath_pad_right_with AS ATH_PAD_RIGHT_WITH;
+BIFURCATE ARGS[X, Y];
+ATH_PAD_RIGHT_WITH[X, Y] R;
 THIS.DIE(R);

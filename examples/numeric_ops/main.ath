@@ -4,33 +4,50 @@
 //   athc examples/numeric_ops/main.ath -o no && ./no
 //   # 1024 / 6 / 12 / 18 / 6 / 48 / -1 / 18
 
-importf <pow>       as POW;
-importf <gcd>       as GCD;
-importf <min>       as MIN;
-importf <max>       as MAX;
-importf <bxor>      as BXOR;
-importf <shl>       as SHL;
-importf <neg>       as NEG;
-importf <sign>      as SIGN;
-importf <clamp>     as CLAMP;
-importf <to_string> as TO_STRING;
-importf <entangle>  as ENTANGLE;
+IMPORTF <pow>       AS POW;
+IMPORTF <gcd>       AS GCD;
+IMPORTF <min>       AS MIN;
+IMPORTF <max>       AS MAX;
+IMPORTF <bxor>      AS BXOR;
+IMPORTF <shl>       AS SHL;
+IMPORTF <neg>       AS NEG;
+IMPORTF <sign>      AS SIGN;
+IMPORTF <clamp>     AS CLAMP;
+IMPORTF <to_string> AS TO_STRING;
+IMPORTF <entangle>  AS ENTANGLE;
 
-import number 2 as TWO;
-import number 10 as TEN;
-import number 12 as N12;
-import number 18 as N18;
-import number 100 as N100;
-import number 0 as ZERO;
+IMPORT NUMBER 2 AS TWO;
+IMPORT NUMBER 10 AS TEN;
+IMPORT NUMBER 12 AS N12;
+IMPORT NUMBER 18 AS N18;
+IMPORT NUMBER 100 AS N100;
+IMPORT NUMBER 0 AS ZERO;
 
-POW [TWO, TEN] A;  TO_STRING [A, NULL] AOUT; print $AOUT;
-GCD [N12, N18] B;  TO_STRING [B, NULL] BS; print $BS;
-MIN [N12, N18] C;  TO_STRING [C, NULL] CS; print $CS;
-MAX [N12, N18] D;  TO_STRING [D, NULL] DS; print $DS;
-BXOR [N12, TEN] E; TO_STRING [E, NULL] ES; print $ES;
-SHL [N12, TWO] F;  TO_STRING [F, NULL] FS; print $FS;
-NEG [TEN, NULL] G; SIGN [G, NULL] H; TO_STRING [H, NULL] HS; print $HS;
-ENTANGLE [ZERO, N18] LH;
-CLAMP [N100, LH] I; TO_STRING [I, NULL] IS; print $IS;
+POW[TWO, TEN] A;
+TO_STRING[A, NULL] AOUT;
+PRINT $AOUT;
+GCD[N12, N18] B;
+TO_STRING[B, NULL] BS;
+PRINT $BS;
+MIN[N12, N18] C;
+TO_STRING[C, NULL] CS;
+PRINT $CS;
+MAX[N12, N18] D;
+TO_STRING[D, NULL] DS;
+PRINT $DS;
+BXOR[N12, TEN] E;
+TO_STRING[E, NULL] ES;
+PRINT $ES;
+SHL[N12, TWO] F;
+TO_STRING[F, NULL] FS;
+PRINT $FS;
+NEG[TEN, NULL] G;
+SIGN[G, NULL] H;
+TO_STRING[H, NULL] HS;
+PRINT $HS;
+ENTANGLE[ZERO, N18] LH;
+CLAMP[N100, LH] I;
+TO_STRING[I, NULL] IS;
+PRINT $IS;
 
 THIS.DIE();

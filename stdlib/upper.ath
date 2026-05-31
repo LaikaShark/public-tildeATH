@@ -5,7 +5,7 @@
 // R is a fresh cons-list with every ASCII a-z byte mapped to A-Z.
 // Non-letter bytes pass through unchanged. Inherits S as a dep.
 
-import builtin ath_upper as ATH_UPPER;
-BIFURCATE ARGS [X, Y];
-ATH_UPPER [X, Y] R;
+IMPORT BUILTIN ath_upper AS ATH_UPPER;
+BIFURCATE ARGS[X, Y];
+ATH_UPPER[X, Y] R;
 THIS.DIE(R);

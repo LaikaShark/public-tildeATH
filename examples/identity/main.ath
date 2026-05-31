@@ -1,10 +1,10 @@
 // Tests that a function returning its ARGS works, and that the caller
 // can decompose the returned object back into its halves.
 
-importf "id.ath" as ID;
-INPUT line;
-ID line [HEAD, TAIL];
+IMPORTF "id.ath" AS ID;
+INPUT LINE;
+ID LINE[HEAD, TAIL];
 // HEAD is the first-char atom of `line`; TAIL is the rest of the string.
-print $TAIL;
-print done;
+PRINT $TAIL;
+PRINT done;
 THIS.DIE();

@@ -5,7 +5,7 @@
 // V is alive iff HAY begins with PREFIX. The empty prefix matches
 // every string. Born dead on malformed input.
 
-import builtin ath_startswith as ATH_STARTSWITH;
-BIFURCATE ARGS [X, Y];
-ATH_STARTSWITH [X, Y] R;
+IMPORT BUILTIN ath_startswith AS ATH_STARTSWITH;
+BIFURCATE ARGS[X, Y];
+ATH_STARTSWITH[X, Y] R;
 THIS.DIE(R);

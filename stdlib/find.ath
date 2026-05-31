@@ -6,7 +6,7 @@
 // the first occurrence of NEEDLE in HAY. Born dead if NEEDLE is not
 // present, or if either operand is dead. Empty NEEDLE matches at 0.
 
-import builtin ath_find as ATH_FIND;
-BIFURCATE ARGS [HAY, NEEDLE];
-ATH_FIND [HAY, NEEDLE] R;
+IMPORT BUILTIN ath_find AS ATH_FIND;
+BIFURCATE ARGS[HAY, NEEDLE];
+ATH_FIND[HAY, NEEDLE] R;
 THIS.DIE(R);

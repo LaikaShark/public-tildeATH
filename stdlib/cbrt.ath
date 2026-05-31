@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — cube root (float). CBRT [X, _] R;
-import builtin ath_cbrt as CBRT;
-BIFURCATE ARGS [X, Y];
-CBRT [X, Y] R;
+IMPORT BUILTIN ath_cbrt AS CBRT;
+BIFURCATE ARGS[X, Y];
+CBRT[X, Y] R;
 THIS.DIE(R);

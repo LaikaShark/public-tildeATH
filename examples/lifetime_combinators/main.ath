@@ -5,32 +5,60 @@
 //   athc examples/lifetime_combinators/main.ath -o lc && ./lc
 //   # all before alive / all after dead / any after alive / any final dead
 
-importf <all_of> as ALL_OF;
-importf <any_of> as ANY_OF;
+IMPORTF <all_of> AS ALL_OF;
+IMPORTF <any_of> AS ANY_OF;
 
-import number 1 as A1;
-import number 2 as A2;
+IMPORT NUMBER 1 AS A1;
+IMPORT NUMBER 2 AS A2;
 
 // LIST = [A1, A2], both alive.
 BIFURCATE [A2, NULL] L1;
 BIFURCATE [A1, L1] LIST;
 
-ALL_OF [LIST, NULL] ALLV;
-ANY_OF [LIST, NULL] ANYV;
+ALL_OF[LIST, NULL] ALLV;
+ANY_OF[LIST, NULL] ANYV;
 
-CLONE ALLV as C1;
-BRANCH(C1) { print all before alive; } ELSE { print all before dead; }
+CLONE ALLV AS C1;
+BRANCH(C1)
+{
+    PRINT all before alive;
+}
+ELSE
+{
+    PRINT all before dead;
+}
 
 // Kill one element: ALL_OF must now observe dead, ANY_OF stays alive.
 A2.DIE();
-CLONE ALLV as C2;
-BRANCH(C2) { print all after alive; } ELSE { print all after dead; }
-CLONE ANYV as C3;
-BRANCH(C3) { print any after alive; } ELSE { print any after dead; }
+CLONE ALLV AS C2;
+BRANCH(C2)
+{
+    PRINT all after alive;
+}
+ELSE
+{
+    PRINT all after dead;
+}
+CLONE ANYV AS C3;
+BRANCH(C3)
+{
+    PRINT any after alive;
+}
+ELSE
+{
+    PRINT any after dead;
+}
 
 // Kill the last live element: ANY_OF now dies too.
 A1.DIE();
-CLONE ANYV as C4;
-BRANCH(C4) { print any final alive; } ELSE { print any final dead; }
+CLONE ANYV AS C4;
+BRANCH(C4)
+{
+    PRINT any final alive;
+}
+ELSE
+{
+    PRINT any final dead;
+}
 
 THIS.DIE();

@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — bitwise XOR. BXOR [X, Y] R;
-import builtin ath_bxor as ATH_BXOR;
-BIFURCATE ARGS [X, Y];
-ATH_BXOR [X, Y] R;
+IMPORT BUILTIN ath_bxor AS ATH_BXOR;
+BIFURCATE ARGS[X, Y];
+ATH_BXOR[X, Y] R;
 THIS.DIE(R);

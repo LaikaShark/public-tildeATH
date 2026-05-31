@@ -14,35 +14,35 @@
 //   printf 'ab\n' | ./sb
 //   # ababab / ba / "   ab" / "ab   " / 97 / a
 
-importf <repeat>    as REPEAT;
-importf <reverse>   as REVERSE;
-importf <pad_left>  as PAD_LEFT;
-importf <pad_right> as PAD_RIGHT;
-importf <ord>       as ORD;
-importf <chr>       as CHR;
-importf <to_string> as TO_STRING;
+IMPORTF <repeat>    AS REPEAT;
+IMPORTF <reverse>   AS REVERSE;
+IMPORTF <pad_left>  AS PAD_LEFT;
+IMPORTF <pad_right> AS PAD_RIGHT;
+IMPORTF <ord>       AS ORD;
+IMPORTF <chr>       AS CHR;
+IMPORTF <to_string> AS TO_STRING;
 
 INPUT S;
 
-import number 3 as N3;
-REPEAT [S, N3] REP;
-print $REP;
+IMPORT NUMBER 3 AS N3;
+REPEAT[S, N3] REP;
+PRINT $REP;
 
-REVERSE [S, NULL] REV;
-print $REV;
+REVERSE[S, NULL] REV;
+PRINT $REV;
 
-import number 5 as N5;
-PAD_LEFT [S, N5] PL;
-print $PL;
-PAD_RIGHT [S, N5] PR;
-print $PR;
+IMPORT NUMBER 5 AS N5;
+PAD_LEFT[S, N5] PL;
+PRINT $PL;
+PAD_RIGHT[S, N5] PR;
+PRINT $PR;
 
-import number 0 as I0;
+IMPORT NUMBER 0 AS I0;
 S[I0] H;
-ORD [H, NULL] OC;
-TO_STRING [OC, NULL] OCS;
-print $OCS;
-CHR [OC, NULL] BACK;
-print $BACK;
+ORD[H, NULL] OC;
+TO_STRING[OC, NULL] OCS;
+PRINT $OCS;
+CHR[OC, NULL] BACK;
+PRINT $BACK;
 
 THIS.DIE();

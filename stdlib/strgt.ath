@@ -4,7 +4,7 @@
 //
 // V is alive iff A follows B in byte-by-byte lexicographic order.
 
-import builtin ath_strgt as ATH_STRGT;
-BIFURCATE ARGS [X, Y];
-ATH_STRGT [X, Y] R;
+IMPORT BUILTIN ath_strgt AS ATH_STRGT;
+BIFURCATE ARGS[X, Y];
+ATH_STRGT[X, Y] R;
 THIS.DIE(R);

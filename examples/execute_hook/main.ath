@@ -6,13 +6,15 @@
 //   athc examples/execute_hook/main.ath -o eh && ./eh
 //   # working / farewell / after
 
-importf "farewell.ath" as FAREWELL;
-import number 1 as V;
+IMPORTF "farewell.ath" AS FAREWELL;
+IMPORT NUMBER 1 AS V;
 
-~ATH(V) {
-    print working;
+~ATH(V)
+{
+    PRINT working;
     V.DIE();
-} EXECUTE(FAREWELL);
+}
+EXECUTE(FAREWELL);
 
-print after;
+PRINT after;
 THIS.DIE();

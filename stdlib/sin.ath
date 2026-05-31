@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — sine of X radians (float). SIN [X, _] R;
-import builtin ath_sin as SIN;
-BIFURCATE ARGS [X, Y];
-SIN [X, Y] R;
+IMPORT BUILTIN ath_sin AS SIN;
+BIFURCATE ARGS[X, Y];
+SIN[X, Y] R;
 THIS.DIE(R);

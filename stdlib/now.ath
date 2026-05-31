@@ -6,7 +6,7 @@
 // returns a fresh number-payload object. The result is not dep-tracked
 // against its operands — NOW is a clock reading.
 
-import builtin ath_now as ATH_NOW;
-BIFURCATE ARGS [A, B];
-ATH_NOW [A, B] R;
+IMPORT BUILTIN ath_now AS ATH_NOW;
+BIFURCATE ARGS[A, B];
+ATH_NOW[A, B] R;
 THIS.DIE(R);

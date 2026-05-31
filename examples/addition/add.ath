@@ -7,14 +7,15 @@
 // ARGS is compose(a, b); the result (also an encoded number) is returned
 // via THIS.DIE.
 
-import s S;
+IMPORT S S;
 BIFURCATE ARGS[A, B];
 BIFURCATE A[ALEFT, AREST];
 
-~ATH(ALEFT) {
+~ATH(ALEFT)
+{
     // a > 1: recurse with (a-1, b+1)
     BIFURCATE [S, B] BPLUS;
-    ADD [AREST, BPLUS] R;
+    ADD[AREST, BPLUS] R;
     THIS.DIE(R);
 }
 

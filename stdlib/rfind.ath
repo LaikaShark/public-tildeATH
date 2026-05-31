@@ -6,7 +6,7 @@
 // last occurrence of NEEDLE in HAY. Born dead if NEEDLE is absent or an
 // operand is dead. Empty NEEDLE matches at len(HAY).
 
-import builtin ath_rfind as ATH_RFIND;
-BIFURCATE ARGS [X, Y];
-ATH_RFIND [X, Y] R;
+IMPORT BUILTIN ath_rfind AS ATH_RFIND;
+BIFURCATE ARGS[X, Y];
+ATH_RFIND[X, Y] R;
 THIS.DIE(R);

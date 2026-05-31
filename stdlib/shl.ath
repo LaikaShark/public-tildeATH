@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — left shift X by Y (0..63). SHL [X, Y] R;
-import builtin ath_shl as ATH_SHL;
-BIFURCATE ARGS [X, Y];
-ATH_SHL [X, Y] R;
+IMPORT BUILTIN ath_shl AS ATH_SHL;
+BIFURCATE ARGS[X, Y];
+ATH_SHL[X, Y] R;
 THIS.DIE(R);

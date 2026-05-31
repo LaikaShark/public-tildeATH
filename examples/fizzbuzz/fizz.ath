@@ -2,10 +2,11 @@
 // FIZZBUZZ -> FIZZ. Each prints its label and, if its counter ARGS
 // encodes n > 1, calls the next function with n-1.
 
-print fizz;
+PRINT fizz;
 BIFURCATE ARGS[LEFT, REST];
-~ATH(LEFT) {
-    BUZZ REST [X, Y];
+~ATH(LEFT)
+{
+    BUZZ REST[X, Y];
     BIFURCATE NULL[JUNK, LEFT];
 }
 THIS.DIE();

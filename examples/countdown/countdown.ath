@@ -6,10 +6,11 @@
 // The rebind-to-NULL idiom breaks the if-then loop without killing the
 // shared sentinel object that every level of ARGS points to.
 
-print tick;
+PRINT tick;
 BIFURCATE ARGS[LEFT, REST];
-~ATH(LEFT) {
-    COUNTDOWN REST [A, B];
+~ATH(LEFT)
+{
+    COUNTDOWN REST[A, B];
     BIFURCATE NULL[JUNK, LEFT];
 }
 THIS.DIE();

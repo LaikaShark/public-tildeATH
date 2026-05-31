@@ -4,7 +4,7 @@
 //
 // V is alive iff X.value <= Y.value, else born dead.
 
-import builtin ath_le as ATH_LE;
-BIFURCATE ARGS [X, Y];
-ATH_LE [X, Y] R;
+IMPORT BUILTIN ath_le AS ATH_LE;
+BIFURCATE ARGS[X, Y];
+ATH_LE[X, Y] R;
 THIS.DIE(R);

@@ -4,37 +4,43 @@
 //   printf 'hello world\n' | ./sp
 //   # Hello world / Hello World / h / 7 / hello world / .hello world
 
-importf <capitalize>    as CAPITALIZE;
-importf <title>         as TITLE;
-importf <char_at>       as CHAR_AT;
-importf <find_from>     as FIND_FROM;
-importf <strip_chars>   as STRIP_CHARS;
-importf <pad_left_with> as PAD_LEFT_WITH;
-importf <to_string>     as TO_STRING;
-importf <entangle>      as ENTANGLE;
+IMPORTF <capitalize>    AS CAPITALIZE;
+IMPORTF <title>         AS TITLE;
+IMPORTF <char_at>       AS CHAR_AT;
+IMPORTF <find_from>     AS FIND_FROM;
+IMPORTF <strip_chars>   AS STRIP_CHARS;
+IMPORTF <pad_left_with> AS PAD_LEFT_WITH;
+IMPORTF <to_string>     AS TO_STRING;
+IMPORTF <entangle>      AS ENTANGLE;
 
 INPUT S;
 
-CAPITALIZE [S, NULL] CAP; print $CAP;
-TITLE [S, NULL] TT; print $TT;
+CAPITALIZE[S, NULL] CAP;
+PRINT $CAP;
+TITLE[S, NULL] TT;
+PRINT $TT;
 
-import number 0 as I0;
-CHAR_AT [S, I0] CA; print $CA;
+IMPORT NUMBER 0 AS I0;
+CHAR_AT[S, I0] CA;
+PRINT $CA;
 
 // First 'o' at or after index 5.
-text "o" as OO;
-import number 5 as FIVE;
-ENTANGLE [OO, FIVE] NEEDLE_AT;
-FIND_FROM [S, NEEDLE_AT] FF;
-TO_STRING [FF, NULL] FFS; print $FFS;
+TEXT "o" AS OO;
+IMPORT NUMBER 5 AS FIVE;
+ENTANGLE[OO, FIVE] NEEDLE_AT;
+FIND_FROM[S, NEEDLE_AT] FF;
+TO_STRING[FF, NULL] FFS;
+PRINT $FFS;
 
 // Strip dashes (none here) and left-pad to width 12 with dots.
-text "-" as DASH;
-STRIP_CHARS [S, DASH] SC; print $SC;
+TEXT "-" AS DASH;
+STRIP_CHARS[S, DASH] SC;
+PRINT $SC;
 
-text "." as DOT;
-import number 12 as N12;
-ENTANGLE [N12, DOT] PADSPEC;
-PAD_LEFT_WITH [S, PADSPEC] PL; print $PL;
+TEXT "." AS DOT;
+IMPORT NUMBER 12 AS N12;
+ENTANGLE[N12, DOT] PADSPEC;
+PAD_LEFT_WITH[S, PADSPEC] PL;
+PRINT $PL;
 
 THIS.DIE();

@@ -1,6 +1,6 @@
-importf "hello.ath" as HELLO;
-import any A;
-import any B;
-HELLO [A, B] R;
-print main is done;
+IMPORTF "hello.ath" AS HELLO;
+IMPORT ANY A;
+IMPORT ANY B;
+HELLO[A, B] R;
+PRINT main is done;
 THIS.DIE();

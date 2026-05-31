@@ -5,7 +5,7 @@
 // V is alive iff HAY ends with SUFFIX. The empty suffix matches
 // every string. Born dead on malformed input.
 
-import builtin ath_endswith as ATH_ENDSWITH;
-BIFURCATE ARGS [X, Y];
-ATH_ENDSWITH [X, Y] R;
+IMPORT BUILTIN ath_endswith AS ATH_ENDSWITH;
+BIFURCATE ARGS[X, Y];
+ATH_ENDSWITH[X, Y] R;
 THIS.DIE(R);

@@ -1,6 +1,6 @@
 // SPEC §4.8.2 — integer multiplication.
 
-import builtin ath_mul as ATH_MUL;
-BIFURCATE ARGS [X, Y];
-ATH_MUL [X, Y] R;
+IMPORT BUILTIN ath_mul AS ATH_MUL;
+BIFURCATE ARGS[X, Y];
+ATH_MUL[X, Y] R;
 THIS.DIE(R);

@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — e raised to X (float). EXP [X, _] R;
-import builtin ath_exp as EXP;
-BIFURCATE ARGS [X, Y];
-EXP [X, Y] R;
+IMPORT BUILTIN ath_exp AS EXP;
+BIFURCATE ARGS[X, Y];
+EXP[X, Y] R;
 THIS.DIE(R);

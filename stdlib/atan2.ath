@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — arctangent of Y/X using both signs (float). ATAN2 [X, Y] R;
-import builtin ath_atan2 as ATAN2;
-BIFURCATE ARGS [X, Y];
-ATAN2 [X, Y] R;
+IMPORT BUILTIN ath_atan2 AS ATAN2;
+BIFURCATE ARGS[X, Y];
+ATAN2[X, Y] R;
 THIS.DIE(R);

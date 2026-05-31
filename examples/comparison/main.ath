@@ -9,32 +9,35 @@
 // Each "branch" is a ~ATH loop that runs at most once: the verdict is
 // alive iff the comparison holds, the body kills it, the loop exits.
 
-importf <parse> as PARSE;
-importf <lt> as LT;
-importf <eq> as EQ;
-importf <gt> as GT;
+IMPORTF <parse> AS PARSE;
+IMPORTF <lt> AS LT;
+IMPORTF <eq> AS EQ;
+IMPORTF <gt> AS GT;
 
 INPUT LINE_X;
 INPUT LINE_Y;
 
-PARSE [LINE_X, NULL] X;
-PARSE [LINE_Y, NULL] Y;
+PARSE[LINE_X, NULL] X;
+PARSE[LINE_Y, NULL] Y;
 
-LT [X, Y] IS_LT;
-~ATH(IS_LT) {
-    print less;
+LT[X, Y] IS_LT;
+~ATH(IS_LT)
+{
+    PRINT less;
     IS_LT.DIE();
 }
 
-EQ [X, Y] IS_EQ;
-~ATH(IS_EQ) {
-    print equal;
+EQ[X, Y] IS_EQ;
+~ATH(IS_EQ)
+{
+    PRINT equal;
     IS_EQ.DIE();
 }
 
-GT [X, Y] IS_GT;
-~ATH(IS_GT) {
-    print greater;
+GT[X, Y] IS_GT;
+~ATH(IS_GT)
+{
+    PRINT greater;
     IS_GT.DIE();
 }
 

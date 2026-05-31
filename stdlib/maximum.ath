@@ -1,5 +1,5 @@
 // SPEC §4.8.6 — greatest element payload (empty list dead). MAXIMUM [LIST, _] R;
-import builtin ath_maximum as ATH_MAXIMUM;
-BIFURCATE ARGS [X, Y];
-ATH_MAXIMUM [X, Y] R;
+IMPORT BUILTIN ath_maximum AS ATH_MAXIMUM;
+BIFURCATE ARGS[X, Y];
+ATH_MAXIMUM[X, Y] R;
 THIS.DIE(R);

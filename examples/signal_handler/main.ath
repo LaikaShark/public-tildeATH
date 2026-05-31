@@ -16,13 +16,15 @@
 //   serving requests
 //   received SIGUSR1, shutting down cleanly
 
-watch signal SIGUSR1 as RUNNING;
-import once SHOWN;
+WATCH SIGNAL SIGUSR1 AS RUNNING;
+IMPORT ONCE SHOWN;
 
-~ATH(RUNNING) {
-    ~ATH(SHOWN) {
-        print serving requests;
+~ATH(RUNNING)
+{
+    ~ATH(SHOWN)
+    {
+        PRINT serving requests;
     }
 }
-print received SIGUSR1, shutting down cleanly;
+PRINT received SIGUSR1, shutting down cleanly;
 THIS.DIE();

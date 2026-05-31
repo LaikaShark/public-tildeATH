@@ -1,6 +1,6 @@
 // SPEC §4.8.7 — promote a value into the sticky bignum representation.
 // INT_TO_BIGNUM [X, _] R;
-import builtin ath_int_to_bignum as INT_TO_BIGNUM;
-BIFURCATE ARGS [X, Y];
-INT_TO_BIGNUM [X, Y] R;
+IMPORT BUILTIN ath_int_to_bignum AS INT_TO_BIGNUM;
+BIFURCATE ARGS[X, Y];
+INT_TO_BIGNUM[X, Y] R;
 THIS.DIE(R);

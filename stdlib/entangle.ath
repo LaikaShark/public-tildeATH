@@ -11,7 +11,7 @@
 // Use plain BIFURCATE composition when the composite must outlive its
 // operands.
 
-import builtin ath_entangle as ATH_ENTANGLE;
-BIFURCATE ARGS [X, Y];
-ATH_ENTANGLE [X, Y] R;
+IMPORT BUILTIN ath_entangle AS ATH_ENTANGLE;
+BIFURCATE ARGS[X, Y];
+ATH_ENTANGLE[X, Y] R;
 THIS.DIE(R);

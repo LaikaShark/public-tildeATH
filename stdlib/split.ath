@@ -6,7 +6,7 @@
 // cons-list strings. The empty separator is born dead. A trailing
 // SEP yields a trailing empty-string element.
 
-import builtin ath_split as ATH_SPLIT;
-BIFURCATE ARGS [X, Y];
-ATH_SPLIT [X, Y] R;
+IMPORT BUILTIN ath_split AS ATH_SPLIT;
+BIFURCATE ARGS[X, Y];
+ATH_SPLIT[X, Y] R;
 THIS.DIE(R);

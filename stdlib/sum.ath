@@ -1,5 +1,5 @@
 // SPEC §4.8.6 — sum of a number list's element payloads. SUM [LIST, _] R;
-import builtin ath_sum as ATH_SUM;
-BIFURCATE ARGS [X, Y];
-ATH_SUM [X, Y] R;
+IMPORT BUILTIN ath_sum AS ATH_SUM;
+BIFURCATE ARGS[X, Y];
+ATH_SUM[X, Y] R;
 THIS.DIE(R);

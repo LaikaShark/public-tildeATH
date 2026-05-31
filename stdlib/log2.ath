@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — base-2 log (float). LOG2 [X, _] R;
-import builtin ath_log2 as LOG2;
-BIFURCATE ARGS [X, Y];
-LOG2 [X, Y] R;
+IMPORT BUILTIN ath_log2 AS LOG2;
+BIFURCATE ARGS[X, Y];
+LOG2[X, Y] R;
 THIS.DIE(R);

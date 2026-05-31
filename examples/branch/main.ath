@@ -11,28 +11,34 @@
 //   printf '10\n3\n' | ./br      # not less / verdict was dead
 //   printf '7\n7\n'  | ./br      # not less / verdict was dead
 
-importf <parse> as PARSE;
-importf <lt>    as LT;
+IMPORTF <parse> AS PARSE;
+IMPORTF <lt>    AS LT;
 
 INPUT XS;
 INPUT YS;
-PARSE [XS, NULL] X;
-PARSE [YS, NULL] Y;
-LT [X, Y] V;
+PARSE[XS, NULL] X;
+PARSE[YS, NULL] Y;
+LT[X, Y] V;
 
 // CLONE V so the first BRANCH consumes a copy and V stays available.
-CLONE V as VCHECK;
-BRANCH(VCHECK) {
-    print less;
-} ELSE {
-    print not less;
+CLONE V AS VCHECK;
+BRANCH(VCHECK)
+{
+    PRINT less;
+}
+ELSE
+{
+    PRINT not less;
 }
 
 // V is still alive — confirm by branching on it again.
-BRANCH(V) {
-    print verdict was alive;
-} ELSE {
-    print verdict was dead;
+BRANCH(V)
+{
+    PRINT verdict was alive;
+}
+ELSE
+{
+    PRINT verdict was dead;
 }
 
 THIS.DIE();

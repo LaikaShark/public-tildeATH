@@ -6,7 +6,7 @@
 // spaces to reach width N. If S is already that long, R is a copy of S.
 // N is a number payload; N < 0 is born dead.
 
-import builtin ath_pad_right as ATH_PAD_RIGHT;
-BIFURCATE ARGS [X, Y];
-ATH_PAD_RIGHT [X, Y] R;
+IMPORT BUILTIN ath_pad_right AS ATH_PAD_RIGHT;
+BIFURCATE ARGS[X, Y];
+ATH_PAD_RIGHT[X, Y] R;
 THIS.DIE(R);

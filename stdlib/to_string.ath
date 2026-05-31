@@ -4,7 +4,7 @@
 //
 // Returns NULL if N has no payload.
 
-import builtin ath_to_string as ATH_TO_STRING;
-BIFURCATE ARGS [N, IGNORED];
-ATH_TO_STRING [N, IGNORED] R;
+IMPORT BUILTIN ath_to_string AS ATH_TO_STRING;
+BIFURCATE ARGS[N, IGNORED];
+ATH_TO_STRING[N, IGNORED] R;
 THIS.DIE(R);

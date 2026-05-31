@@ -4,7 +4,7 @@
 //
 // N is born dead on malformed input or overflow.
 
-import builtin ath_parse as ATH_PARSE;
-BIFURCATE ARGS [S, IGNORED];
-ATH_PARSE [S, IGNORED] R;
+IMPORT BUILTIN ath_parse AS ATH_PARSE;
+BIFURCATE ARGS[S, IGNORED];
+ATH_PARSE[S, IGNORED] R;
 THIS.DIE(R);

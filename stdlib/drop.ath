@@ -1,5 +1,5 @@
 // SPEC §4.8.6 — fresh list of all but the first N elements. DROP [LIST, N] R;
-import builtin ath_drop as ATH_DROP;
-BIFURCATE ARGS [X, Y];
-ATH_DROP [X, Y] R;
+IMPORT BUILTIN ath_drop AS ATH_DROP;
+BIFURCATE ARGS[X, Y];
+ATH_DROP[X, Y] R;
 THIS.DIE(R);

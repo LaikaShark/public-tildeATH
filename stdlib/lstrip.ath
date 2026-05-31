@@ -2,7 +2,7 @@
 //
 //   LSTRIP [S, _] R;
 
-import builtin ath_lstrip as ATH_LSTRIP;
-BIFURCATE ARGS [X, Y];
-ATH_LSTRIP [X, Y] R;
+IMPORT BUILTIN ath_lstrip AS ATH_LSTRIP;
+BIFURCATE ARGS[X, Y];
+ATH_LSTRIP[X, Y] R;
 THIS.DIE(R);

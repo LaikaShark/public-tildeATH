@@ -8,7 +8,7 @@
 // R is born dead if NEEDLE is empty, not present in S, or if any
 // operand is dead. See TUTORIAL.md §14.7 for the rationale.
 
-import builtin ath_replace as ATH_REPLACE;
-BIFURCATE ARGS [S, PAIR];
-ATH_REPLACE [S, PAIR] R;
+IMPORT BUILTIN ath_replace AS ATH_REPLACE;
+BIFURCATE ARGS[S, PAIR];
+ATH_REPLACE[S, PAIR] R;
 THIS.DIE(R);

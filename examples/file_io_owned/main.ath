@@ -18,12 +18,13 @@
 // "I'm done with both the object and the file."
 
 INPUT MSG;
-write MSG to "/tmp/ath_owned_scratch.txt";
+WRITE MSG TO "/tmp/ath_owned_scratch.txt";
 
-read "/tmp/ath_owned_scratch.txt" as S;
-print $S;
+READ "/tmp/ath_owned_scratch.txt" AS S;
+PRINT $S;
 
-S.DIE();    // <-- this deletes /tmp/ath_owned_scratch.txt
-print scratch file is now gone;
+S.DIE();
+// <-- this deletes /tmp/ath_owned_scratch.txt
+PRINT scratch file is now gone;
 
 THIS.DIE();

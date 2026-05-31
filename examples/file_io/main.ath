@@ -15,20 +15,20 @@
 // To inspect the read result destructively while keeping the file, use
 // `CLONE ... as ...;` and BRANCH on the clone (see §17 in TUTORIAL.md).
 
-importf <length>    as LENGTH;
-importf <to_string> as TO_STRING;
+IMPORTF <length>    AS LENGTH;
+IMPORTF <to_string> AS TO_STRING;
 
 INPUT MSG;
-write MSG to "/tmp/ath_example_io.txt";
+WRITE MSG TO "/tmp/ath_example_io.txt";
 
-read "/tmp/ath_example_io.txt" as CONTENT;
+READ "/tmp/ath_example_io.txt" AS CONTENT;
 
-LENGTH [CONTENT, NULL] N;
-TO_STRING [N, NULL] NS;
-print $NS;
-print $CONTENT;
+LENGTH[CONTENT, NULL] N;
+TO_STRING[N, NULL] NS;
+PRINT $NS;
+PRINT $CONTENT;
 
 // Release the file without deleting it.
-close CONTENT;
+CLOSE CONTENT;
 
 THIS.DIE();

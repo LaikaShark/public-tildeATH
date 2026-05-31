@@ -15,27 +15,27 @@
 //   # "  hello,world,foo  " / "  HELLO,WORLD,FOO  " / "Hello,World,FOO"
 //   # / "Hello-World-FOO"
 
-importf <lower> as LOWER;
-importf <upper> as UPPER;
-importf <trim>  as TRIM;
-importf <split> as SPLIT;
-importf <join>  as JOIN;
+IMPORTF <lower> AS LOWER;
+IMPORTF <upper> AS UPPER;
+IMPORTF <trim>  AS TRIM;
+IMPORTF <split> AS SPLIT;
+IMPORTF <join>  AS JOIN;
 
 INPUT S;
 
-LOWER [S, NULL] LO;
-print $LO;
+LOWER[S, NULL] LO;
+PRINT $LO;
 
-UPPER [S, NULL] UP;
-print $UP;
+UPPER[S, NULL] UP;
+PRINT $UP;
 
-TRIM [S, NULL] TR;
-print $TR;
+TRIM[S, NULL] TR;
+PRINT $TR;
 
-text "," as COMMA;
-text "-" as DASH;
-SPLIT [TR, COMMA] PARTS;
-JOIN [PARTS, DASH] REJOINED;
-print $REJOINED;
+TEXT "," AS COMMA;
+TEXT "-" AS DASH;
+SPLIT[TR, COMMA] PARTS;
+JOIN[PARTS, DASH] REJOINED;
+PRINT $REJOINED;
 
 THIS.DIE();

@@ -14,30 +14,33 @@
 //   # 0
 //   # hi world hi
 
-importf <find>        as FIND;
-importf <replace_all> as REPLACE_ALL;
-importf <to_string>   as TO_STRING;
-importf <entangle>    as ENTANGLE;
+IMPORTF <find>        AS FIND;
+IMPORTF <replace_all> AS REPLACE_ALL;
+IMPORTF <to_string>   AS TO_STRING;
+IMPORTF <entangle>    AS ENTANGLE;
 
 INPUT HAY;
 INPUT NEEDLE;
 INPUT REPL;
 
 // Search: report the position of the first match (or "not found").
-FIND [HAY, NEEDLE] IDX;
-CLONE IDX as IDX_CHECK;
-BRANCH(IDX_CHECK) {
-    TO_STRING [IDX, NULL] S;
-    print $S;
-} ELSE {
-    print not found;
+FIND[HAY, NEEDLE] IDX;
+CLONE IDX AS IDX_CHECK;
+BRANCH(IDX_CHECK)
+{
+    TO_STRING[IDX, NULL] S;
+    PRINT $S;
+}
+ELSE
+{
+    PRINT not found;
 }
 
 // Replace: pack (NEEDLE, REPL) with dep propagation, then call. ENTANGLE
 // ensures that if NEEDLE or REPL dies after the call, the REPLACE_ALL
 // result observes the death and becomes dead at the next observation.
-ENTANGLE [NEEDLE, REPL] PAIR;
-REPLACE_ALL [HAY, PAIR] R;
-print $R;
+ENTANGLE[NEEDLE, REPL] PAIR;
+REPLACE_ALL[HAY, PAIR] R;
+PRINT $R;
 
 THIS.DIE();

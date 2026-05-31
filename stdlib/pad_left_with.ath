@@ -1,5 +1,5 @@
 // SPEC §4.8.4 — left-pad S to width with a fill char, packed (WIDTH, FILL). PAD_LEFT_WITH [S, PAIR] R;
-import builtin ath_pad_left_with as ATH_PAD_LEFT_WITH;
-BIFURCATE ARGS [X, Y];
-ATH_PAD_LEFT_WITH [X, Y] R;
+IMPORT BUILTIN ath_pad_left_with AS ATH_PAD_LEFT_WITH;
+BIFURCATE ARGS[X, Y];
+ATH_PAD_LEFT_WITH[X, Y] R;
 THIS.DIE(R);

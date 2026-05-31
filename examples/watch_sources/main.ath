@@ -8,13 +8,27 @@
 // (`watch mtime "PATH"` — die on a file's modification — is exercised
 // deterministically in the C runtime tests, where timing is controlled.)
 
-import number 1 as PID1;
-import number 2147480000 as PIDX;
+IMPORT NUMBER 1 AS PID1;
+IMPORT NUMBER 2147480000 AS PIDX;
 
-watch pid PID1 as A;
-BRANCH(A) { print pid alive; } ELSE { print pid dead; }
+WATCH PID PID1 AS A;
+BRANCH(A)
+{
+    PRINT pid alive;
+}
+ELSE
+{
+    PRINT pid dead;
+}
 
-watch pid PIDX as B;
-BRANCH(B) { print other alive; } ELSE { print other dead; }
+WATCH PID PIDX AS B;
+BRANCH(B)
+{
+    PRINT other alive;
+}
+ELSE
+{
+    PRINT other dead;
+}
 
 THIS.DIE();

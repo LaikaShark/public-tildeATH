@@ -6,7 +6,7 @@
 // (0..255). Born dead if N is out of range or lacks a payload. Inverse
 // of ORD.
 
-import builtin ath_chr as ATH_CHR;
-BIFURCATE ARGS [X, Y];
-ATH_CHR [X, Y] R;
+IMPORT BUILTIN ath_chr AS ATH_CHR;
+BIFURCATE ARGS[X, Y];
+ATH_CHR[X, Y] R;
 THIS.DIE(R);

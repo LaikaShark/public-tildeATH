@@ -2,9 +2,9 @@
 // then prints what that single atom looks like as a "one-character string"
 // (compose with NULL terminator and print $interpolation).
 
-importf "first.ath" as FIRST;
-INPUT line;
-FIRST line [CH, REST];
-BIFURCATE [CH, NULL] single;
-print $single;
+IMPORTF "first.ath" AS FIRST;
+INPUT LINE;
+FIRST LINE[CH, REST];
+BIFURCATE [CH, NULL] SINGLE;
+PRINT $SINGLE;
 THIS.DIE();

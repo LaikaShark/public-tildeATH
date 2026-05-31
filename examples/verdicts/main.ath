@@ -10,53 +10,58 @@
 // Each line is printed iff the corresponding verdict is alive at the
 // observation site.
 
-importf <parse> as PARSE;
-importf <le>    as LE;
-importf <ge>    as GE;
-importf <ne>    as NE;
-importf <gt>    as GT;
-importf <and>   as AND;
-importf <or>    as OR;
-importf <eq>    as EQ;
+IMPORTF <parse> AS PARSE;
+IMPORTF <le>    AS LE;
+IMPORTF <ge>    AS GE;
+IMPORTF <ne>    AS NE;
+IMPORTF <gt>    AS GT;
+IMPORTF <and>   AS AND;
+IMPORTF <or>    AS OR;
+IMPORTF <eq>    AS EQ;
 
 INPUT LINE_X;
 INPUT LINE_Y;
-PARSE [LINE_X, NULL] X;
-PARSE [LINE_Y, NULL] Y;
+PARSE[LINE_X, NULL] X;
+PARSE[LINE_Y, NULL] Y;
 
-import number 0 as ZERO;
+IMPORT NUMBER 0 AS ZERO;
 
-LE [X, Y] V_LE;
-~ATH(V_LE) {
-    print x le y;
+LE[X, Y] V_LE;
+~ATH(V_LE)
+{
+    PRINT x le y;
     V_LE.DIE();
 }
 
-GE [X, Y] V_GE;
-~ATH(V_GE) {
-    print x ge y;
+GE[X, Y] V_GE;
+~ATH(V_GE)
+{
+    PRINT x ge y;
     V_GE.DIE();
 }
 
-NE [X, Y] V_NE;
-~ATH(V_NE) {
-    print x ne y;
+NE[X, Y] V_NE;
+~ATH(V_NE)
+{
+    PRINT x ne y;
     V_NE.DIE();
 }
 
-GT [X, ZERO] X_POS;
-GT [Y, ZERO] Y_POS;
-AND [X_POS, Y_POS] BOTH_POS;
-~ATH(BOTH_POS) {
-    print both positive;
+GT[X, ZERO] X_POS;
+GT[Y, ZERO] Y_POS;
+AND[X_POS, Y_POS] BOTH_POS;
+~ATH(BOTH_POS)
+{
+    PRINT both positive;
     BOTH_POS.DIE();
 }
 
-EQ [X, ZERO] X_ZERO;
-EQ [Y, ZERO] Y_ZERO;
-OR [X_ZERO, Y_ZERO] EITHER_ZERO;
-~ATH(EITHER_ZERO) {
-    print some zero;
+EQ[X, ZERO] X_ZERO;
+EQ[Y, ZERO] Y_ZERO;
+OR[X_ZERO, Y_ZERO] EITHER_ZERO;
+~ATH(EITHER_ZERO)
+{
+    PRINT some zero;
     EITHER_ZERO.DIE();
 }
 

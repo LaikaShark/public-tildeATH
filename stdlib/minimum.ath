@@ -1,5 +1,5 @@
 // SPEC §4.8.6 — least element payload (empty list dead). MINIMUM [LIST, _] R;
-import builtin ath_minimum as ATH_MINIMUM;
-BIFURCATE ARGS [X, Y];
-ATH_MINIMUM [X, Y] R;
+IMPORT BUILTIN ath_minimum AS ATH_MINIMUM;
+BIFURCATE ARGS[X, Y];
+ATH_MINIMUM[X, Y] R;
 THIS.DIE(R);

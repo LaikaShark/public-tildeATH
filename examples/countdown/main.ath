@@ -6,14 +6,14 @@
 //   1 = compose(NULL, anything)
 //   n+1 = compose(alive-sentinel, n)
 
-importf "countdown.ath" as COUNTDOWN;
+IMPORTF "countdown.ath" AS COUNTDOWN;
 
-import sentinel S;
+IMPORT SENTINEL S;
 BIFURCATE [NULL, S] ONE;
 BIFURCATE [S, ONE]  TWO;
 BIFURCATE [S, TWO]  THREE;
 
-COUNTDOWN THREE [A, B];
+COUNTDOWN THREE[A, B];
 
-print done;
+PRINT done;
 THIS.DIE();

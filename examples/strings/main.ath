@@ -14,32 +14,32 @@
 //   ell
 //   helloworld
 
-importf <length>    as LENGTH;
-importf <concat>    as CONCAT;
-importf <to_string> as TO_STRING;
+IMPORTF <length>    AS LENGTH;
+IMPORTF <concat>    AS CONCAT;
+IMPORTF <to_string> AS TO_STRING;
 
 INPUT A;
 INPUT B;
 
 // Length of A as a decimal string.
-LENGTH [A, NULL] LA;
-TO_STRING [LA, NULL] LA_STR;
-print $LA_STR;
+LENGTH[A, NULL] LA;
+TO_STRING[LA, NULL] LA_STR;
+PRINT $LA_STR;
 
 // First character of A, printed by wrapping the atom in a length-1 string.
-import number 0 as I0;
+IMPORT NUMBER 0 AS I0;
 A[I0] HEAD_ATOM;
 BIFURCATE [HEAD_ATOM, NULL] HEAD_STR;
-print $HEAD_STR;
+PRINT $HEAD_STR;
 
 // Slice A[1..4] (exclusive end).
-import number 1 as I1;
-import number 4 as I4;
+IMPORT NUMBER 1 AS I1;
+IMPORT NUMBER 4 AS I4;
 A[I1..I4] MID;
-print $MID;
+PRINT $MID;
 
 // Concatenate A and B.
-CONCAT [A, B] AB;
-print $AB;
+CONCAT[A, B] AB;
+PRINT $AB;
 
 THIS.DIE();

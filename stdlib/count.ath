@@ -5,7 +5,7 @@
 // N is an int64-payload object holding the number of non-overlapping
 // occurrences of NEEDLE in HAY (0 if none). Empty NEEDLE is born dead.
 
-import builtin ath_count as ATH_COUNT;
-BIFURCATE ARGS [X, Y];
-ATH_COUNT [X, Y] R;
+IMPORT BUILTIN ath_count AS ATH_COUNT;
+BIFURCATE ARGS[X, Y];
+ATH_COUNT[X, Y] R;
 THIS.DIE(R);

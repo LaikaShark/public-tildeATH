@@ -1,5 +1,5 @@
 // SPEC §4.8.2 — round a float up to a whole-valued float. CEIL [X, _] R;
-import builtin ath_ceil as CEIL;
-BIFURCATE ARGS [X, Y];
-CEIL [X, Y] R;
+IMPORT BUILTIN ath_ceil AS CEIL;
+BIFURCATE ARGS[X, Y];
+CEIL[X, Y] R;
 THIS.DIE(R);

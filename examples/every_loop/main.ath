@@ -5,11 +5,12 @@
 //   athc examples/every_loop/main.ath -o el && ./el
 //   # beat
 
-import number 1 as MS;
+IMPORT NUMBER 1 AS MS;
 
-every MS {
-    print beat;
+EVERY MS
+{
+    PRINT beat;
     THIS.DIE();
 }
-print unreachable;
+PRINT unreachable;
 THIS.DIE();

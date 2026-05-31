@@ -4,14 +4,21 @@
 //   athc examples/repeat_loop/main.ath -o rl && ./rl
 //   # row / dot / dot / row / dot / dot / done
 
-import number 2 as TWO;
-import number 0 as ZERO;
+IMPORT NUMBER 2 AS TWO;
+IMPORT NUMBER 0 AS ZERO;
 
-loop TWO {
-    print row;
-    loop TWO { print dot; }
+LOOP TWO
+{
+    PRINT row;
+    LOOP TWO
+    {
+        PRINT dot;
+    }
 }
-loop ZERO { print skipped; }
-print done;
+LOOP ZERO
+{
+    PRINT skipped;
+}
+PRINT done;
 
 THIS.DIE();

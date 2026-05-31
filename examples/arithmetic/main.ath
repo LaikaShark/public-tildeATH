@@ -8,19 +8,19 @@
 // then dies and TO_STRING returns the empty string, so we'd print a
 // blank line. That's the thematic "computation around death" behavior.
 
-importf <parse> as PARSE;
-importf <add> as ADD;
-importf <to_string> as TO_STRING;
+IMPORTF <parse> AS PARSE;
+IMPORTF <add> AS ADD;
+IMPORTF <to_string> AS TO_STRING;
 
 INPUT LINE_X;
 INPUT LINE_Y;
 
-PARSE [LINE_X, NULL] X;
-PARSE [LINE_Y, NULL] Y;
+PARSE[LINE_X, NULL] X;
+PARSE[LINE_Y, NULL] Y;
 
-ADD [X, Y] SUM;
+ADD[X, Y] SUM;
 
-TO_STRING [SUM, NULL] OUT;
-print $OUT;
+TO_STRING[SUM, NULL] OUT;
+PRINT $OUT;
 
 THIS.DIE();

@@ -7,40 +7,70 @@
 //   athc examples/list_ops/main.ath -o lo && ./lo
 //   # 15 / 96 / 8 / 3 / has 3 / no 99 / 2 / 7 / 8
 
-importf <sum>       as SUM;
-importf <product>   as PRODUCT;
-importf <maximum>   as MAXIMUM;
-importf <minimum>   as MINIMUM;
-importf <member>    as MEMBER;
-importf <take>      as TAKE;
-importf <drop>      as DROP;
-importf <length>    as LENGTH;
-importf <to_string> as TO_STRING;
+IMPORTF <sum>       AS SUM;
+IMPORTF <product>   AS PRODUCT;
+IMPORTF <maximum>   AS MAXIMUM;
+IMPORTF <minimum>   AS MINIMUM;
+IMPORTF <member>    AS MEMBER;
+IMPORTF <take>      AS TAKE;
+IMPORTF <drop>      AS DROP;
+IMPORTF <length>    AS LENGTH;
+IMPORTF <to_string> AS TO_STRING;
 
-import number 4 as N4;
-import number 3 as N3;
-import number 8 as N8;
-import number 99 as N99;
-import number 2 as N2;
+IMPORT NUMBER 4 AS N4;
+IMPORT NUMBER 3 AS N3;
+IMPORT NUMBER 8 AS N8;
+IMPORT NUMBER 99 AS N99;
+IMPORT NUMBER 2 AS N2;
 
 // Build [4, 3, 8] head-first.
 BIFURCATE [N8, NULL] L1;
 BIFURCATE [N3, L1] L2;
 BIFURCATE [N4, L2] LIST;
 
-SUM [LIST, NULL] S;     TO_STRING [S, NULL] SS;   print $SS;
-PRODUCT [LIST, NULL] P; TO_STRING [P, NULL] PS;   print $PS;
-MAXIMUM [LIST, NULL] MX; TO_STRING [MX, NULL] MXS; print $MXS;
-MINIMUM [LIST, NULL] MN; TO_STRING [MN, NULL] MNS; print $MNS;
+SUM[LIST, NULL] S;
+TO_STRING[S, NULL] SS;
+PRINT $SS;
+PRODUCT[LIST, NULL] P;
+TO_STRING[P, NULL] PS;
+PRINT $PS;
+MAXIMUM[LIST, NULL] MX;
+TO_STRING[MX, NULL] MXS;
+PRINT $MXS;
+MINIMUM[LIST, NULL] MN;
+TO_STRING[MN, NULL] MNS;
+PRINT $MNS;
 
-MEMBER [LIST, N3] M1;  BRANCH(M1) { print has 3; } ELSE { print no 3; }
-MEMBER [LIST, N99] M2; BRANCH(M2) { print has 99; } ELSE { print no 99; }
+MEMBER[LIST, N3] M1;
+BRANCH(M1)
+{
+    PRINT has 3;
+}
+ELSE
+{
+    PRINT no 3;
+}
+MEMBER[LIST, N99] M2;
+BRANCH(M2)
+{
+    PRINT has 99;
+}
+ELSE
+{
+    PRINT no 99;
+}
 
 // TAKE 2 -> [4, 3]: length 2, sum 7. DROP 2 -> [8]: sum 8.
-TAKE [LIST, N2] T;
-LENGTH [T, NULL] TL; TO_STRING [TL, NULL] TLS; print $TLS;
-SUM [T, NULL] TS;    TO_STRING [TS, NULL] TSS; print $TSS;
-DROP [LIST, N2] D;
-SUM [D, NULL] DS;    TO_STRING [DS, NULL] DSS; print $DSS;
+TAKE[LIST, N2] T;
+LENGTH[T, NULL] TL;
+TO_STRING[TL, NULL] TLS;
+PRINT $TLS;
+SUM[T, NULL] TS;
+TO_STRING[TS, NULL] TSS;
+PRINT $TSS;
+DROP[LIST, N2] D;
+SUM[D, NULL] DS;
+TO_STRING[DS, NULL] DSS;
+PRINT $DSS;
 
 THIS.DIE();

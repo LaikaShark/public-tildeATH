@@ -1,5 +1,5 @@
 // SPEC §4.8.4 — first index of NEEDLE in S at/after START, packed (NEEDLE, START). FIND_FROM [S, PAIR] IDX;
-import builtin ath_find_from as ATH_FIND_FROM;
-BIFURCATE ARGS [X, Y];
-ATH_FIND_FROM [X, Y] R;
+IMPORT BUILTIN ath_find_from AS ATH_FIND_FROM;
+BIFURCATE ARGS[X, Y];
+ATH_FIND_FROM[X, Y] R;
 THIS.DIE(R);

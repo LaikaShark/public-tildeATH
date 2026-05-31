@@ -4,11 +4,11 @@
 //
 //   fizz, buzz, fizzbuzz, fizz, buzz, fizzbuzz.
 
-importf "fizz.ath"     as FIZZ;
-importf "buzz.ath"     as BUZZ;
-importf "fizzbuzz.ath" as FIZZBUZZ;
+IMPORTF "fizz.ath"     AS FIZZ;
+IMPORTF "buzz.ath"     AS BUZZ;
+IMPORTF "fizzbuzz.ath" AS FIZZBUZZ;
 
-import sentinel S;
+IMPORT SENTINEL S;
 BIFURCATE [NULL, S] N1;
 BIFURCATE [S, N1] N2;
 BIFURCATE [S, N2] N3;
@@ -16,5 +16,5 @@ BIFURCATE [S, N3] N4;
 BIFURCATE [S, N4] N5;
 BIFURCATE [S, N5] N6;
 
-FIZZ N6 [X, Y];
+FIZZ N6[X, Y];
 THIS.DIE();
