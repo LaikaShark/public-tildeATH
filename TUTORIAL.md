@@ -373,8 +373,8 @@ EXECUTE(CLEANUP);
 
 `EXECUTE(F)` calls the function `F` once, when the loop exits by its
 condition, passing the subject `V` (dead, for a normal loop) as `F`'s
-argument. It is the Homestuck "when the subject dies, do the action"
-hook — handy for an after-loop report or cleanup.
+argument. It is the "when the subject dies, do the action" hook — handy
+for an after-loop report or cleanup.
 
 ```ath
 ~ATH(V)

@@ -320,7 +320,7 @@ static const ath_lifetime_entry ath_library[] = {
     {"experiment",       1.0,             1000000.0},  /* 6 orders */
     {"empire",           3.15e9,          3.15e13},    /* 100 - 1M years */
 
-    /* Homestuck-flavored. */
+    /* Whimsical. */
     {"author",           2.52e9,          3.15e9},     /* 80 - 100 years */
     {"meson",            1e-8,            1e-7},       /* 10-100 ns */
 

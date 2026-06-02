@@ -129,10 +129,10 @@ CASES = [
         id="inverted_loop",
     ),
     pytest.param(
-        "homestuck_canonical.ath",
+        "execute_postfix.ath",
         None,
         "the universe has ended.\nand yet, the program continues.\n",
-        id="homestuck_canonical",
+        id="execute_postfix",
     ),
     pytest.param(
         "function_hello/main.ath",

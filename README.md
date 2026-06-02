@@ -1,10 +1,10 @@
 # athc — a compiler for `~ATH`
 
-`~ATH` ("until they hang" / "infinite loop") is the esoteric programming
-language from Andrew Hussie's *Homestuck*. **athc** is a real, working
-compiler for an implementable dialect of it: it lexes, parses, and lowers
-`~ATH` source to native executables through [LLVM](https://llvm.org/), backed
-by a small C runtime.
+`~ATH` ("until they hang" / "infinite loop") is an esoteric programming
+language built around a single idea: object *liveness*. **athc** is a real,
+working compiler for an implementable dialect of it: it lexes, parses, and
+lowers `~ATH` source to native executables through [LLVM](https://llvm.org/),
+backed by a small C runtime.
 
 The language is built on a single idea — the **object**, which is either alive
 or dead — and a handful of statements that allocate objects, split and rejoin
@@ -148,6 +148,4 @@ README for install steps.
 
 ## License
 
-TODO — choose and add a `LICENSE` file before publishing. `~ATH` originates
-from *Homestuck* by Andrew Hussie; this project is an independent
-implementation of the language idea.
+TODO — choose and add a `LICENSE` file before publishing.

@@ -401,7 +401,7 @@ def test_unknown_function_call_rejected_at_cli(tmp_path):
     assert "not declared" in compiled.stderr.lower()
 
 
-# --- Homestuck surface ---
+# --- Surface-syntax extensions ---
 
 
 def test_inverted_loop_runs_after_var_dies(tmp_path):
@@ -446,8 +446,8 @@ def test_execute_postfix_is_accepted(tmp_path):
     assert _build_and_run(src, tmp_path) == "after\n"
 
 
-def test_homestuck_canonical_shape_parses_and_runs(tmp_path):
-    # Patterned after esolangs wiki canonical shape.
+def test_execute_postfix_canonical_shape_parses_and_runs(tmp_path):
+    # The canonical import-dead / inverted-loop / EXECUTE-postfix shape.
     src = tmp_path / "hs.ath"
     src.write_text(
         "import dead universe U;\n"

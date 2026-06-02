@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`athc` is a compiler for **~ATH**, the esoteric language from Homestuck. The implementable dialect is roughly drocta's; the surface syntax adds Homestuck flourishes (`~ATH(!V)` inversion, `EXECUTE(...)` postfix, multi-word `import`). The authoritative reference is `SPEC.md` (language) and `TUTORIAL.md` (user-facing). When changing language behavior, update both.
+`athc` is a compiler for **~ATH**, an esoteric language whose sole control-flow primitive is object *liveness*. The surface syntax adds extensions on top of the core (`~ATH(!V)` inversion, `EXECUTE(...)` postfix, multi-word `import`). The authoritative reference is `SPEC.md` (language) and `TUTORIAL.md` (user-facing). When changing language behavior, update both.
 
 ## Common commands
 

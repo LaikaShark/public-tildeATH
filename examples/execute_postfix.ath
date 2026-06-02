@@ -1,4 +1,4 @@
-// the canonical homestuck-flavored shape: a concept is imported, killed
+// the canonical EXECUTE-postfix shape: a concept is imported, killed
 // (so the inverted loop fires), and an EXECUTE clause sits at the tail.
 // EXECUTE(NULL) is currently a syntactic no-op (SPEC §4.4.4).
 

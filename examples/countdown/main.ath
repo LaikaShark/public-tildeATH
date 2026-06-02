@@ -1,8 +1,8 @@
-// Build the drocta-style positive integer 3 — a chain of objects whose
-// left half is alive for "successor" levels and NULL at the base — then
-// recurse on it, printing "tick" once per level.
+// Build the positive integer 3 — a chain of objects whose left half is
+// alive for "successor" levels and NULL at the base — then recurse on it,
+// printing "tick" once per level.
 //
-// Encoding (per learn-tilde-ath blog):
+// Encoding:
 //   1 = compose(NULL, anything)
 //   n+1 = compose(alive-sentinel, n)
 

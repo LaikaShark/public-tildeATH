@@ -4,9 +4,9 @@ This document defines the dialect of `~ATH` that our compiler accepts and the
 runtime semantics it implements. It is the source of truth: when the
 implementation and this document disagree, one of them is a bug.
 
-The dialect is a **custom hybrid** rooted in drocta `~ATH` (the implementable
-variant defined at <https://learn-tilde-ath.tumblr.com/>) with explicit
-decisions on points the reference interpreter leaves ambiguous.
+The dialect is a **custom hybrid** rooted in the implementable core of
+`~ATH`, with explicit decisions on points earlier informal definitions
+leave ambiguous.
 
 ---
 
@@ -31,7 +31,7 @@ language — they are **not** rejected. Each is specified in §4:
   forms `FN [A,B] C;` / `FN A [B,C];` (§4.4.9–4.4.11).
 - `INPUT V;` (§4.4.7), `print` with `$VAR` interpolation (§4.4.6), and the
   predefined name `ARGS` in function bodies (§4.2).
-- Homestuck-surface syntax: the `EXECUTE(F)` postfix (§4.4.4), lowercase
+- Surface-syntax extensions: the `EXECUTE(F)` postfix (§4.4.4), lowercase
   `bifurcate`, `!VAR` loop inversion (§4.4.4), and multi-word concept
   names in `import` (§4.4.1).
 - Numeric literals (`import number`, §4.4.14) and the numeric / string /
@@ -540,7 +540,7 @@ inside the body changes what is being watched.
 The body may be empty (`{}`), in which case the construct loops forever if
 the initial check passes.
 
-The `!V` form (Homestuck "inversion") inverts the condition: the body
+The `!V` form ("inversion") inverts the condition: the body
 runs while `V` is **dead**. Because objects can never come back to life,
 `~ATH(!V)` runs at most once if `V` is already dead at entry, then exits;
 if `V` is alive at entry, the loop never runs.
@@ -552,8 +552,8 @@ An optional `EXECUTE(IDENT)` postfix may follow the closing `}`:
 ```
 
 `EXECUTE(F)` names a **function to invoke once the loop exits by its
-condition** — the Homestuck reading of "when the subject dies, EXECUTE
-the action." On reaching the loop's exit:
+condition** — "when the subject dies, EXECUTE the action." On reaching
+the loop's exit:
 
 1. The subject `V` is read. For a normal loop it is dead (the condition
    failed); for an inverted loop it is alive.
@@ -1262,8 +1262,8 @@ are initially unset. Decomposing an atom is permitted but yields freshly
 allocated halves that have no meaning as characters — the atom itself
 remains the canonical representative for the interpolation reverse lookup.
 
-The encoding is deliberately the same as drocta `~ATH`'s `getStrObj` /
-`getObjStr`, so strings round-trip across implementations.
+The encoding is a stable string ↔ object mapping, so strings round-trip
+across implementations.
 
 ### 4.7 Lifetime extensions
 
@@ -2451,7 +2451,7 @@ reads yield `NULL` (§4.2), and every operation in §4.4 is defined on `NULL`.
 
 ---
 
-## 7. Example: canonical countdown (from drocta `looptest.~ATH`)
+## 7. Example: canonical countdown
 
 ```
 import blah A;
