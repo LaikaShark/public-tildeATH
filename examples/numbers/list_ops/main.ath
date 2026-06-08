@@ -1,0 +1,66 @@
+// Cons-list operations over [4, 3, 8]: sum, product, max, min, membership, take/drop. Output: 15 / 96 / 8 / 3 / has 3 / no 99 / 2 / 7 / 8 (one per line).
+
+IMPORTF <sum> AS SUM;
+IMPORTF <product> AS PRODUCT;
+IMPORTF <maximum> AS MAXIMUM;
+IMPORTF <minimum> AS MINIMUM;
+IMPORTF <member> AS MEMBER;
+IMPORTF <take> AS TAKE;
+IMPORTF <drop> AS DROP;
+IMPORTF <length> AS LENGTH;
+IMPORTF <to_string> AS TO_STRING;
+
+// Build [4, 3, 8] head-first (BIFURCATE operands must be names, not literals).
+IMPORT NUMBER 8 AS N8;
+IMPORT NUMBER 3 AS N3;
+IMPORT NUMBER 4 AS N4;
+BIFURCATE [N8, NULL] L1;
+BIFURCATE [N3, L1] L2;
+BIFURCATE [N4, L2] LIST;
+
+SUM [LIST, NULL]S;
+TO_STRING [S, NULL]SS;
+PRINT $SS;
+PRODUCT [LIST, NULL]P;
+TO_STRING [P, NULL]PS;
+PRINT $PS;
+MAXIMUM [LIST, NULL]MX;
+TO_STRING [MX, NULL]MXS;
+PRINT $MXS;
+MINIMUM [LIST, NULL]MN;
+TO_STRING [MN, NULL]MNS;
+PRINT $MNS;
+
+MEMBER [LIST, 3]M1;
+BRANCH(M1)
+{
+    PRINT has 3;
+}
+ELSE
+{
+    PRINT no 3;
+}
+MEMBER [LIST, 99]M2;
+BRANCH(M2)
+{
+    PRINT has 99;
+}
+ELSE
+{
+    PRINT no 99;
+}
+
+// TAKE 2 -> [4, 3]: length 2, sum 7. DROP 2 -> [8]: sum 8.
+TAKE [LIST, 2]T;
+LENGTH [T, NULL]TL;
+TO_STRING [TL, NULL]TLS;
+PRINT $TLS;
+SUM [T, NULL]TS;
+TO_STRING [TS, NULL]TSS;
+PRINT $TSS;
+DROP [LIST, 2]D;
+SUM [D, NULL]DS;
+TO_STRING [DS, NULL]DSS;
+PRINT $DSS;
+
+THIS.DIE();

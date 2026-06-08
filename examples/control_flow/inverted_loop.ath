@@ -1,0 +1,12 @@
+// The ~ATH(!V) form runs while V is dead; the body runs at most once and rebinds V to a fresh alive value to exit. Output: V is currently dead, after the loop (one per line)
+
+IMPORT X V;
+V.DIE();
+~ATH(!V)
+{
+    PRINT V is currently dead;
+    // rebind V to a fresh alive composite to exit the inverted loop
+    BIFURCATE [NULL, NULL] V;
+}
+PRINT after the loop;
+THIS.DIE();

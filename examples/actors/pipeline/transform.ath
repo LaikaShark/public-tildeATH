@@ -1,0 +1,12 @@
+// Doubles each item from the input channel onto the output, closing the output when the input ends.
+IMPORTF <add> AS ADD;
+BIFURCATE ARGS[IN, OUT];
+RECV FROM IN AS M;
+~ATH(M)
+{
+    ADD [M, M] D;
+    SEND D TO OUT;
+    RECV FROM IN AS M;
+}
+CLOSE OUT;
+THIS.DIE();

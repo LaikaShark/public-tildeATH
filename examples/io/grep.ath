@@ -1,0 +1,18 @@
+// Print stdin lines that contain the pattern given by the first line. Output: the matching lines.
+
+IMPORTF <contains> AS CONTAINS;
+
+// first line is the search pattern
+INPUT PAT;
+INPUT LINE;
+~ATH(LINE)
+{
+    CONTAINS [LINE, PAT]HIT;
+    BRANCH(HIT)
+    {
+        PRINT $LINE;
+    }
+
+    INPUT LINE;
+}
+THIS.DIE();

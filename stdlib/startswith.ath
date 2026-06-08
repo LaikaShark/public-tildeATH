@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — prefix-match verdict.
+//
+//   STARTSWITH [HAY, PREFIX] V;
+//
+// V is alive iff HAY begins with PREFIX. The empty prefix matches
+// every string. Born dead on malformed input.
+
+IMPORT BUILTIN ath_startswith AS ATH_STARTSWITH;
+BIFURCATE ARGS[X, Y];
+ATH_STARTSWITH[X, Y] R;
+THIS.DIE(R);

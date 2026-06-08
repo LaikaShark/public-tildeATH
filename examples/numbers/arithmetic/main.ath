@@ -1,0 +1,20 @@
+// Add two integers read from stdin (one per line). Output: their sum (17,25 -> 42); malformed input prints a blank line.
+
+IMPORTF <parse> AS PARSE;
+IMPORTF <add> AS ADD;
+IMPORTF <to_string> AS TO_STRING;
+
+INPUT LINE_X;
+INPUT LINE_Y;
+
+// PARSE yields a dead number on bad input; the sum and TO_STRING then
+// die too, printing an empty line
+PARSE [LINE_X, NULL]X;
+PARSE [LINE_Y, NULL]Y;
+
+ADD [X, Y]SUM;
+
+TO_STRING [SUM, NULL]OUT;
+PRINT $OUT;
+
+THIS.DIE();

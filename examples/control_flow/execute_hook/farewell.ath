@@ -1,0 +1,3 @@
+// EXECUTE hook target: receives the loop's dead subject as ARGS (unused) and prints a parting line.
+PRINT farewell;
+THIS.DIE();

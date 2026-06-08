@@ -1,0 +1,10 @@
+// Print "watching" while "target.txt" exists, then exit once it is removed. Output: repeated "watching" lines, then "target is gone" after the file is deleted.
+
+// F is alive as long as the file at "target.txt" (relative to CWD) exists.
+WATCH "target.txt" AS F;
+~ATH(F)
+{
+    PRINT watching;
+}
+PRINT target is gone;
+THIS.DIE();

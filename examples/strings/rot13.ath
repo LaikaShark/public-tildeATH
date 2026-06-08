@@ -1,0 +1,61 @@
+// Apply ROT13 to a line, rotating each letter by 13 and passing other characters through. Input: 'Hello, World!'. Output: 'Uryyb, Jbeyq!'.
+
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mod> AS MOD;
+IMPORTF <lt> AS LT;
+IMPORTF <le> AS LE;
+IMPORTF <ge> AS GE;
+IMPORTF <and> AS AND;
+IMPORTF <length> AS LENGTH;
+IMPORTF <ord> AS ORD;
+IMPORTF <chr> AS CHR;
+IMPORTF <concat> AS CONCAT;
+
+INPUT LINE;
+TEXT "" AS OUT;
+
+IMPORT NUMBER 0 AS I;
+
+LENGTH [LINE, NULL]L;
+LT [I, L]GOING;
+~ATH(GOING)
+{
+    LINE[I] CH;
+    ORD [CH, NULL]C;
+    // Default: leave the character unchanged.
+    ADD [C, 0]NC;
+
+    // Uppercase range A..Z: rotate within it.
+    GE [C, 65]GU;
+    LE [C, 90]LU;
+    AND [GU, LU]ISUP;
+    BRANCH(ISUP)
+    {
+        SUB [C, 65]T;
+        ADD [T, 13]T;
+        MOD [T, 26]T;
+        ADD [T, 65]NC;
+    }
+
+    // Lowercase range a..z: rotate within it.
+    GE [C, 97]GL;
+    LE [C, 122]LL;
+    AND [GL, LL]ISLO;
+    BRANCH(ISLO)
+    {
+        SUB [C, 97]T;
+        ADD [T, 13]T;
+        MOD [T, 26]T;
+        ADD [T, 97]NC;
+    }
+
+    CHR [NC, NULL]NCH;
+    CONCAT [OUT, NCH]OUT;
+
+    ADD [I, 1]I;
+    LT [I, L]GOING;
+}
+
+PRINT $OUT;
+THIS.DIE();

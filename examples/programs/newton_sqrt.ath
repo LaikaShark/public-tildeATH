@@ -1,0 +1,29 @@
+// Newton's method for a square root in floats, iterating x := (x + a/x)/2 while a "not-converged" object stays alive (it dies once |x*x - a| < epsilon). Output: sqrt(2) ~ 1.414213562373095
+
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mul> AS MUL;
+IMPORTF <div> AS DIV;
+IMPORTF <abs> AS ABS;
+IMPORTF <gt> AS GT;
+
+IMPORT NUMBER 1.0 AS X;             // initial guess
+
+// not-converged := |x*x - a| > eps  (a = 2, eps = 1e-15)
+MUL [X, X]XSQ;
+SUB [XSQ, 2.0]D;
+ABS [D, NULL]AD;
+GT [AD, 0.000000000000001]GOING;
+~ATH(GOING)
+{
+    DIV [2.0, X]AX;            // a / x
+    ADD [X, AX]S;           // x + a/x
+    DIV [S, 2.0]X;          // x := (x + a/x) / 2
+    MUL [X, X]XSQ;
+    SUB [XSQ, 2.0]D;
+    ABS [D, NULL]AD;
+    GT [AD, 0.000000000000001]GOING;
+}
+
+PRINT sqrt(2) ~ $X;
+THIS.DIE();

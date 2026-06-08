@@ -1,0 +1,5 @@
+// Sleeps 50ms, then prints.
+IMPORT NUMBER 50 AS MS;
+SLEEP MS;
+PRINT slow done;
+THIS.DIE();

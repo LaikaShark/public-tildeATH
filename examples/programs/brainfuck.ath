@@ -1,0 +1,194 @@
+// Brainfuck interpreter running an embedded Hello-World program. Output: Hello World!
+
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mod> AS MOD;
+IMPORTF <lt> AS LT;
+IMPORTF <gt> AS GT;
+IMPORTF <eq> AS EQ;
+IMPORTF <length> AS LENGTH;
+IMPORTF <ord> AS ORD;
+IMPORTF <chr> AS CHR;
+IMPORTF <concat> AS CONCAT;
+
+// hello-world brainfuck (no trailing newline)
+TEXT "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+." AS PROG;
+
+IMPORT NUMBER 30 AS TLEN; // tape length
+
+// tape := TLEN zero cells; OUT := ""
+LENGTH [PROG, NULL]PLEN;
+CHR [0, NULL]ZCH;
+TEXT "" AS TAPE;
+LOOP TLEN
+{
+    CONCAT [TAPE, ZCH]TAPE;
+}
+TEXT "" AS OUT;
+
+IMPORT NUMBER 0 AS PTR;
+IMPORT NUMBER 0 AS PC;
+IMPORT NUMBER 0 AS WFLAG; // flag: this command writes a new cell value
+IMPORT NUMBER 0 AS NEWVAL;
+IMPORT NUMBER 0 AS RJ; // tape-rebuild countdown index (reset each write)
+
+LT [PC, PLEN]RUN;
+~ATH(RUN)
+{
+    PROG[PC] CMDCH;
+    ORD [CMDCH, NULL]OP;
+    TAPE[PTR] CELLCH;
+    ORD [CELLCH, NULL]CELL;
+    ADD [0, 0]WFLAG;
+
+    EQ [OP, 62]ISGT;
+    BRANCH(ISGT)
+    {
+        ADD [PTR, 1]PTR;
+    }
+    ELSE
+    {
+        EQ [OP, 60]ISLT;
+        BRANCH(ISLT)
+        {
+            SUB [PTR, 1]PTR;
+        }
+        ELSE
+        {
+            EQ [OP, 43]ISPLUS;
+            BRANCH(ISPLUS)
+            {
+                ADD [CELL, 1]V;
+                MOD [V, 256]NEWVAL;
+                ADD [1, 0]WFLAG;
+            }
+            ELSE
+            {
+                EQ [OP, 45]ISMINUS;
+                BRANCH(ISMINUS)
+                {
+                    ADD [CELL, 255]V;
+                    MOD [V, 256]NEWVAL;
+                    ADD [1, 0]WFLAG;
+                }
+                ELSE
+                {
+                    EQ [OP, 46]ISDOT;
+                    BRANCH(ISDOT)
+                    {
+                        CHR [CELL, NULL]OCH;
+                        CONCAT [OUT, OCH]OUT;
+                    }
+                    ELSE
+                    {
+                        EQ [OP, 91]ISLB;
+                        BRANCH(ISLB)
+                        {
+                            EQ [CELL, 0]ISZERO;
+                            BRANCH(ISZERO)
+                            {
+                                // jump forward past the matching ']'
+                                ADD [1, 0]DEPTH;
+                                ADD [PC, 1]SI;
+                                GT [DEPTH, 0]SCAN;
+                                ~ATH(SCAN)
+                                {
+                                    PROG[SI] SC;
+                                    ORD [SC, NULL]SO;
+                                    EQ [SO, 91]SL;
+                                    BRANCH(SL)
+                                    {
+                                        ADD [DEPTH, 1]DEPTH;
+                                    }
+                                    EQ [SO, 93]SR;
+                                    BRANCH(SR)
+                                    {
+                                        SUB [DEPTH, 1]DEPTH;
+                                    }
+                                    ADD [SI, 1]SI;
+                                    GT [DEPTH, 0]SCAN;
+                                }
+                                // PC := matching ']' (++ moves past)
+                                SUB [SI, 1]PC;
+                            }
+                        }
+                        ELSE
+                        {
+                            EQ [OP, 93]ISRB;
+                            BRANCH(ISRB)
+                            {
+                                GT [CELL, 0]NONZERO;
+                                BRANCH(NONZERO)
+                                {
+                                    // jump back to the matching '['
+                                    ADD [1, 0]DEPTH;
+                                    SUB [PC, 1]SI;
+                                    GT [DEPTH, 0]SCAN;
+                                    ~ATH(SCAN)
+                                    {
+                                        PROG[SI] SC;
+                                        ORD [SC, NULL]SO;
+                                        EQ [SO, 93]SR;
+                                        BRANCH(SR)
+                                        {
+                                            ADD [DEPTH, 1]DEPTH;
+                                        }
+                                        EQ [SO, 91]SL;
+                                        BRANCH(SL)
+                                        {
+                                            SUB [DEPTH, 1]DEPTH;
+                                        }
+                                        SUB [SI, 1]SI;
+                                        GT [DEPTH, 0]SCAN;
+                                    }
+                                    // PC := matching '[' (++ re-enters body)
+                                    ADD [SI, 1]PC;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // commit a cell write if + or - asked for one: rebuild the tape right to
+    // left with plain compose, cloning each char atom to keep it dep-less so
+    // lifetime-dependency chains don't pile up across rebuilds.
+    EQ [WFLAG, 1]DOWRITE;
+    BRANCH(DOWRITE)
+    {
+        CHR [NEWVAL, NULL]NCHS;
+        NCHS[0] NA0;
+        CLONE NA0 AS NEWATOM;
+        BIFURCATE NULL[JX, ACC];
+        SUB [TLEN, 1]TM;
+        ADD [0, 0]RJ;
+        LT [RJ, TLEN]RGO;
+        ~ATH(RGO)
+        {
+            SUB [TM, RJ]IDX;
+            EQ [IDX, PTR]ISHERE;
+            BRANCH(ISHERE)
+            {
+                BIFURCATE [NEWATOM, ACC] ACC;
+            }
+            ELSE
+            {
+                TAPE[IDX] OA;
+                CLONE OA AS CA;
+                BIFURCATE [CA, ACC] ACC;
+            }
+            ADD [RJ, 1]RJ;
+            LT [RJ, TLEN]RGO;
+        }
+        BIFURCATE ACC[AH, AT];
+        BIFURCATE [AH, AT] TAPE;
+    }
+
+    ADD [PC, 1]PC;
+    LT [PC, PLEN]RUN;
+}
+
+PRINT $OUT;
+THIS.DIE();

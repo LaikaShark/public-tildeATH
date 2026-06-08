@@ -1,0 +1,10 @@
+// Recursively count down a sentinel-encoded number, printing "tick" once per step.
+
+PRINT tick;
+BIFURCATE ARGS[LEFT, REST];
+~ATH(LEFT)
+{
+    COUNTDOWN REST[A, B];
+    BIFURCATE NULL[JUNK, LEFT];
+}
+THIS.DIE();

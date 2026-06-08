@@ -1,0 +1,81 @@
+// Rule 110 elementary cellular automaton, evolving a single rightmost seed cell. Each next-row cell comes from its 3-cell neighborhood via bit p of 110. Output: 16 rows of '#'/'.' showing the pattern growing leftward.
+
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mul> AS MUL;
+IMPORTF <lt> AS LT;
+IMPORTF <eq> AS EQ;
+IMPORTF <shr> AS SHR;
+IMPORTF <band> AS BAND;
+IMPORTF <ord> AS ORD;
+IMPORTF <concat> AS CONCAT;
+
+IMPORT NUMBER 16 AS GENS;
+
+TEXT "...............................#" AS ROW;   // 31 dots + '#'
+
+IMPORT NUMBER 0 AS I;
+TEXT "" AS NEXT;
+
+LOOP GENS
+{
+    PRINT $ROW;
+
+    // build NEXT from ROW, cell by cell
+    TEXT "" AS N2;            // (rebind a fresh empty accumulator)
+    ADD [0, 0]I;
+    LT [I, 32]CIN;
+    ~ATH(CIN)
+    {
+        // neighborhood values (out-of-range -> dead verdict -> 0)
+        SUB [I, 1]IM;
+        ROW[IM] CL;
+        ORD [CL, NULL]OL;
+        EQ [OL, 35]LH;
+        ROW[I] CS;
+        ORD [CS, NULL]OS;
+        EQ [OS, 35]SH;
+        ADD [I, 1]IP;
+        ROW[IP] CR;
+        ORD [CR, NULL]ORR;
+        EQ [ORR, 35]RH;
+
+        ADD [0, 0]LV;
+        BRANCH(LH)
+        {
+            ADD [1, 0]LV;
+        }
+        ADD [0, 0]SV;
+        BRANCH(SH)
+        {
+            ADD [1, 0]SV;
+        }
+        ADD [0, 0]RV;
+        BRANCH(RH)
+        {
+            ADD [1, 0]RV;
+        }
+
+        MUL [LV, 4]A;
+        MUL [SV, 2]B;
+        ADD [A, B]AB;
+        ADD [AB, RV]P;
+        SHR [110, P]T;
+        BAND [T, 1]NB;          // next bit = (110 >> p) & 1
+
+        EQ [NB, 1]ON;
+        BRANCH(ON)
+        {
+            CONCAT [N2, "#"]N2;
+        }
+        ELSE
+        {
+            CONCAT [N2, "."]N2;
+        }
+
+        ADD [I, 1]I;
+        LT [I, 32]CIN;
+    }
+    CONCAT [N2, ""]ROW;       // ROW := NEXT
+}
+THIS.DIE();

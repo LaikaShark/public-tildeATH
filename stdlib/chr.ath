@@ -1,0 +1,12 @@
+// SPEC §4.8.4 — code point to length-1 string.
+//
+//   CHR [N, _] S;
+//
+// S is a fresh length-1 string whose single character has code N
+// (0..255). Born dead if N is out of range or lacks a payload. Inverse
+// of ORD.
+
+IMPORT BUILTIN ath_chr AS ATH_CHR;
+BIFURCATE ARGS[X, Y];
+ATH_CHR[X, Y] R;
+THIS.DIE(R);

@@ -1,0 +1,11 @@
+// Fork three workers into a nursery, then cancel the whole group by killing the nursery. Output: spawned, cancelled, then worker stopped (x3) (one per line).
+IMPORTF "worker.ath" AS WORKER;
+CHANNEL AS C;
+NURSERY AS N;
+SPAWN WORKER C INTO N AS A;
+SPAWN WORKER C INTO N AS B;
+SPAWN WORKER C INTO N AS D;
+PRINT spawned;
+N.DIE();
+PRINT cancelled;
+THIS.DIE();

@@ -1,0 +1,43 @@
+// Numeric builtins: pow, gcd, min, max, bitwise xor, shift-left, sign, clamp. Output: 1024 / 6 / 12 / 18 / 6 / 48 / -1 / 18 (one per line).
+
+IMPORTF <pow> AS POW;
+IMPORTF <gcd> AS GCD;
+IMPORTF <min> AS MIN;
+IMPORTF <max> AS MAX;
+IMPORTF <bxor> AS BXOR;
+IMPORTF <shl> AS SHL;
+IMPORTF <neg> AS NEG;
+IMPORTF <sign> AS SIGN;
+IMPORTF <clamp> AS CLAMP;
+IMPORTF <to_string> AS TO_STRING;
+IMPORTF <entangle> AS ENTANGLE;
+
+POW [2, 10]A;
+TO_STRING [A, NULL]AOUT;
+PRINT $AOUT;
+GCD [12, 18]B;
+TO_STRING [B, NULL]BS;
+PRINT $BS;
+MIN [12, 18]C;
+TO_STRING [C, NULL]CS;
+PRINT $CS;
+MAX [12, 18]D;
+TO_STRING [D, NULL]DS;
+PRINT $DS;
+BXOR [12, 10]E;
+TO_STRING [E, NULL]ES;
+PRINT $ES;
+SHL [12, 2]F;
+TO_STRING [F, NULL]FS;
+PRINT $FS;
+NEG [10, NULL]G;
+SIGN [G, NULL]H;
+TO_STRING [H, NULL]HS;
+PRINT $HS;
+// pack the [lo, hi] bounds into one pair, then clamp 100 to [0, 18]
+ENTANGLE [0, 18]LH;
+CLAMP [100, LH]I;
+TO_STRING [I, NULL]IS;
+PRINT $IS;
+
+THIS.DIE();

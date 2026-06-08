@@ -1,0 +1,62 @@
+// Read two lines A and B and report A == B, A starts with / ends with B, and A < / > B in byte order. Input: 'apple', 'app'. Output: 'not equal', 'prefix', 'no suffix', 'not lt', 'gt' (one per line).
+
+IMPORTF <streq> AS STREQ;
+IMPORTF <startswith> AS STARTSWITH;
+IMPORTF <endswith> AS ENDSWITH;
+IMPORTF <strlt> AS STRLT;
+IMPORTF <strgt> AS STRGT;
+
+INPUT A;
+INPUT B;
+
+STREQ [A, B]V_EQ;
+BRANCH(V_EQ)
+{
+    PRINT equal;
+}
+ELSE
+{
+    PRINT not equal;
+}
+
+STARTSWITH [A, B]V_PRE;
+BRANCH(V_PRE)
+{
+    PRINT prefix;
+}
+ELSE
+{
+    PRINT no prefix;
+}
+
+ENDSWITH [A, B]V_SUF;
+BRANCH(V_SUF)
+{
+    PRINT suffix;
+}
+ELSE
+{
+    PRINT no suffix;
+}
+
+STRLT [A, B]V_LT;
+BRANCH(V_LT)
+{
+    PRINT lt;
+}
+ELSE
+{
+    PRINT not lt;
+}
+
+STRGT [A, B]V_GT;
+BRANCH(V_GT)
+{
+    PRINT gt;
+}
+ELSE
+{
+    PRINT not gt;
+}
+
+THIS.DIE();

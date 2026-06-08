@@ -1,0 +1,9 @@
+// Import a multi-word name, loop once over it, then end. Output: speaking once before she dies / silence
+IMPORT DEAD GRANDMOTHER G;
+~ATH(G)
+{
+    PRINT speaking once before she dies;
+    G.DIE();
+}
+PRINT silence;
+THIS.DIE();

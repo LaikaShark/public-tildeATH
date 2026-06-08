@@ -1,0 +1,8 @@
+// Receives three messages from its own mailbox and prints each in order.
+RECV AS M;
+PRINT $M;
+RECV AS M;
+PRINT $M;
+RECV AS M;
+PRINT $M;
+THIS.DIE();

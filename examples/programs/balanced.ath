@@ -1,0 +1,94 @@
+// Check whether a line's brackets are balanced using a cons-cell stack: push the expected closer on an open, pop and compare on a close. Reads one line of stdin. Output: "balanced" or "unbalanced".
+
+IMPORTF <add> AS ADD;
+IMPORTF <lt> AS LT;
+IMPORTF <eq> AS EQ;
+IMPORTF <or> AS OR;
+IMPORTF <length> AS LENGTH;
+IMPORTF <ord> AS ORD;
+
+INPUT LINE;
+IMPORT BALANCED BAL;             // alive = still balanced
+BIFURCATE NULL[JUNK, STACK];    // STACK := NULL (empty)
+
+IMPORT NUMBER 0 AS I;
+
+LENGTH [LINE, NULL]L;
+LT [I, L]GOING;
+~ATH(GOING)
+{
+    LINE[I] CH;
+    ORD [CH, NULL]C;
+
+    EQ [C, 40]O1;
+    EQ [C, 91]O2;
+    EQ [C, 123]O3;
+    OR [O1, O2]OO;
+    OR [OO, O3]ISOPEN;
+    EQ [C, 41]C1;
+    EQ [C, 93]C2;
+    EQ [C, 125]C3;
+    OR [C1, C2]CC;
+    OR [CC, C3]ISCLOSE;
+
+    BRANCH(ISOPEN)
+    {
+        // expected closing code: '(' -> +1, '[' / '{' -> +2
+        EQ [C, 40]ISP;
+        BRANCH(ISP)
+        {
+            ADD [C, 1]EC;
+        }
+        ELSE
+        {
+            ADD [C, 2]EC;
+        }
+        BIFURCATE [EC, STACK] STACK;            // push
+    }
+    ELSE
+    {
+        BRANCH(ISCLOSE)
+        {
+            CLONE STACK AS SC;
+            BRANCH(SC)
+            {
+                BIFURCATE STACK[TOP, STACK];    // pop
+                EQ [TOP, C]OK;
+                CLONE OK AS OKC;
+                BRANCH(OKC)
+                {
+                }
+                ELSE
+                {
+                    BAL.DIE();
+                }   // wrong closer
+            }
+            ELSE
+            {
+                BAL.DIE();                      // close with empty stack
+            }
+        }
+    }
+
+    ADD [I, 1]I;
+    LT [I, L]GOING;
+}
+
+CLONE BAL AS BCHK;
+BRANCH(BCHK)
+{
+    CLONE STACK AS SCHK;
+    BRANCH(SCHK)
+    {
+        PRINT unbalanced;
+    }
+    ELSE
+    {
+        PRINT balanced;
+    }
+}
+ELSE
+{
+    PRINT unbalanced;
+}
+THIS.DIE();

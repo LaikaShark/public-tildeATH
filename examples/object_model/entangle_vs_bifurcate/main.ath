@@ -1,0 +1,58 @@
+// Contrast ENTANGLE and BIFURCATE composition under operand death. Output: bifurcate alive, entangle hold, bifurcate still alive, entangle dead (one per line)
+
+IMPORTF <entangle> AS ENTANGLE;
+
+IMPORT NUMBER 1 AS A1;
+IMPORT NUMBER 2 AS B1;
+IMPORT NUMBER 1 AS A2;
+IMPORT NUMBER 2 AS B2;
+
+// BIFURCATE installs no deps: P_BIF outlives A1's death
+BIFURCATE [A1, B1] P_BIF;
+// ENTANGLE installs deps: P_ENT dies once A2 dies
+ENTANGLE [A2, B2]P_ENT;
+
+CLONE P_BIF AS B0;
+BRANCH(B0)
+{
+    PRINT bifurcate alive;
+}
+ELSE
+{
+    PRINT bifurcate fail;
+}
+
+CLONE P_ENT AS E0;
+BRANCH(E0)
+{
+    PRINT entangle hold;
+}
+ELSE
+{
+    PRINT entangle fail;
+}
+
+A1.DIE();
+A2.DIE();
+
+CLONE P_BIF AS B1C;
+BRANCH(B1C)
+{
+    PRINT bifurcate still alive;
+}
+ELSE
+{
+    PRINT bifurcate dead;
+}
+
+CLONE P_ENT AS E1C;
+BRANCH(E1C)
+{
+    PRINT entangle still alive;
+}
+ELSE
+{
+    PRINT entangle dead;
+}
+
+THIS.DIE();

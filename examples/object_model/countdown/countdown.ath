@@ -1,0 +1,11 @@
+// Recursively count down an encoded integer, printing "tick" per level; recurses while LEFT is alive (a successor), stops at the dead-left base case.
+
+PRINT tick;
+BIFURCATE ARGS[LEFT, REST];
+~ATH(LEFT)
+{
+    COUNTDOWN REST[A, B];
+    // rebind LEFT to a NULL slot to end the loop without killing the shared sentinel
+    BIFURCATE NULL[JUNK, LEFT];
+}
+THIS.DIE();

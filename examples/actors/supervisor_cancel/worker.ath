@@ -1,0 +1,9 @@
+// Waits for work on its channel; when the supervising nursery is cancelled, RECV returns a dead object and it unwinds.
+RECV FROM ARGS AS M;
+~ATH(M)
+{
+    PRINT working;
+    RECV FROM ARGS AS M;
+}
+PRINT worker stopped;
+THIS.DIE();

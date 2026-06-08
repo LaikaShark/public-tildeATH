@@ -1,0 +1,10 @@
+// Spin in the loop until a short-lived "tick" object expires (a few ms). Output: tick is dead.
+
+// T lives only 0.001-0.01 seconds.
+IMPORT TICK T;
+~ATH(T)
+{
+    // tight spin
+}
+PRINT tick is dead;
+THIS.DIE();

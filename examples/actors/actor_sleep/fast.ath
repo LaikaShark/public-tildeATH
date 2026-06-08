@@ -1,0 +1,3 @@
+// Prints immediately without sleeping.
+PRINT fast done;
+THIS.DIE();

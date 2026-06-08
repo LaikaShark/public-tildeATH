@@ -1,0 +1,12 @@
+// SPEC §4.8.4 — right-pad a string with spaces to width N.
+//
+//   PAD_RIGHT [S, N] R;
+//
+// R is a fresh cons-list of at least N characters: S followed by enough
+// spaces to reach width N. If S is already that long, R is a copy of S.
+// N is a number payload; N < 0 is born dead.
+
+IMPORT BUILTIN ath_pad_right AS ATH_PAD_RIGHT;
+BIFURCATE ARGS[X, Y];
+ATH_PAD_RIGHT[X, Y] R;
+THIS.DIE(R);

@@ -1,0 +1,9 @@
+// Pass a stdin line through the identity function, then split off its first char and print the rest. Output: input minus first char / done (for "hello" -> ello / done)
+
+IMPORTF "id.ath" AS ID;
+INPUT LINE;
+ID LINE[HEAD, TAIL];
+// HEAD is the first character; TAIL is the rest of the line
+PRINT $TAIL;
+PRINT done;
+THIS.DIE();

@@ -1,0 +1,17 @@
+// Compute add(2, 3) = 5, then count down from it. Output: tick (x5) then done.
+
+IMPORTF "add.ath" AS ADD;
+IMPORTF "countdown.ath" AS COUNTDOWN;
+
+IMPORT SENTINEL S;
+// encode 1, 2, 3 as nested compose cells
+BIFURCATE [NULL, S] ONE;
+BIFURCATE [S, ONE] TWO;
+BIFURCATE [S, TWO] THREE;
+
+// SUM encodes 5
+ADD [TWO, THREE]SUM;
+COUNTDOWN SUM[A, B];
+
+PRINT done;
+THIS.DIE();

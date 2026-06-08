@@ -1,0 +1,5 @@
+// Prints a1, yields to let the other actor run, then prints a2.
+PRINT a1;
+YIELD;
+PRINT a2;
+THIS.DIE();

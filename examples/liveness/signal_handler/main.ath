@@ -1,0 +1,16 @@
+// Serve until SIGUSR1 arrives, then shut down. Output: serving requests once, then a shutdown line when the signal is delivered.
+
+// RUNNING is alive until the process receives SIGUSR1.
+WATCH SIGNAL SIGUSR1 AS RUNNING;
+// SHOWN is alive for exactly one observation, so the inner body prints once.
+IMPORT ONCE SHOWN;
+
+~ATH(RUNNING)
+{
+    ~ATH(SHOWN)
+    {
+        PRINT serving requests;
+    }
+}
+PRINT received SIGUSR1, shutting down cleanly;
+THIS.DIE();

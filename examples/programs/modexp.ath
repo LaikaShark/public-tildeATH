@@ -1,0 +1,36 @@
+// Modular exponentiation base^exp mod m by repeated squaring, with a 20-digit bignum modulus so intermediates stay arbitrary-precision. Output: 123456789 ^ 20 mod 98765432109876543211 = 82630247944240163692
+
+IMPORTF <int_to_bignum> AS TO_BIG;
+IMPORTF <mul> AS MUL;
+IMPORTF <mod> AS MOD;
+IMPORTF <div> AS DIV;
+IMPORTF <gt> AS GT;
+IMPORTF <eq> AS EQ;
+
+IMPORT NUMBER 123456789 AS BASE;
+IMPORT NUMBER 20 AS EXP;
+IMPORT NUMBER 98765432109876543211 AS M;     // bignum modulus
+
+IMPORT NUMBER 1 AS RESULT;
+TO_BIG [RESULT, RESULT]RESULT;               // RESULT := sticky bignum 1
+MOD [BASE, M]B;                              // B := base mod m (bignum)
+
+IMPORT NUMBER 20 AS E;                        // working copy of the exponent
+GT [E, 0]GOING;
+~ATH(GOING)
+{
+    MOD [E, 2]BIT;
+    EQ [BIT, 1]ODD;
+    BRANCH(ODD)
+    {
+        MUL [RESULT, B]T;
+        MOD [T, M]RESULT;                    // RESULT := RESULT*B mod m
+    }
+    MUL [B, B]BB;
+    MOD [BB, M]B;                            // B := B*B mod m
+    DIV [E, 2]E;                           // E := E / 2
+    GT [E, 0]GOING;
+}
+
+PRINT $BASE ^ $EXP mod $M = $RESULT;
+THIS.DIE();

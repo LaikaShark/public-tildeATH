@@ -1,0 +1,8 @@
+// SPEC §4.8.4 — strip leading whitespace.
+//
+//   LSTRIP [S, _] R;
+
+IMPORT BUILTIN ath_lstrip AS ATH_LSTRIP;
+BIFURCATE ARGS[X, Y];
+ATH_LSTRIP[X, Y] R;
+THIS.DIE(R);

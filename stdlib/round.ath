@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — round a float to nearest, half away from zero. ROUND [X, _] R;
+IMPORT BUILTIN ath_round AS ROUND;
+BIFURCATE ARGS[X, Y];
+ROUND[X, Y] R;
+THIS.DIE(R);

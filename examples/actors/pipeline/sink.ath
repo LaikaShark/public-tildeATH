@@ -1,0 +1,8 @@
+// Drains its input channel and prints each item until the channel closes.
+RECV FROM ARGS AS M;
+~ATH(M)
+{
+    PRINT $M;
+    RECV FROM ARGS AS M;
+}
+THIS.DIE();

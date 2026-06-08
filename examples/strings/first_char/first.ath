@@ -1,0 +1,2 @@
+// Return ARGS unchanged so the caller can decompose it into head atom and tail; identity on a non-empty string.
+THIS.DIE(ARGS);

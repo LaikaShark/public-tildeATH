@@ -1,0 +1,11 @@
+// Print with $VAR interpolation and escaped dollars. Output: Hello, world! N is 7. / plain line / a $literal dollar and world again
+
+IMPORTF <to_string> AS TO_STRING;
+
+TO_STRING [7, 7]NS;
+TEXT "world" AS W;
+
+PRINT Hello, $W! N is $NS.;
+PRINT plain line;
+PRINT a \$literal dollar and $W again;
+THIS.DIE();

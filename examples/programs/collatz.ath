@@ -1,0 +1,35 @@
+// Collatz (3n+1) trajectory from seed 6: while n != 1, halve if even else 3n+1. Output: each successive n (6, 3, 10, 5, 16, 8, 4, 2, 1), then "reached 1 in 8 steps".
+
+IMPORTF <mod> AS MOD;
+IMPORTF <div> AS DIV;
+IMPORTF <mul> AS MUL;
+IMPORTF <add> AS ADD;
+IMPORTF <eq> AS EQ;
+IMPORTF <ne> AS NE;
+
+IMPORT NUMBER 6 AS N;
+IMPORT NUMBER 0 AS STEPS;
+
+PRINT $N;
+
+NE [N, 1]GOING;
+~ATH(GOING)
+{
+    MOD [N, 2]R;
+    EQ [R, 0]EVEN;
+    BRANCH(EVEN)
+    {
+        DIV [N, 2]N;
+    }
+    ELSE
+    {
+        MUL [N, 3]M;
+        ADD [M, 1]N;
+    }
+    ADD [STEPS, 1]STEPS;
+    PRINT $N;
+    NE [N, 1]GOING;
+}
+
+PRINT reached 1 in $STEPS steps;
+THIS.DIE();

@@ -1,0 +1,30 @@
+// Find a needle in a haystack and replace every occurrence. Input: haystack, needle, replacement (3 lines). Output: index of first match (or 'not found'), then the replaced string.
+
+IMPORTF <find> AS FIND;
+IMPORTF <replace_all> AS REPLACE_ALL;
+IMPORTF <to_string> AS TO_STRING;
+IMPORTF <entangle> AS ENTANGLE;
+
+INPUT HAY;
+INPUT NEEDLE;
+INPUT REPL;
+
+// FIND is born dead when the needle is absent; CLONE to test liveness before branching.
+FIND [HAY, NEEDLE]IDX;
+CLONE IDX AS IDX_CHECK;
+BRANCH(IDX_CHECK)
+{
+    TO_STRING [IDX, NULL]S;
+    PRINT $S;
+}
+ELSE
+{
+    PRINT not found;
+}
+
+// Pack (NEEDLE, REPL) into a single argument for the two-argument call.
+ENTANGLE [NEEDLE, REPL]PAIR;
+REPLACE_ALL [HAY, PAIR]R;
+PRINT $R;
+
+THIS.DIE();

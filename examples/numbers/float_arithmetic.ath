@@ -1,0 +1,33 @@
+// Float arithmetic and int/float mixing. Output: pi = 3.14 / 3.14 + 7 = 10.14 / 7 / 2.0 = 3.5 / floor(3.14) = 3.0 / trunc(3.14) = 3 / parse 2.5e3 = 2500.0.
+
+IMPORTF <to_string> AS TO_STRING;
+IMPORTF <add> AS ADD;
+IMPORTF <div> AS DIV;
+IMPORTF <floor> AS FLOOR;
+IMPORTF <float_to_int> AS FLOAT_TO_INT;
+IMPORTF <parse> AS PARSE;
+
+TO_STRING [3.14, 3.14]PS;
+PRINT pi = $PS;
+
+ADD [3.14, 7]SUM;
+TO_STRING [SUM, SUM]SUMS;
+PRINT 3.14 + 7 = $SUMS;
+
+DIV [7, 2.0]HALF;
+TO_STRING [HALF, HALF]HS;
+PRINT 7 / 2.0 = $HS;
+
+FLOOR [3.14, 3.14]FL;
+TO_STRING [FL, FL]FLS;
+PRINT floor(3.14) = $FLS;
+
+FLOAT_TO_INT [3.14, 3.14]TI;
+TO_STRING [TI, TI]TIS;
+PRINT trunc(3.14) = $TIS;
+
+PARSE ["2.5e3", "2.5e3"]P;
+TO_STRING [P, P]PPS;
+PRINT parse 2.5e3 = $PPS;
+
+THIS.DIE();

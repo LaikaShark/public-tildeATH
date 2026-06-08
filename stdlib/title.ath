@@ -1,0 +1,5 @@
+// SPEC §4.8.4 — first char of each whitespace-delimited word upper. TITLE [S, _] R;
+IMPORT BUILTIN ath_title AS ATH_TITLE;
+BIFURCATE ARGS[X, Y];
+ATH_TITLE[X, Y] R;
+THIS.DIE(R);

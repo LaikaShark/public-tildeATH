@@ -1,0 +1,11 @@
+// SPEC §4.8.4 — reverse a string.
+//
+//   REVERSE [S, _] R;
+//
+// R is a fresh cons-list with the characters of S in reverse order.
+// NULL in, NULL out.
+
+IMPORT BUILTIN ath_reverse AS ATH_REVERSE;
+BIFURCATE ARGS[X, Y];
+ATH_REVERSE[X, Y] R;
+THIS.DIE(R);

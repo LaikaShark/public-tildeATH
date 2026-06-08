@@ -1,0 +1,50 @@
+// Use int/float/bignum/string literals directly as bracket operands in calls, subscripts, and slices. Output: 42 / 2.0 / 100000000000000000042 / hi! / 8 / 15
+
+IMPORTF <add> AS ADD;
+IMPORTF <sum> AS SUM;
+IMPORTF <to_string> AS TO_STRING;
+IMPORTF <concat> AS CONCAT;
+
+IMPORT NUMBER 40 AS BASE;
+IMPORT NUMBER 0.5 AS HALF;
+
+// int literal in a compose-arg operand
+ADD [BASE, 2]ANSWER;
+TO_STRING [ANSWER, NULL]ANSWERS;
+PRINT $ANSWERS;
+
+// float literal operand
+ADD [HALF, 1.5]TWO;
+TO_STRING [TWO, NULL]TWOS;
+PRINT $TWOS;
+
+// bignum literal operand (beyond int64)
+ADD [ANSWER, 100000000000000000000]BIG;
+TO_STRING [BIG, NULL]BIGS;
+PRINT $BIGS;
+
+// string literal operand: concat a literal onto a built string
+TEXT "hi" AS GREET;
+CONCAT [GREET, "!"]MSG;
+PRINT $MSG;
+
+// build [7, 8, 9], then subscript and slice with literal indices
+IMPORT NUMBER 7 AS N7;
+IMPORT NUMBER 8 AS N8;
+IMPORT NUMBER 9 AS N9;
+BIFURCATE [N9, NULL] T1;
+BIFURCATE [N8, T1] T2;
+BIFURCATE [N7, T2] LIST;
+
+// literal subscript index
+LIST[1]MID;
+TO_STRING [MID, NULL]MIDS;
+PRINT $MIDS;
+
+// literal slice bounds -> [7, 8], summed = 15
+LIST[0..2]HEAD;
+SUM [HEAD, NULL]HS;
+TO_STRING [HS, NULL]HSS;
+PRINT $HSS;
+
+THIS.DIE();

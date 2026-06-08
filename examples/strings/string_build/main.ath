@@ -1,0 +1,34 @@
+// Build strings with repeat, reverse, pad, and the ord/chr bridge. Input: 'ab'. Output: 'ababab', 'ba', '   ab', 'ab   ', '97', 'a' (one per line).
+
+IMPORTF <repeat> AS REPEAT;
+IMPORTF <reverse> AS REVERSE;
+IMPORTF <pad_left> AS PAD_LEFT;
+IMPORTF <pad_right> AS PAD_RIGHT;
+IMPORTF <ord> AS ORD;
+IMPORTF <chr> AS CHR;
+IMPORTF <to_string> AS TO_STRING;
+
+INPUT S;
+
+REPEAT [S, 3]REP;
+PRINT $REP;
+
+REVERSE [S, NULL]REV;
+PRINT $REV;
+
+// Pad with spaces to width 5, on the left then the right.
+PAD_LEFT [S, 5]PL;
+PRINT $PL;
+PAD_RIGHT [S, 5]PR;
+PRINT $PR;
+
+// Code point of the first character, then mapped back via CHR.
+IMPORT NUMBER 0 AS I0;
+S[I0] H;
+ORD [H, NULL]OC;
+TO_STRING [OC, NULL]OCS;
+PRINT $OCS;
+CHR [OC, NULL]BACK;
+PRINT $BACK;
+
+THIS.DIE();

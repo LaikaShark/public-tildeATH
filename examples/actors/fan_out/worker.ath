@@ -1,0 +1,11 @@
+// Pulls tasks from the shared channel until it closes, yielding after each so work spreads across workers.
+BIFURCATE ARGS[ID, WORK];
+RECV FROM WORK AS M;
+~ATH(M)
+{
+    TEXT "worker " ID " got " M AS LINE;
+    PRINT $LINE;
+    YIELD;
+    RECV FROM WORK AS M;
+}
+THIS.DIE();

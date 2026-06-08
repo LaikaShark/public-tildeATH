@@ -1,0 +1,14 @@
+// Build the integer 3 as a cons chain and count it down. Output: tick, tick, tick, done (one per line)
+
+IMPORTF "countdown.ath" AS COUNTDOWN;
+
+// encode n: 1 = (NULL, _), n+1 = (alive sentinel, n)
+IMPORT SENTINEL S;
+BIFURCATE [NULL, S] ONE;
+BIFURCATE [S, ONE] TWO;
+BIFURCATE [S, TWO] THREE;
+
+COUNTDOWN THREE[A, B];
+
+PRINT done;
+THIS.DIE();

@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — tangent of X radians (float). TAN [X, _] R;
+IMPORT BUILTIN ath_tan AS TAN;
+BIFURCATE ARGS[X, Y];
+TAN[X, Y] R;
+THIS.DIE(R);

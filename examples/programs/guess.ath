@@ -1,0 +1,37 @@
+// Number-guessing game with a random secret in 1..100, looping while a "playing" object stays alive (a correct guess kills it). Input: one guess per line. Output: the intro line, then "your guess?" and too low / too high / correct! per guess.
+
+IMPORTF <random> AS RANDOM;
+IMPORTF <parse> AS PARSE;
+IMPORTF <lt> AS LT;
+IMPORTF <gt> AS GT;
+
+RANDOM [1, 101]SECRET;             // exclusive → 1..100
+
+PRINT I am thinking of a number from 1 to 100.;
+
+IMPORT PLAYING PLAYING;             // alive = game in progress
+~ATH(PLAYING)
+{
+    PRINT your guess?;
+    INPUT G;
+    PARSE [G, NULL]GUESS;
+    LT [GUESS, SECRET]LOW;
+    BRANCH(LOW)
+    {
+        PRINT too low;
+    }
+    ELSE
+    {
+        GT [GUESS, SECRET]HIGH;
+        BRANCH(HIGH)
+        {
+            PRINT too high;
+        }
+        ELSE
+        {
+            PRINT correct!;
+            PLAYING.DIE();          // win → end the loop
+        }
+    }
+}
+THIS.DIE();

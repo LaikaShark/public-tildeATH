@@ -1,0 +1,31 @@
+// Read two lines A and B and print length of A, its first character, slice A[1..4], and A concatenated with B. Input: 'hello', 'world'. Output: '5', 'h', 'ell', 'helloworld' (one per line).
+
+IMPORTF <length> AS LENGTH;
+IMPORTF <concat> AS CONCAT;
+IMPORTF <to_string> AS TO_STRING;
+
+INPUT A;
+INPUT B;
+
+// Length of A as a decimal string.
+LENGTH [A, NULL]LA;
+TO_STRING [LA, NULL]LA_STR;
+PRINT $LA_STR;
+
+// First character of A, wrapped as a length-1 string for printing.
+IMPORT NUMBER 0 AS I0;
+A[I0] HEAD_ATOM;
+BIFURCATE [HEAD_ATOM, NULL] HEAD_STR;
+PRINT $HEAD_STR;
+
+// Slice A[1..4] (exclusive end).
+IMPORT NUMBER 1 AS I1;
+IMPORT NUMBER 4 AS I4;
+A[I1..I4] MID;
+PRINT $MID;
+
+// Concatenate A and B.
+CONCAT [A, B]AB;
+PRINT $AB;
+
+THIS.DIE();

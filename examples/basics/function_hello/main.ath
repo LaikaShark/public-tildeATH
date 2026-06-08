@@ -1,0 +1,7 @@
+// Call an imported function, then resume here. Output: hello from a function / main is done
+IMPORTF "hello.ath" AS HELLO;
+IMPORT ANY A;
+IMPORT ANY B;
+HELLO [A, B]R;
+PRINT main is done;
+THIS.DIE();

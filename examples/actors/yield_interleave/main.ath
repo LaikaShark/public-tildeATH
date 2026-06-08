@@ -1,0 +1,7 @@
+// Two actors that YIELD between prints interleave deterministically. Output: spawned, a1, b1, a2, b2 (one per line).
+IMPORTF "ping.ath" AS PING;
+IMPORTF "pong.ath" AS PONG;
+SPAWN PING NULL AS A;
+SPAWN PONG NULL AS B;
+PRINT spawned;
+THIS.DIE();

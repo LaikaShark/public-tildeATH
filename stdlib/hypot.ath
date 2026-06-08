@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — sqrt(X*X + Y*Y) without overflow (float). HYPOT [X, Y] R;
+IMPORT BUILTIN ath_hypot AS HYPOT;
+BIFURCATE ARGS[X, Y];
+HYPOT[X, Y] R;
+THIS.DIE(R);

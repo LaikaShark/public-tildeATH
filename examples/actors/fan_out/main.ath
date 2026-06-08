@@ -1,0 +1,18 @@
+// One producer fans four tasks out to two workers over a shared channel. Output: worker 1 got 10, worker 2 got 20, worker 1 got 30, worker 2 got 40, done (one per line).
+IMPORTF "worker.ath" AS WORKER;
+IMPORT NUMBER 1 AS ONE;
+IMPORT NUMBER 2 AS TWO;
+CHANNEL AS WORK;
+NURSERY AS N;
+BIFURCATE [ONE, WORK] A1;
+SPAWN WORKER A1 INTO N AS WA;
+BIFURCATE [TWO, WORK] A2;
+SPAWN WORKER A2 INTO N AS WB;
+SEND 10 TO WORK;
+SEND 20 TO WORK;
+SEND 30 TO WORK;
+SEND 40 TO WORK;
+CLOSE WORK;
+JOIN N;
+PRINT done;
+THIS.DIE();

@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — arcsine (float; out-of-domain is live nan). ASIN [X, _] R;
+IMPORT BUILTIN ath_asin AS ASIN;
+BIFURCATE ARGS[X, Y];
+ASIN[X, Y] R;
+THIS.DIE(R);

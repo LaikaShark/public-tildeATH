@@ -1,0 +1,11 @@
+// Roll a single d6. Output (with ATH_SEED=42): 1; without ATH_SEED the seed comes from the wall clock and runs vary.
+
+IMPORTF <random> AS RANDOM;
+IMPORTF <to_string> AS TO_STRING;
+
+// exclusive — gives [1, 7) = 1..6
+RANDOM [1, 7]ROLL;
+TO_STRING [ROLL, NULL]OUT;
+PRINT $OUT;
+
+THIS.DIE();

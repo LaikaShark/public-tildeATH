@@ -1,0 +1,11 @@
+// The `every N { body }` interval loop runs the body, sleeps N ms, and repeats forever; here the body kills the activation after one pass. Output: beat
+
+IMPORT NUMBER 1 AS MS;
+
+EVERY MS
+{
+    PRINT beat;
+    THIS.DIE();
+}
+PRINT unreachable;
+THIS.DIE();

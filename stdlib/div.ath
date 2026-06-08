@@ -1,0 +1,7 @@
+// SPEC §4.8.2 — integer division (truncating toward zero).
+// Born dead on Y == 0 or INT64_MIN / -1.
+
+IMPORT BUILTIN ath_div AS ATH_DIV;
+BIFURCATE ARGS[X, Y];
+ATH_DIV[X, Y] R;
+THIS.DIE(R);

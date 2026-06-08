@@ -1,0 +1,11 @@
+// Import a concept dead, run the inverted loop once, with a trailing EXECUTE(NULL) hook that is a no-op. Output: the universe has ended., and yet, the program continues. (one per line)
+
+IMPORT DEAD UNIVERSE U;
+U.DIE();
+~ATH(!U)
+{
+    PRINT the universe has ended.;
+    BIFURCATE [NULL, NULL] U;
+} EXECUTE(NULL);
+PRINT and yet, the program continues.;
+THIS.DIE();

@@ -1,0 +1,12 @@
+// SPEC §4.8.3 — logical AND over verdicts.
+//
+//   AND [X, Y] V;
+//
+// V is alive iff both X and Y are alive at every observation. Born dead
+// if either operand is dead at the call. Uses the conjunctive dep
+// machinery (§4.8.1).
+
+IMPORT BUILTIN ath_and AS ATH_AND;
+BIFURCATE ARGS[X, Y];
+ATH_AND[X, Y] R;
+THIS.DIE(R);

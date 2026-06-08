@@ -1,0 +1,157 @@
+// Infix calculator with correct precedence via the shunting-yard method (two cons-cell stacks). Reads one space-separated expression of non-negative integers and + - * / (no parens). Output: the result, e.g. "3 + 4 * 2 - 1" gives 10.
+
+IMPORTF <add> AS ADD;
+IMPORTF <sub> AS SUB;
+IMPORTF <mul> AS MUL;
+IMPORTF <div> AS DIV;
+IMPORTF <lt> AS LT;
+IMPORTF <eq> AS EQ;
+IMPORTF <ge> AS GE;
+IMPORTF <or> AS OR;
+IMPORTF <length> AS LENGTH;
+IMPORTF <split> AS SPLIT;
+IMPORTF <ord> AS ORD;
+IMPORTF <parse> AS PARSE;
+
+INPUT EXPR;
+SPLIT [EXPR, " "]TOKENS;
+LENGTH [TOKENS, NULL]NT;
+
+BIFURCATE NULL[J1, VALUES];   // value stack := empty
+BIFURCATE NULL[J2, OPS];      // operator stack := empty
+
+IMPORT NUMBER 0 AS I;
+LT [I, NT]TLOOP;
+~ATH(TLOOP)
+{
+    TOKENS[I] T;
+    T[0] T0;
+    ORD [T0, NULL]C;        // first-char code
+
+    EQ [C, 42]E1;
+    EQ [C, 43]E2;
+    EQ [C, 45]E3;
+    EQ [C, 47]E4;
+    OR [E1, E2]O1;
+    OR [O1, E3]O2;
+    OR [O2, E4]ISOP;
+
+    BRANCH(ISOP)
+    {
+        // precedence of this operator: * / = 2, + - = 1
+        EQ [C, 42]S1;
+        EQ [C, 47]S2;
+        OR [S1, S2]HI;
+        ADD [1, 0]PCUR;
+        BRANCH(HI)
+        {
+            ADD [2, 0]PCUR;
+        }
+
+        // drain operators whose precedence >= this one's. The loop runs while
+        // OPS is non-empty (a clone is alive iff non-empty); inside, if the
+        // top's precedence is too low we stop by killing the guard.
+        CLONE OPS AS DRAINCHK;
+        ~ATH(DRAINCHK)
+        {
+            CLONE OPS AS PK;
+            BIFURCATE PK[PV, JP];      // peek top op code
+            EQ [PV, 42]Q1;
+            EQ [PV, 47]Q2;
+            OR [Q1, Q2]QHI;
+            ADD [1, 0]QT;
+            BRANCH(QHI)
+            {
+                ADD [2, 0]QT;
+            }
+            GE [QT, PCUR]KEEP;
+            CLONE KEEP AS KEEPC;
+            BRANCH(KEEPC)
+            {
+                BIFURCATE OPS[OPC, OPS];          // pop operator
+                BIFURCATE VALUES[BV, VALUES];     // pop b
+                BIFURCATE VALUES[AV, VALUES];     // pop a
+                EQ [OPC, 43]A1;
+                BRANCH(A1)
+                {
+                    ADD [AV, BV]RES;
+                }
+                ELSE
+                {
+                    EQ [OPC, 45]A2;
+                    BRANCH(A2)
+                    {
+                        SUB [AV, BV]RES;
+                    }
+                    ELSE
+                    {
+                        EQ [OPC, 42]A3;
+                        BRANCH(A3)
+                        {
+                            MUL [AV, BV]RES;
+                        }
+                        ELSE
+                        {
+                            DIV [AV, BV]RES;
+                        }
+                    }
+                }
+                BIFURCATE [RES, VALUES] VALUES; // push result
+                CLONE OPS AS DRAINCHK; // loop iff OPS non-empty
+            }
+            ELSE
+            {
+                BIFURCATE NULL[JB, DRAINCHK]; // prec too low: stop
+            }
+        }
+        BIFURCATE [C, OPS] OPS;               // push this operator
+    }
+    ELSE
+    {
+        PARSE [T, NULL]V;
+        BIFURCATE [V, VALUES] VALUES;         // push operand
+    }
+
+    ADD [I, 1]I;
+    LT [I, NT]TLOOP;
+}
+
+// drain the rest
+CLONE OPS AS FIN;
+~ATH(FIN)
+{
+    BIFURCATE OPS[OPC, OPS];
+    BIFURCATE VALUES[BV, VALUES];
+    BIFURCATE VALUES[AV, VALUES];
+    EQ [OPC, 43]F1;
+    BRANCH(F1)
+    {
+        ADD [AV, BV]RES;
+    }
+    ELSE
+    {
+        EQ [OPC, 45]F2;
+        BRANCH(F2)
+        {
+            SUB [AV, BV]RES;
+        }
+        ELSE
+        {
+            EQ [OPC, 42]F3;
+            BRANCH(F3)
+            {
+                MUL [AV, BV]RES;
+            }
+            ELSE
+            {
+                DIV [AV, BV]RES;
+            }
+        }
+    }
+    BIFURCATE [RES, VALUES] VALUES;
+    CLONE OPS AS FIN;
+}
+
+BIFURCATE VALUES[ANSWER, JREST];
+PRINT $ANSWER;
+THIS.DIE();

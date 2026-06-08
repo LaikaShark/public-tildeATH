@@ -1,0 +1,25 @@
+// Demonstrate the TEXT statement: string literals and interpolation of numbers into strings. Output: 'hello world', 'value: 42', 'x=7', 'y=8', 'sum=15' (one per line).
+
+IMPORTF <add> AS ADD;
+
+// Primitive form: a single string literal becomes a string value.
+TEXT "hello world" AS GREETING;
+PRINT $GREETING;
+
+// Interpolation form: literals and identifiers interleave; numeric identifiers are coerced to strings.
+IMPORT NUMBER 42 AS N;
+TEXT "value: " N AS MSG;
+PRINT $MSG;
+
+IMPORT NUMBER 7 AS X;
+IMPORT NUMBER 8 AS Y;
+ADD [X, Y]S;
+
+TEXT "x=" X AS XLINE;
+PRINT $XLINE;
+TEXT "y=" Y AS YLINE;
+PRINT $YLINE;
+TEXT "sum=" S AS SLINE;
+PRINT $SLINE;
+
+THIS.DIE();

@@ -1,0 +1,6 @@
+// Emits three numbers then closes the output channel.
+SEND 1 TO ARGS;
+SEND 2 TO ARGS;
+SEND 3 TO ARGS;
+CLOSE ARGS;
+THIS.DIE();

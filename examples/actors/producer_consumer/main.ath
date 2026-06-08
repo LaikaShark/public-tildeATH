@@ -1,0 +1,11 @@
+// Producer sends three messages then closes the channel; the consumer drains them and stops at EOF. Output: 10, 20, 30, done (one per line).
+IMPORTF "consumer.ath" AS CONSUMER;
+CHANNEL AS C;
+SPAWN CONSUMER C AS A;
+SEND 10 TO C;
+SEND 20 TO C;
+SEND 30 TO C;
+CLOSE C;
+JOIN A;
+PRINT done;
+THIS.DIE();

@@ -1,0 +1,13 @@
+// SPEC §4.8.4 — replace every non-overlapping occurrence of NEEDLE.
+//
+//   BIFURCATE [NEEDLE, REPLACEMENT] PAIR;
+//   REPLACE_ALL [S, PAIR] R;
+//
+// Single left-to-right pass; matches do not overlap (each consumes
+// NEEDLE.length bytes of S). R is born dead if NEEDLE is empty, not
+// present anywhere in S, or if any operand is dead.
+
+IMPORT BUILTIN ath_replace_all AS ATH_REPLACE_ALL;
+BIFURCATE ARGS[S, PAIR];
+ATH_REPLACE_ALL[S, PAIR] R;
+THIS.DIE(R);

@@ -1,0 +1,9 @@
+// Fork three workers into a nursery and join the whole group. Output: 1, 2, 3, done (one per line).
+IMPORTF "worker.ath" AS WORKER;
+NURSERY AS N;
+SPAWN WORKER 1 INTO N AS A;
+SPAWN WORKER 2 INTO N AS B;
+SPAWN WORKER 3 INTO N AS C;
+JOIN N;
+PRINT done;
+THIS.DIE();

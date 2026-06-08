@@ -1,0 +1,39 @@
+// Read a haystack and a needle (two lines) and print whether the needle is present, its count of non-overlapping occurrences, and the index of the last occurrence (or 'no match'). Input: 'abracadabra', 'a'. Output: 'present', '5', '10' (one per line).
+
+IMPORTF <contains> AS CONTAINS;
+IMPORTF <count> AS COUNT;
+IMPORTF <rfind> AS RFIND;
+IMPORTF <to_string> AS TO_STRING;
+
+INPUT HAY;
+INPUT NEEDLE;
+
+CONTAINS [HAY, NEEDLE]HAS;
+BRANCH(HAS)
+{
+    PRINT present;
+}
+ELSE
+{
+    PRINT absent;
+}
+
+COUNT [HAY, NEEDLE]N;
+TO_STRING [N, NULL]NS;
+PRINT $NS;
+
+// RFIND is born dead when the needle is absent; CLONE to test liveness
+// before consuming the value with a BRANCH.
+RFIND [HAY, NEEDLE]R;
+CLONE R AS RCHK;
+BRANCH(RCHK)
+{
+    TO_STRING [R, NULL]RS;
+    PRINT $RS;
+}
+ELSE
+{
+    PRINT no match;
+}
+
+THIS.DIE();

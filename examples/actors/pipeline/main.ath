@@ -1,0 +1,13 @@
+// A three-stage source -> transform -> sink pipeline; closing each channel propagates end-of-stream downstream. Output: 2, 4, 6, done (one per line).
+IMPORTF "source.ath" AS SOURCE;
+IMPORTF "transform.ath" AS TRANSFORM;
+IMPORTF "sink.ath" AS SINK;
+CHANNEL AS C1;
+CHANNEL AS C2;
+SPAWN SOURCE C1 AS S;
+BIFURCATE [C1, C2] TARG;
+SPAWN TRANSFORM TARG AS T;
+SPAWN SINK C2 AS K;
+JOIN K;
+PRINT done;
+THIS.DIE();

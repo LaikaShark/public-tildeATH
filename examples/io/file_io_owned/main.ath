@@ -1,0 +1,13 @@
+// Write stdin to a scratch file, read it back and print it, then DIE the read result, which deletes the file. Output: the message, then "scratch file is now gone".
+
+INPUT MSG;
+WRITE MSG TO "/tmp/ath_owned_scratch.txt";
+
+READ "/tmp/ath_owned_scratch.txt" AS S;
+PRINT $S;
+
+// killing the read result deletes /tmp/ath_owned_scratch.txt
+S.DIE();
+PRINT scratch file is now gone;
+
+THIS.DIE();

@@ -1,0 +1,76 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ---- C runtime build artifacts ----
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.dSYM/
+*.ll
+*.bc
+*.s
+a.out
+runtime/test_runtime
+runtime/test_runtime_fresh
+runtime/test_runtime_intern
+# Runtime artifacts bundled into the wheel at build time.
+athc/_runtime/
+# Stdlib bundled into the wheel at build time.
+athc/_stdlib/
+
+# ---- Compiled example binaries ----
+# The docs build native binaries at the repo root, e.g.
+#   python -m athc.cli examples/maze.ath -o maze
+# Keep a fresh checkout clean by ignoring those output names.
+/balanced
+/bf
+/bn
+/calc
+/collatz
+/daemon
+/fa
+/ft
+/grep
+/guess
+/hello
+/maze
+/modexp
+/nsqrt
+/pi
+/primes
+/prog
+/rle
+/rot13
+/rule110
+/sudoku
+/ue
+/wc
+/wordfreq
+
+# ---- Editors ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+Desktop.ini

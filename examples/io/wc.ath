@@ -1,0 +1,31 @@
+// Count lines, words, and chars of stdin. Output: the three counts, one per line as "lines:", "words:", "chars:".
+
+IMPORTF <add> AS ADD;
+IMPORTF <length> AS LENGTH;
+IMPORTF <split> AS SPLIT;
+
+IMPORT NUMBER 0 AS LINES;
+IMPORT NUMBER 0 AS WORDS;
+IMPORT NUMBER 0 AS CHARS;
+
+INPUT LINE;
+~ATH(LINE)
+{
+    ADD [LINES, 1]LINES;
+
+    LENGTH [LINE, NULL]LL;
+    ADD [CHARS, LL]CHARS;
+    // count the newline too
+    ADD [CHARS, 1]CHARS;
+
+    SPLIT [LINE, " "]PARTS;
+    LENGTH [PARTS, NULL]NW;
+    ADD [WORDS, NW]WORDS;
+
+    INPUT LINE;
+}
+
+PRINT lines: $LINES;
+PRINT words: $WORDS;
+PRINT chars: $CHARS;
+THIS.DIE();

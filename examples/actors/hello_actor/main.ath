@@ -1,0 +1,6 @@
+// Spawn one actor and wait for it to finish. Output: hello from actor, then main done.
+IMPORTF "greeter.ath" AS GREETER;
+SPAWN GREETER NULL AS A;
+JOIN A;
+PRINT main done;
+THIS.DIE();

@@ -1,0 +1,3 @@
+// Prints a greeting, then finishes.
+PRINT hello from actor;
+THIS.DIE();

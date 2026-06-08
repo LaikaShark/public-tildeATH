@@ -1,0 +1,22 @@
+// Factorial seeded as a bignum so the product stays exact past int64 overflow. Output: 25! = 15511210043330985984000000.
+
+IMPORTF <int_to_bignum> AS INT_TO_BIGNUM;
+IMPORTF <mul> AS MUL;
+IMPORTF <add> AS ADD;
+IMPORTF <to_string> AS TS;
+
+// ACC starts as bignum 1; bignum is sticky, so ACC*K stays a bignum
+INT_TO_BIGNUM [1, 1]ACC;
+IMPORT NUMBER 0 AS K;
+IMPORT NUMBER 25 AS N;
+
+LOOP N
+{
+    // K := 1, 2, ..., 25; ACC *= K
+    ADD [K, 1]K;
+    MUL [ACC, K]ACC;
+}
+
+TS [ACC, ACC]R;
+PRINT 25! = $R;
+THIS.DIE();

@@ -1,0 +1,73 @@
+// Count word frequencies over stdin in first-occurrence order: collect all words into one cons-list, then for each first occurrence print its total count. Input: lines of space-separated words. Output: "word: count" per distinct word, e.g. "the: 2", "cat: 2", "sat: 1".
+
+IMPORTF <add> AS ADD;
+IMPORTF <lt> AS LT;
+IMPORTF <eq> AS EQ;
+IMPORTF <streq> AS STREQ;
+IMPORTF <length> AS LENGTH;
+IMPORTF <split> AS SPLIT;
+IMPORTF <concat> AS CONCAT;
+
+TEXT "" AS WORDS;                 // grows into a cons-list of all words
+IMPORT NUMBER 0 AS I;
+IMPORT NUMBER 0 AS J;
+IMPORT NUMBER 0 AS K;
+IMPORT NUMBER 0 AS CNT;
+IMPORT NUMBER 0 AS SEEN;           // prefix matches for the current word
+
+INPUT LINE;
+~ATH(LINE)
+{
+    SPLIT [LINE, " "]PARTS;
+    CONCAT [WORDS, PARTS]WORDS;
+    INPUT LINE;
+}
+
+LENGTH [WORDS, NULL]NW;
+ADD [0, 0]I;
+LT [I, NW]OUTER;
+~ATH(OUTER)
+{
+    WORDS[I] W;
+
+    // first occurrence? count equal words in the prefix WORDS[0 .. I-1].
+    ADD [0, 0]SEEN;
+    ADD [0, 0]J;
+    LT [J, I]PREV;
+    ~ATH(PREV)
+    {
+        WORDS[J] WJ;
+        STREQ [W, WJ]SAME;
+        BRANCH(SAME)
+        {
+            ADD [SEEN, 1]SEEN;
+        }
+        ADD [J, 1]J;
+        LT [J, I]PREV;
+    }
+
+    EQ [SEEN, 0]FC;                   // first occurrence iff no prefix match
+    BRANCH(FC)
+    {
+        // count occurrences of W across all of WORDS
+        ADD [0, 0]CNT;
+        ADD [0, 0]K;
+        LT [K, NW]COUNTL;
+        ~ATH(COUNTL)
+        {
+            WORDS[K] WK;
+            STREQ [W, WK]EQK;
+            BRANCH(EQK)
+            {
+                ADD [CNT, 1]CNT;
+            }
+            ADD [K, 1]K;
+            LT [K, NW]COUNTL;
+        }
+        PRINT $W: $CNT;
+    }
+
+    ADD [I, 1]I;
+    LT [I, NW]OUTER;
+}
+THIS.DIE();

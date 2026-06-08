@@ -1,0 +1,12 @@
+// SPEC §4.8.4 — character atom to code point.
+//
+//   ORD [A, _] N;
+//
+// N is an int64-payload object holding the 0..255 code of the character
+// atom A — the value the subscript form S[I] yields. Born dead if A is
+// not a character atom. Inverse of CHR.
+
+IMPORT BUILTIN ath_ord AS ATH_ORD;
+BIFURCATE ARGS[X, Y];
+ATH_ORD[X, Y] R;
+THIS.DIE(R);

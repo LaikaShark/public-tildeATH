@@ -1,0 +1,6 @@
+// A sleeping actor parks instead of blocking, so the fast actor finishes first. Output: fast done, then slow done.
+IMPORTF "slow.ath" AS SLOW;
+IMPORTF "fast.ath" AS FAST;
+SPAWN SLOW NULL AS A;
+SPAWN FAST NULL AS B;
+THIS.DIE();

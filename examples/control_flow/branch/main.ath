@@ -1,0 +1,33 @@
+// Read two integers, report whether the first is less than the second, then branch on the verdict again via a saved clone. Output (STDIN 3,10): less, verdict was alive (one per line); (10,3 or 7,7): not less, verdict was dead
+
+IMPORTF <parse> AS PARSE;
+IMPORTF <lt> AS LT;
+
+INPUT XS;
+INPUT YS;
+PARSE [XS, NULL]X;
+PARSE [YS, NULL]Y;
+LT [X, Y]V;
+
+// CLONE V so the first BRANCH consumes a copy and V stays available.
+CLONE V AS VCHECK;
+BRANCH(VCHECK)
+{
+    PRINT less;
+}
+ELSE
+{
+    PRINT not less;
+}
+
+// V is still alive — confirm by branching on it again.
+BRANCH(V)
+{
+    PRINT verdict was alive;
+}
+ELSE
+{
+    PRINT verdict was dead;
+}
+
+THIS.DIE();

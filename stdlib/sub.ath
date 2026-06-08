@@ -1,0 +1,6 @@
+// SPEC §4.8.2 — integer subtraction (X - Y).
+
+IMPORT BUILTIN ath_sub AS ATH_SUB;
+BIFURCATE ARGS[X, Y];
+ATH_SUB[X, Y] R;
+THIS.DIE(R);

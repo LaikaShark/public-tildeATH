@@ -1,0 +1,9 @@
+// Print "fizzbuzz", then if the counter ARGS encodes n > 1, recurse into FIZZ with n-1.
+PRINT fizzbuzz;
+BIFURCATE ARGS[LEFT, REST];
+~ATH(LEFT)
+{
+    FIZZ REST[X, Y];
+    BIFURCATE NULL[JUNK, LEFT];
+}
+THIS.DIE();

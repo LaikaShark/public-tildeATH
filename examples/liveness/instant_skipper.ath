@@ -1,0 +1,10 @@
+// The "instant" object is born dead, so the loop body never runs. Output: fell through.
+
+// V is born dead (lifetime [0, 0]).
+IMPORT INSTANT V;
+~ATH(V)
+{
+    PRINT never reached;
+}
+PRINT fell through;
+THIS.DIE();

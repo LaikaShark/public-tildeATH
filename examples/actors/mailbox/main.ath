@@ -1,0 +1,9 @@
+// Send three messages to an actor's mailbox by its handle. Output: 100, 200, 300, done (one per line).
+IMPORTF "collector.ath" AS COLLECTOR;
+SPAWN COLLECTOR NULL AS A;
+SEND 100 TO A;
+SEND 200 TO A;
+SEND 300 TO A;
+JOIN A;
+PRINT done;
+THIS.DIE();

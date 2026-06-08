@@ -1,0 +1,29 @@
+// Subscripting a string yields an independent snapshot, so killing one string does not poison a character atom shared with another. Output: 97, 97 (one per line)
+
+IMPORTF <ord> AS ORD;
+IMPORTF <to_string> AS TO_STRING;
+
+TEXT "abc" AS FIRST;
+FIRST[0] A1;
+ORD [A1, NULL]C1;
+TO_STRING [C1, NULL]S1;
+PRINT $S1;
+
+// Kill the first string; its 'a' must not affect the second string.
+FIRST.DIE();
+
+TEXT "ant" AS SECOND;
+SECOND[0] A2;
+ORD [A2, NULL]C2;
+CLONE C2 AS C2CHK;
+BRANCH(C2CHK)
+{
+    TO_STRING [C2, NULL]S2;
+    PRINT $S2;
+}
+ELSE
+{
+    PRINT poisoned;
+}
+
+THIS.DIE();

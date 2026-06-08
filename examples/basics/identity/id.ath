@@ -1,0 +1,2 @@
+// Identity function: returns its ARGS unchanged.
+THIS.DIE(ARGS);

@@ -1,0 +1,5 @@
+// SPEC §4.8.6 — fresh list of the first N elements. TAKE [LIST, N] R;
+IMPORT BUILTIN ath_take AS ATH_TAKE;
+BIFURCATE ARGS[X, Y];
+ATH_TAKE[X, Y] R;
+THIS.DIE(R);

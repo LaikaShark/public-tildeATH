@@ -1,0 +1,13 @@
+// The EXECUTE(F) postfix runs F once the loop exits naturally, passing the now-dead subject as F's argument; here the body kills the subject so FAREWELL fires. Output: working, farewell, after (one per line)
+
+IMPORTF "farewell.ath" AS FAREWELL;
+IMPORT NUMBER 1 AS V;
+
+~ATH(V)
+{
+    PRINT working;
+    V.DIE();
+} EXECUTE(FAREWELL);
+
+PRINT after;
+THIS.DIE();

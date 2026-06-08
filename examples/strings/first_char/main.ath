@@ -1,0 +1,10 @@
+// Read a line and print its first character as a one-character string. Input: 'xyz'. Output: 'x'.
+
+IMPORTF "first.ath" AS FIRST;
+INPUT LINE;
+// Split LINE into head atom CH and tail REST.
+FIRST LINE[CH, REST];
+// Wrap the single atom as a length-1 string.
+BIFURCATE [CH, NULL] SINGLE;
+PRINT $SINGLE;
+THIS.DIE();

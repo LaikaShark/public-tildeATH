@@ -1,0 +1,86 @@
+// Run-length encode a stdin line by counting maximal runs of equal characters, then decode it back. Reads one line. Output: "encoded: 3a4b1c" then "decoded: aaabbbbc" for input "aaabbbbc".
+
+IMPORTF <add> AS ADD;
+IMPORTF <mul> AS MUL;
+IMPORTF <sub> AS SUB;
+IMPORTF <lt> AS LT;
+IMPORTF <le> AS LE;
+IMPORTF <ge> AS GE;
+IMPORTF <eq> AS EQ;
+IMPORTF <and> AS AND;
+IMPORTF <length> AS LENGTH;
+IMPORTF <ord> AS ORD;
+IMPORTF <chr> AS CHR;
+IMPORTF <concat> AS CONCAT;
+IMPORTF <to_string> AS TO_STRING;
+
+INPUT S;
+
+// --- encode ---------------------------------------------------------------
+LENGTH [S, NULL]L;
+TEXT "" AS ENC;
+IMPORT NUMBER 0 AS I;
+LT [I, L]EGO;
+~ATH(EGO)
+{
+    S[I] CH;
+    ORD [CH, NULL]C;
+    ADD [1, 0]RUN;             // RUN := 1
+    ADD [I, 1]J;
+    S[J] CHJ;
+    ORD [CHJ, NULL]CJ;
+    EQ [CJ, C]JIN;   // dead when J out of range
+    ~ATH(JIN)
+    {
+        ADD [RUN, 1]RUN;
+        ADD [J, 1]J;
+        S[J] CHK;
+        ORD [CHK, NULL]CK;
+        EQ [CK, C]JIN;
+    }
+    TO_STRING [RUN, NULL]RUNS;
+    CHR [C, NULL]CHS;
+    CONCAT [ENC, RUNS]ENC;
+    CONCAT [ENC, CHS]ENC;
+    ADD [J, 0]I;                 // I := J (start of next run)
+    LT [I, L]EGO;
+}
+PRINT encoded: $ENC;
+
+// --- decode ---------------------------------------------------------------
+LENGTH [ENC, NULL]EL;
+TEXT "" AS DEC;
+IMPORT NUMBER 0 AS K;
+LT [K, EL]DGO;
+~ATH(DGO)
+{
+    // read a run of digits into NUM
+    ADD [0, 0]NUM;
+    ENC[K] DCH;
+    ORD [DCH, NULL]DC;
+    GE [DC, 48]G;
+    LE [DC, 57]L;
+    AND [G, L]ISDIG;
+    ~ATH(ISDIG)
+    {
+        SUB [DC, 48]DV;
+        MUL [NUM, 10]NUM;
+        ADD [NUM, DV]NUM;       // NUM := NUM*10 + digit
+        ADD [K, 1]K;
+        ENC[K] DCH;
+        ORD [DCH, NULL]DC;
+        GE [DC, 48]G2;
+        LE [DC, 57]L2;
+        AND [G2, L2]ISDIG;
+    }
+    // the next character is the run char; emit it NUM times
+    CHR [DC, NULL]RUNCH;
+    LOOP NUM
+    {
+        CONCAT [DEC, RUNCH]DEC;
+    }
+    ADD [K, 1]K;
+    LT [K, EL]DGO;
+}
+PRINT decoded: $DEC;
+THIS.DIE();

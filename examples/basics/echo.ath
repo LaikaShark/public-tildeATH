@@ -1,0 +1,4 @@
+// Echo one line of stdin back. Output: the input line, unchanged.
+INPUT LINE;
+PRINT $LINE;
+THIS.DIE();

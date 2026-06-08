@@ -1,0 +1,835 @@
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+RUNTIME_LIB = PROJECT_ROOT / "runtime" / "libath_fresh.a"
+CONFORMANCE = PROJECT_ROOT / "examples"
+
+
+def _ensure_runtime():
+    if RUNTIME_LIB.exists():
+        return
+    result = subprocess.run(
+        ["make", "runtime"], cwd=PROJECT_ROOT, capture_output=True, text=True
+    )
+    if result.returncode != 0 or not RUNTIME_LIB.exists():
+        pytest.skip(f"could not build runtime: {result.stderr.strip()}")
+
+
+def _compile(
+    source_path: Path,
+    output: Path,
+    extra_args: list[str] | None = None,
+) -> subprocess.CompletedProcess:
+    cmd = [sys.executable, "-m", "athc.cli", str(source_path), "-o", str(output)]
+    if extra_args:
+        cmd.extend(extra_args)
+    return subprocess.run(
+        cmd, cwd=PROJECT_ROOT, capture_output=True, text=True
+    )
+
+
+def _run(binary: Path, timeout: float = 5.0, stdin_input: str | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [str(binary)],
+        input=stdin_input,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def _build_and_run(
+    source_path: Path,
+    tmp_path: Path,
+    stdin_input: str | None = None,
+    extra_args: list[str] | None = None,
+) -> str:
+    _ensure_runtime()
+    out = tmp_path / "prog"
+    compiled = _compile(source_path, out, extra_args=extra_args)
+    assert compiled.returncode == 0, f"compile failed:\nstderr:\n{compiled.stderr}"
+    assert out.exists(), "compiler did not produce output binary"
+    run = _run(out, stdin_input=stdin_input)
+    assert run.returncode == 0, f"binary exited {run.returncode}, stderr:\n{run.stderr}"
+    return run.stdout
+
+
+def test_hello_world(tmp_path):
+    src = tmp_path / "hello.ath"
+    src.write_text("print Hello, ~ATH!;\nTHIS.DIE();\n")
+    assert _build_and_run(src, tmp_path) == "Hello, ~ATH!\n"
+
+
+def test_implicit_termination_at_eof(tmp_path):
+    src = tmp_path / "noop.ath"
+    src.write_text("print fell off the end;\n")
+    assert _build_and_run(src, tmp_path) == "fell off the end\n"
+
+
+def test_text_target_only_referenced_by_text_compiles(tmp_path):
+    # text target never read elsewhere still needs a codegen slot
+    src = tmp_path / "text_only.ath"
+    src.write_text('text "hi" as V;\nTHIS.DIE();\n')
+    assert _build_and_run(src, tmp_path) == ""
+
+
+def test_text_ident_part_only_use_compiles(tmp_path):
+    # IDENT part is a read; its slot must be collected too
+    src = tmp_path / "text_ident.ath"
+    src.write_text('import number 5 as N;\ntext "n=" N as MSG;\nprint $MSG;\nTHIS.DIE();\n')
+    assert _build_and_run(src, tmp_path) == "n=5\n"
+
+
+def test_print_interpolates_numeric_payload(tmp_path):
+    # print $N renders numeric payload as decimal directly, no TO_STRING
+    src = tmp_path / "num_interp.ath"
+    src.write_text(
+        "import number 42 as N;\n"
+        "import number 3.14 as PI;\n"
+        "print int $N float $PI;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "int 42 float 3.14\n"
+
+
+def test_bignum_literal_and_exact_arithmetic(tmp_path):
+    # literal beyond int64 is exact bignum; arithmetic stays exact
+    src = tmp_path / "big.ath"
+    src.write_text(
+        "importf <mul> as MUL;\n"
+        "import number 99999999999999999999 as BIG;\n"
+        "MUL [BIG, BIG] SQ;\n"
+        "print $SQ;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == (
+        "9999999999999999999800000000000000000001\n"
+    )
+
+
+def test_int_overflow_still_dies(tmp_path):
+    # int64 overflow stays born-dead; does NOT auto-promote to bignum
+    src = tmp_path / "ov.ath"
+    src.write_text(
+        "importf <add> as ADD;\n"
+        "import number 9223372036854775807 as M;\n"
+        "import number 1 as ONE;\n"
+        "ADD [M, ONE] OV;\n"
+        "~ATH(OV) { print ALIVE_BUG; BIFURCATE NULL[z, OV]; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_die_immediately_terminates(tmp_path):
+    src = tmp_path / "early.ath"
+    src.write_text(
+        "print before;\n"
+        "THIS.DIE();\n"
+        "print after;\n"
+    )
+    assert _build_and_run(src, tmp_path) == "before\n"
+
+
+def test_ath_loop_skipped_when_var_already_dead(tmp_path):
+    src = tmp_path / "skip.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { print never; }\n"
+        "print after;\n"
+    )
+    assert _build_and_run(src, tmp_path) == "after\n"
+
+
+def test_ath_loop_runs_once_then_var_dies(tmp_path):
+    src = tmp_path / "once.ath"
+    src.write_text(
+        "import x V;\n"
+        "~ATH(V) { print tick; V.DIE(); }\n"
+        "print after;\n"
+    )
+    assert _build_and_run(src, tmp_path) == "tick\nafter\n"
+
+
+def test_keyword_case_insensitive_end_to_end(tmp_path):
+    # keywords, ~ATH, .DIE case-insensitive; identifiers case-sensitive
+    src = tmp_path / "cases.ath"
+    src.write_text(
+        "Import x V;\n"
+        "~ath(V) { Print mixed case keywords; V.die(); }\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "mixed case keywords\n"
+
+
+def test_looptest_conformance(tmp_path):
+    out = _build_and_run(CONFORMANCE / "control_flow" / "looptest.ath", tmp_path)
+    lines = out.strip().splitlines()
+    assert all(line in ("APPLE", "ORANGE") for line in lines)
+    assert lines.count("APPLE") == lines.count("ORANGE")
+    assert len(lines) >= 2
+
+
+def test_importf_path_must_be_string_literal(tmp_path):
+    src = tmp_path / "bad_importf.ath"
+    src.write_text("importf foo as bar;\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out)
+    assert compiled.returncode != 0
+    assert "string literal" in compiled.stderr.lower()
+
+
+def test_unbound_variable_rejected_at_cli(tmp_path):
+    src = tmp_path / "typo.ath"
+    # lowercase 'this' is not predefined THIS
+    src.write_text("this.DIE();\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out)
+    assert compiled.returncode != 0
+    assert "not in scope" in compiled.stderr.lower()
+    assert not out.exists()
+
+
+def test_writing_to_NULL_rejected_at_cli(tmp_path):
+    src = tmp_path / "null_write.ath"
+    src.write_text("import x NULL;\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out)
+    assert compiled.returncode != 0
+    assert "null" in compiled.stderr.lower() and "read-only" in compiled.stderr.lower()
+
+
+def test_read_of_flow_unreachable_binding_does_not_crash(tmp_path):
+    # W introduced in a loop body that runs zero times; runtime must not segfault on W.DIE()
+    src = tmp_path / "unreachable.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { import y W; }\n"
+        "W.DIE();\n"
+        "print done;\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_decompose_of_unbound_variable_yields_NULL_halves(tmp_path):
+    # decompose of unbound null-pointer slot must yield NULL halves, not allocate onto null
+    src = tmp_path / "decompose_unbound.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { import y U; }\n"
+        "BIFURCATE U[L, R];\n"
+        "L.DIE();\n"
+        "R.DIE();\n"
+        "print survived;\n"
+    )
+    assert _build_and_run(src, tmp_path) == "survived\n"
+
+
+def test_echo_via_input_and_print2(tmp_path):
+    src = tmp_path / "echo.ath"
+    src.write_text("INPUT s;\nprint $s;\nTHIS.DIE();\n")
+    assert _build_and_run(src, tmp_path, stdin_input="hello, ~ATH!\n") == "hello, ~ATH!\n"
+
+
+def test_print2_of_NULL_prints_blank_line(tmp_path):
+    src = tmp_path / "blank.ath"
+    src.write_text("print $NULL;\nTHIS.DIE();\n")
+    assert _build_and_run(src, tmp_path) == "\n"
+
+
+def test_input_at_eof_yields_empty_string(tmp_path):
+    src = tmp_path / "eof.ath"
+    src.write_text("INPUT s;\nprint $s;\nprint after;\nTHIS.DIE();\n")
+    # empty stdin: input returns empty string, print $s emits one newline
+    assert _build_and_run(src, tmp_path, stdin_input="") == "\nafter\n"
+
+
+def test_input_strips_trailing_newline(tmp_path):
+    src = tmp_path / "strip.ath"
+    src.write_text(
+        "INPUT a;\nINPUT b;\nprint $a;\nprint $b;\nTHIS.DIE();\n"
+    )
+    # trailing \n on each line stripped before encoding
+    assert _build_and_run(src, tmp_path, stdin_input="first\nsecond\n") == "first\nsecond\n"
+
+
+def test_function_call_basic(tmp_path):
+    (tmp_path / "hello.ath").write_text(
+        "print Hello from HELLO.;\nTHIS.DIE();\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "hello.ath" as HELLO;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "HELLO [A, B] R;\n"
+        "print bye;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path) == "Hello from HELLO.\nbye\n"
+
+
+def test_function_returns_args_via_die(tmp_path):
+    (tmp_path / "idfn.ath").write_text("THIS.DIE(ARGS);\n")
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "idfn.ath" as ID;\n'
+        "INPUT s;\n"
+        "ID s [H, T];\n"
+        # T = tail of "hi" = "i"
+        "print $T;\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path, stdin_input="hi\n") == "i\ndone\n"
+
+
+def test_function_default_return_is_NULL(tmp_path):
+    # returns NULL
+    (tmp_path / "noop.ath").write_text("THIS.DIE();\n")
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "noop.ath" as NOOP;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "NOOP [A, B] R;\n"
+        # R = NULL -> blank line
+        "print $R;\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path) == "\nafter\n"
+
+
+def test_die_with_arg_sets_return_then_falls_off_end(tmp_path):
+    # sets return_obj = ARGS, kills V, falls off end -> returns ARGS
+    (tmp_path / "midret.ath").write_text(
+        "import x V;\nV.DIE(ARGS);\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "midret.ath" as F;\n'
+        "INPUT s;\n"
+        "F s [H, T];\n"
+        # T = "ello"
+        "print $T;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path, stdin_input="hello\n") == "ello\n"
+
+
+def test_function_call_compose_arg_form_then_decompose(tmp_path):
+    # function picks left half of ARGS and returns it
+    (tmp_path / "pickleft.ath").write_text(
+        "BIFURCATE ARGS[L, R];\nTHIS.DIE(L);\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "pickleft.ath" as PICK;\n'
+        "INPUT s;\n"
+        "BIFURCATE s[H, T];\n"
+        # call PICK with compose(H, T); should return H back
+        "PICK [H, T] R;\n"
+        # R is the H atom; print its aliveness via a loop
+        "~ATH(R) { print alive; R.DIE(); }\n"
+        "THIS.DIE();\n"
+    )
+    out = _build_and_run(main, tmp_path, stdin_input="ab\n")
+    assert out == "alive\n"
+
+
+def test_importf_nested_function_imports(tmp_path):
+    (tmp_path / "inner.ath").write_text("print inner;\nTHIS.DIE();\n")
+    (tmp_path / "outer.ath").write_text(
+        'importf "inner.ath" as INNER;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "INNER [A, B] R;\n"
+        "print outer;\n"
+        "THIS.DIE();\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "outer.ath" as OUTER;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "OUTER [A, B] R;\n"
+        "print main;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path) == "inner\nouter\nmain\n"
+
+
+def test_importf_missing_file_rejected(tmp_path):
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "nope.ath" as F;\nTHIS.DIE();\n'
+    )
+    out = tmp_path / "prog"
+    compiled = _compile(main, out)
+    assert compiled.returncode != 0
+    assert "file not found" in compiled.stderr.lower()
+
+
+def test_importf_duplicate_name_different_files_rejected(tmp_path):
+    # binding same name to two different files is a conflict
+    (tmp_path / "f1.ath").write_text("print f1;\nTHIS.DIE();\n")
+    (tmp_path / "f2.ath").write_text("print f2;\nTHIS.DIE();\n")
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "f1.ath" as F;\n'
+        'importf "f2.ath" as F;\n'
+        "THIS.DIE();\n"
+    )
+    out = tmp_path / "prog"
+    compiled = _compile(main, out)
+    assert compiled.returncode != 0
+    assert "already bound" in compiled.stderr.lower()
+
+
+def test_importf_diamond_same_file_same_name_ok(tmp_path):
+    # rebinding H to the same resolved file is idempotent, not a conflict
+    (tmp_path / "helper.ath").write_text("print helped;\nTHIS.DIE();\n")
+    (tmp_path / "a.ath").write_text(
+        'importf "helper.ath" as H;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "H [A, B] R;\n"
+        "print a_done;\n"
+        "THIS.DIE();\n"
+    )
+    (tmp_path / "b.ath").write_text(
+        'importf "helper.ath" as H;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "H [A, B] R;\n"
+        "print b_done;\n"
+        "THIS.DIE();\n"
+    )
+    main = tmp_path / "main.ath"
+    main.write_text(
+        'importf "a.ath" as P;\n'
+        'importf "b.ath" as Q;\n'
+        "import x A;\n"
+        "import y B;\n"
+        "P [A, B] R;\n"
+        "Q [A, B] S;\n"
+        "print main;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(main, tmp_path) == (
+        "helped\na_done\nhelped\nb_done\nmain\n"
+    )
+
+
+def test_unknown_function_call_rejected_at_cli(tmp_path):
+    main = tmp_path / "main.ath"
+    main.write_text(
+        "import x A;\nimport y B;\nNOSUCH [A, B] R;\nTHIS.DIE();\n"
+    )
+    out = tmp_path / "prog"
+    compiled = _compile(main, out)
+    assert compiled.returncode != 0
+    assert "not declared" in compiled.stderr.lower()
+
+
+def test_inverted_loop_runs_after_var_dies(tmp_path):
+    # V killed, then ~ATH(!V) fires; body rebinds V live so loop exits
+    src = tmp_path / "inv.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(!V) {\n"
+        "    print V is dead;\n"
+        "    BIFURCATE [NULL, NULL] V;\n"
+        "}\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "V is dead\nafter\n"
+
+
+def test_inverted_loop_skipped_when_var_alive(tmp_path):
+    # V alive, so ~ATH(!V) body never runs
+    src = tmp_path / "inv_skip.ath"
+    src.write_text(
+        "import x V;\n"
+        "~ATH(!V) { print never; }\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "after\n"
+
+
+def test_execute_postfix_is_accepted(tmp_path):
+    src = tmp_path / "exec.ath"
+    src.write_text(
+        "import x V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { print never; } EXECUTE(NULL);\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "after\n"
+
+
+def test_execute_postfix_canonical_shape_parses_and_runs(tmp_path):
+    # canonical import-dead / inverted-loop / EXECUTE-postfix shape
+    src = tmp_path / "hs.ath"
+    src.write_text(
+        "import dead universe U;\n"
+        "U.DIE();\n"
+        "~ATH(!U) {\n"
+        "    print universe ended;\n"
+        "    THIS.DIE();\n"
+        "} EXECUTE(NULL);\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "universe ended\n"
+
+
+def test_multi_word_import_works_end_to_end(tmp_path):
+    src = tmp_path / "multi.ath"
+    src.write_text(
+        "import dead grandmother G;\n"
+        "~ATH(G) { print alive; G.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "alive\ndone\n"
+
+
+def test_instant_lifetime_is_born_dead(tmp_path):
+    # "instant" lifetime [0,0]: dead at allocation, loop body never runs
+    src = tmp_path / "instant.ath"
+    src.write_text(
+        "import instant V;\n"
+        "~ATH(V) { print never; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_tick_lifetime_dies_within_a_few_iterations(tmp_path):
+    # "tick" lifetime 0.001-0.01s; tight spin observes death within timeout
+    src = tmp_path / "tick.ath"
+    src.write_text(
+        "import tick T;\n"
+        "~ATH(T) { }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_library_lookup_is_case_insensitive(tmp_path):
+    src = tmp_path / "case.ath"
+    src.write_text(
+        "import INSTANT V;\n"
+        "~ATH(V) { print never; }\n"
+        "print ok;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "ok\n"
+
+
+def test_unknown_library_name_falls_through_to_plain_alive(tmp_path):
+    # unknown name behaves like v0 import: plain alive object, killed manually
+    src = tmp_path / "fallthrough.ath"
+    src.write_text(
+        "import notarealconcept V;\n"
+        "~ATH(V) { print alive once; V.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "alive once\ndone\n"
+
+
+def test_once_library_entry_runs_body_exactly_once(tmp_path):
+    # "once" alive for exactly one ath_is_alive check; body runs once
+    src = tmp_path / "once.ath"
+    src.write_text(
+        "import once V;\n"
+        "~ATH(V) {\n"
+        "    print exactly once;\n"
+        "}\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "exactly once\nafter\n"
+
+
+def test_once_can_be_explicitly_killed_before_observation(tmp_path):
+    # oneshot killed before any ~ATH check skips its body entirely
+    src = tmp_path / "once_pre_killed.ath"
+    src.write_text(
+        "import once V;\n"
+        "V.DIE();\n"
+        "~ATH(V) { print never; }\n"
+        "print after;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "after\n"
+
+
+def test_long_lived_concept_lets_loop_run_then_kill(tmp_path):
+    # "sequoia" effectively immortal for the test; body must explicitly kill it
+    src = tmp_path / "sequoia.ath"
+    src.write_text(
+        "import sequoia V;\n"
+        "~ATH(V) { print stately; V.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "stately\ndone\n"
+
+
+def test_watch_missing_file_is_born_dead(tmp_path):
+    src = tmp_path / "watch_missing.ath"
+    nonexistent = tmp_path / "definitely_not_here_xyz"
+    src.write_text(
+        f'watch "{nonexistent}" as F;\n'
+        "~ATH(F) { print never; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "done\n"
+
+
+def test_watch_existing_file_then_loop_runs(tmp_path):
+    target = tmp_path / "present.txt"
+    target.write_text("ok")
+    src = tmp_path / "watch_exists.ath"
+    src.write_text(
+        f'watch "{target}" as F;\n'
+        "~ATH(F) { print file is here; F.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "file is here\ndone\n"
+
+
+def test_define_lifetime_registers_new_entry(tmp_path):
+    # --define-lifetime makes tortoise available with a 1-3ms lifetime
+    src = tmp_path / "tortoise.ath"
+    src.write_text(
+        "import tortoise T;\n"
+        "~ATH(T) { }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out = _build_and_run(
+        src, tmp_path, extra_args=["-D", "tortoise:0.001:0.003"]
+    )
+    assert out == "done\n"
+
+
+def test_define_lifetime_overrides_builtin_entry(tmp_path):
+    # built-in "fly" lives 1-3 days; override to 0,0 => born dead
+    src = tmp_path / "override.ath"
+    src.write_text(
+        "import fly F;\n"
+        "~ATH(F) { print never; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out = _build_and_run(
+        src, tmp_path, extra_args=["--define-lifetime", "fly:0:0"]
+    )
+    assert out == "done\n"
+
+
+def test_define_lifetime_supports_multi_word_names(tmp_path):
+    # multi-word import metadata joined with spaces; user entry uses same form
+    src = tmp_path / "mw.ath"
+    src.write_text(
+        "import giant tortoise T;\n"
+        "~ATH(T) { }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out = _build_and_run(
+        src, tmp_path, extra_args=["-D", "giant tortoise:0.001:0.003"]
+    )
+    assert out == "done\n"
+
+
+def test_define_lifetime_multiple_flags(tmp_path):
+    src = tmp_path / "many.ath"
+    src.write_text(
+        "import alpha A;\n"
+        "import beta B;\n"
+        "~ATH(A) { print A; A.DIE(); }\n"
+        "~ATH(B) { print B-skipped; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    # alpha plain alive (loop runs once via explicit DIE); beta zero lifetime (never runs)
+    out = _build_and_run(
+        src, tmp_path,
+        extra_args=["-D", "alpha:60:120", "-D", "beta:0:0"],
+    )
+    assert out == "A\ndone\n"
+
+
+def test_define_lifetime_invalid_spec_rejected(tmp_path):
+    src = tmp_path / "p.ath"
+    src.write_text("THIS.DIE();\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out, extra_args=["-D", "broken"])
+    assert compiled.returncode != 0
+    assert "expected NAME:MIN:MAX" in compiled.stderr
+
+
+def test_define_lifetime_negative_rejected(tmp_path):
+    src = tmp_path / "p.ath"
+    src.write_text("THIS.DIE();\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out, extra_args=["-D", "neg:-1:5"])
+    assert compiled.returncode != 0
+    assert "non-negative" in compiled.stderr
+
+
+def test_define_lifetime_min_exceeds_max_rejected(tmp_path):
+    src = tmp_path / "p.ath"
+    src.write_text("THIS.DIE();\n")
+    out = tmp_path / "prog"
+    compiled = _compile(src, out, extra_args=["-D", "bad:10:5"])
+    assert compiled.returncode != 0
+    assert "must not exceed max" in compiled.stderr
+
+
+def _ensure_runtime_intern():
+    intern_lib = PROJECT_ROOT / "runtime" / "libath_intern.a"
+    if intern_lib.exists():
+        return
+    result = subprocess.run(
+        ["make", "runtime"], cwd=PROJECT_ROOT, capture_output=True, text=True
+    )
+    if result.returncode != 0 or not intern_lib.exists():
+        pytest.skip(f"could not build intern runtime: {result.stderr.strip()}")
+
+
+def test_intern_mode_shares_structurally_equal_composites(tmp_path):
+    # fresh: X and Y distinct, killing Y leaves X alive; intern: same object, killing Y kills X
+    src = tmp_path / "diff.ath"
+    src.write_text(
+        "import x A;\n"
+        "import y B;\n"
+        "BIFURCATE [A, B] X;\n"
+        "BIFURCATE [A, B] Y;\n"
+        "Y.DIE();\n"
+        "~ATH(X) { print X is alive; X.DIE(); }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+
+    fresh = _build_and_run(src, tmp_path)
+    assert fresh == "X is alive\ndone\n"
+
+    _ensure_runtime_intern()
+    intern = _build_and_run(src, tmp_path, extra_args=["--compose", "intern"])
+    assert intern == "done\n"
+
+
+def test_intern_mode_runtime_library_path_default(tmp_path):
+    # --compose intern picks libath_intern.a by default
+    _ensure_runtime_intern()
+    src = tmp_path / "hello.ath"
+    src.write_text("print hi from intern;\nTHIS.DIE();\n")
+    out = _build_and_run(src, tmp_path, extra_args=["--compose", "intern"])
+    assert out == "hi from intern\n"
+
+
+def test_signal_watch_dies_on_signal(tmp_path):
+    _ensure_runtime()
+    import signal as _signal
+
+    src = tmp_path / "sig.ath"
+    src.write_text(
+        "watch signal SIGUSR1 as RUNNING;\n"
+        "import once SHOWN;\n"
+        "~ATH(RUNNING) {\n"
+        "    ~ATH(SHOWN) { print serving requests; }\n"
+        "}\n"
+        "print received signal;\n"
+        "THIS.DIE();\n"
+    )
+    out_bin = tmp_path / "prog"
+    compiled = _compile(src, out_bin)
+    assert compiled.returncode == 0, compiled.stderr
+
+    log = tmp_path / "out.log"
+    with open(log, "w") as f:
+        proc = subprocess.Popen([str(out_bin)], stdout=f)
+    time.sleep(0.1)
+    proc.send_signal(_signal.SIGUSR1)
+    proc.wait(timeout=5.0)
+    assert proc.returncode == 0
+
+    output = log.read_text()
+    assert "serving requests" in output
+    assert output.endswith("received signal\n"), f"got: {output!r}"
+
+
+def test_signal_watch_unknown_signal_name_yields_born_dead(tmp_path):
+    src = tmp_path / "unk.ath"
+    src.write_text(
+        "watch signal NOTASIGNAL as V;\n"
+        "~ATH(V) { print never; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out_bin = tmp_path / "prog"
+    compiled = _compile(src, out_bin)
+    assert compiled.returncode == 0
+    run = subprocess.run(
+        [str(out_bin)], capture_output=True, text=True, timeout=5.0
+    )
+    assert run.returncode == 0
+    assert run.stdout == "done\n"
+    # runtime warned about the unknown signal name
+    assert "unknown signal" in run.stderr.lower()
+
+
+def test_watch_dies_when_file_deleted_mid_run(tmp_path):
+    _ensure_runtime()
+    target = tmp_path / "watched.txt"
+    target.write_text("ok")
+
+    src = tmp_path / "watch_run.ath"
+    src.write_text(
+        f'watch "{target}" as F;\n'
+        "~ATH(F) { print alive; }\n"
+        "print done;\n"
+        "THIS.DIE();\n"
+    )
+    out_bin = tmp_path / "prog"
+    compiled = _compile(src, out_bin)
+    assert compiled.returncode == 0, compiled.stderr
+
+    # redirect stdout to a file so the tight loop doesn't deadlock on pipe buffer
+    out_log = tmp_path / "out.log"
+    with open(out_log, "w") as f:
+        proc = subprocess.Popen([str(out_bin)], stdout=f)
+    # let it start iterating, then yank the file
+    time.sleep(0.1)
+    os.unlink(target)
+    proc.wait(timeout=5.0)
+    assert proc.returncode == 0
+
+    output = out_log.read_text()
+    assert "alive" in output, f"expected at least one alive line; got:\n{output!r}"
+    # after file disappears, loop exits and trailing "done" is last output
+    assert output.endswith("done\n"), f"expected to end with 'done'; got:\n{output!r}"

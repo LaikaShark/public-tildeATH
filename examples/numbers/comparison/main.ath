@@ -1,0 +1,37 @@
+// Report the ordering of two integers read from stdin (one per line). Output: less, greater, or equal (3,10 -> less; 10,3 -> greater; 7,7 -> equal).
+
+IMPORTF <parse> AS PARSE;
+IMPORTF <lt> AS LT;
+IMPORTF <eq> AS EQ;
+IMPORTF <gt> AS GT;
+
+INPUT LINE_X;
+INPUT LINE_Y;
+
+PARSE [LINE_X, NULL]X;
+PARSE [LINE_Y, NULL]Y;
+
+// each verdict is alive iff the comparison holds; the body kills it, so
+// the ~ATH loop runs its print at most once
+LT [X, Y]IS_LT;
+~ATH(IS_LT)
+{
+    PRINT less;
+    IS_LT.DIE();
+}
+
+EQ [X, Y]IS_EQ;
+~ATH(IS_EQ)
+{
+    PRINT equal;
+    IS_EQ.DIE();
+}
+
+GT [X, Y]IS_GT;
+~ATH(IS_GT)
+{
+    PRINT greater;
+    IS_GT.DIE();
+}
+
+THIS.DIE();

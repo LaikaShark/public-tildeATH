@@ -1,0 +1,10 @@
+// Run the loop body exactly once, then continue. Output: exactly one run, then after.
+
+// V is alive for exactly one observation, then dead.
+IMPORT ONCE V;
+~ATH(V)
+{
+    PRINT exactly one run;
+}
+PRINT after;
+THIS.DIE();

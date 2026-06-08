@@ -1,0 +1,16 @@
+// Print "working..." every 500ms until SIGINT, then shut down. Output: a startup line, repeated "working..." lines, then a shutdown line when Ctrl-C is pressed.
+
+IMPORT NUMBER 500 AS TICK;        // 500 ms
+
+// RUN stays alive until the process receives SIGINT.
+WATCH SIGNAL SIGINT AS RUN;
+PRINT daemon started (SIGINT to stop)...;
+
+~ATH(RUN)
+{
+    PRINT working...;
+    SLEEP TICK;
+}
+
+PRINT received SIGINT\; shutting down cleanly.;
+THIS.DIE();

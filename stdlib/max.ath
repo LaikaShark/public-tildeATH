@@ -1,0 +1,5 @@
+// SPEC §4.8.2 — greater of X and Y. MAX [X, Y] R;
+IMPORT BUILTIN ath_max AS ATH_MAX;
+BIFURCATE ARGS[X, Y];
+ATH_MAX[X, Y] R;
+THIS.DIE(R);

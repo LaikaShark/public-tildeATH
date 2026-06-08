@@ -1,0 +1,17 @@
+// SPEC §4.8.4 — compose two objects into a fresh composite and install
+// both as dependencies of the result.
+//
+//   ENTANGLE [L, R] P;
+//
+// Equivalent to a BIFURCATE compose followed by ath_inherit_lifetime,
+// in one call. Use ENTANGLE when the composite must die if either
+// operand dies — typically when packing arguments for a builtin that
+// takes a pair (e.g. (needle, replacement) for REPLACE).
+//
+// Use plain BIFURCATE composition when the composite must outlive its
+// operands.
+
+IMPORT BUILTIN ath_entangle AS ATH_ENTANGLE;
+BIFURCATE ARGS[X, Y];
+ATH_ENTANGLE[X, Y] R;
+THIS.DIE(R);

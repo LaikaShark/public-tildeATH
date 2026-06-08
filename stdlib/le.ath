@@ -1,0 +1,10 @@
+// SPEC §4.8.3 — less-than-or-equal verdict.
+//
+//   LE [X, Y] V;
+//
+// V is alive iff X.value <= Y.value, else born dead.
+
+IMPORT BUILTIN ath_le AS ATH_LE;
+BIFURCATE ARGS[X, Y];
+ATH_LE[X, Y] R;
+THIS.DIE(R);

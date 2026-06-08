@@ -1,0 +1,28 @@
+// `watch pid N` ties an object's liveness to a running process: PID 1 always exists, a huge PID never does. Output: pid alive, other dead.
+
+IMPORT NUMBER 1 AS PID1;
+IMPORT NUMBER 2147480000 AS PIDX;
+
+// A is alive because PID 1 (init) is always running.
+WATCH PID PID1 AS A;
+BRANCH(A)
+{
+    PRINT pid alive;
+}
+ELSE
+{
+    PRINT pid dead;
+}
+
+// B is dead because no process has this out-of-range PID.
+WATCH PID PIDX AS B;
+BRANCH(B)
+{
+    PRINT other alive;
+}
+ELSE
+{
+    PRINT other dead;
+}
+
+THIS.DIE();

@@ -1,0 +1,6 @@
+// SPEC §4.8.6 — verdict alive iff every element of LIST is alive (n-ary
+// AND over lifetimes). Empty list is vacuously alive. ALL_OF [LIST, _] V;
+IMPORT BUILTIN ath_all_of AS ATH_ALL_OF;
+BIFURCATE ARGS[X, Y];
+ATH_ALL_OF[X, Y] R;
+THIS.DIE(R);

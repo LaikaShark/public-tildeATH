@@ -1,0 +1,20 @@
+// The `loop N { body }` count loop runs the body N times (zero times for a non-positive count) and nests; here an outer loop of 2 prints row then an inner loop of 2 dots. Output: row, dot, dot, row, dot, dot, done (one per line)
+
+IMPORT NUMBER 2 AS TWO;
+IMPORT NUMBER 0 AS ZERO;
+
+LOOP TWO
+{
+    PRINT row;
+    LOOP TWO
+    {
+        PRINT dot;
+    }
+}
+LOOP ZERO
+{
+    PRINT skipped;
+}
+PRINT done;
+
+THIS.DIE();

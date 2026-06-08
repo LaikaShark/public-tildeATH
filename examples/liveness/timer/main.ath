@@ -1,0 +1,15 @@
+// Print "go", wait on a 100ms timer (sleeping 10ms per tick), then print "stop". Output: go, then stop.
+
+IMPORT NUMBER 100 AS DURATION_MS;
+IMPORT NUMBER 10 AS TICK_MS;
+
+// T is alive until the 100ms timer expires.
+TIMER DURATION_MS AS T;
+PRINT go;
+~ATH(T)
+{
+    SLEEP TICK_MS;
+}
+PRINT stop;
+
+THIS.DIE();

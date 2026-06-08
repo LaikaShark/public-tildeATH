@@ -1,0 +1,19 @@
+// Write stdin to a temp file, read it back, then CLOSE the read result so the file persists. Output: the byte length of the message, then the message.
+
+IMPORTF <length> AS LENGTH;
+IMPORTF <to_string> AS TO_STRING;
+
+INPUT MSG;
+WRITE MSG TO "/tmp/ath_example_io.txt";
+
+READ "/tmp/ath_example_io.txt" AS CONTENT;
+
+LENGTH [CONTENT, NULL]N;
+TO_STRING [N, NULL]NS;
+PRINT $NS;
+PRINT $CONTENT;
+
+// Release the file without deleting it.
+CLOSE CONTENT;
+
+THIS.DIE();

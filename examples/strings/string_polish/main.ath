@@ -1,0 +1,36 @@
+// Demonstrate capitalize, title, char_at, find_from, strip_chars, and custom-fill pad. Input: 'hello world'. Output: 'Hello world', 'Hello World', 'h', '7', 'hello world', '.hello world' (one per line).
+
+IMPORTF <capitalize> AS CAPITALIZE;
+IMPORTF <title> AS TITLE;
+IMPORTF <char_at> AS CHAR_AT;
+IMPORTF <find_from> AS FIND_FROM;
+IMPORTF <strip_chars> AS STRIP_CHARS;
+IMPORTF <pad_left_with> AS PAD_LEFT_WITH;
+IMPORTF <to_string> AS TO_STRING;
+IMPORTF <entangle> AS ENTANGLE;
+
+INPUT S;
+
+CAPITALIZE [S, NULL]CAP;
+PRINT $CAP;
+TITLE [S, NULL]TT;
+PRINT $TT;
+
+CHAR_AT [S, 0]CA;
+PRINT $CA;
+
+// First 'o' at or after index 5; pack the needle and start index into one argument.
+ENTANGLE ["o", 5]NEEDLE_AT;
+FIND_FROM [S, NEEDLE_AT]FF;
+TO_STRING [FF, NULL]FFS;
+PRINT $FFS;
+
+// Strip dashes (none here) and left-pad to width 12 with dots.
+STRIP_CHARS [S, "-"]SC;
+PRINT $SC;
+
+ENTANGLE [12, "."]PADSPEC;
+PAD_LEFT_WITH [S, PADSPEC]PL;
+PRINT $PL;
+
+THIS.DIE();

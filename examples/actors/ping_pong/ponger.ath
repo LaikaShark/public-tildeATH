@@ -1,0 +1,10 @@
+// For each ball received on its inbox, prints pong and returns the ball on its outbox, until the inbox closes.
+BIFURCATE ARGS[BALLS, ACKS];
+RECV FROM BALLS AS M;
+~ATH(M)
+{
+    PRINT pong;
+    SEND M TO ACKS;
+    RECV FROM BALLS AS M;
+}
+THIS.DIE();

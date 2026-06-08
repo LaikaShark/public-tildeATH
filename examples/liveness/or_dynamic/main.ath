@@ -1,0 +1,43 @@
+// OR stays alive while at least one operand is alive; kill them one at a time and observe. Output: both alive, one alive, both dead.
+
+IMPORTF <gt> AS GT;
+IMPORTF <or> AS OR;
+
+GT [1, 0]V1;
+GT [1, 0]V2;
+OR [V1, V2]R;
+
+// CLONE snapshots R's current liveness so we can inspect it without consuming R.
+CLONE R AS R1;
+BRANCH(R1)
+{
+    PRINT both alive;
+}
+ELSE
+{
+    PRINT both fail;
+}
+
+V1.DIE();
+CLONE R AS R2;
+BRANCH(R2)
+{
+    PRINT one alive;
+}
+ELSE
+{
+    PRINT one fail;
+}
+
+V2.DIE();
+CLONE R AS R3;
+BRANCH(R3)
+{
+    PRINT both fail;
+}
+ELSE
+{
+    PRINT both dead;
+}
+
+THIS.DIE();

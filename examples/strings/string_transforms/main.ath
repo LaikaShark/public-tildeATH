@@ -1,0 +1,24 @@
+// Read one line S and print it lowercased, uppercased, trimmed, and trimmed-then-split-on-comma-rejoined-with-dash. Input: '  Hello,World,FOO  '. Output: '  hello,world,foo  ', '  HELLO,WORLD,FOO  ', 'Hello,World,FOO', 'Hello-World-FOO' (one per line).
+
+IMPORTF <lower> AS LOWER;
+IMPORTF <upper> AS UPPER;
+IMPORTF <trim> AS TRIM;
+IMPORTF <split> AS SPLIT;
+IMPORTF <join> AS JOIN;
+
+INPUT S;
+
+LOWER [S, NULL]LO;
+PRINT $LO;
+
+UPPER [S, NULL]UP;
+PRINT $UP;
+
+TRIM [S, NULL]TR;
+PRINT $TR;
+
+SPLIT [TR, ","]PARTS;
+JOIN [PARTS, "-"]REJOINED;
+PRINT $REJOINED;
+
+THIS.DIE();

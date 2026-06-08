@@ -1,0 +1,17 @@
+// A bounded three-round rally: main prints ping and sends a ball, the ponger prints pong and echoes it back. Output: ping, pong (x3), then done (one per line).
+IMPORTF "ponger.ath" AS PONGER;
+IMPORT NUMBER 3 AS ROUNDS;
+CHANNEL AS BALLS;
+CHANNEL AS ACKS;
+BIFURCATE [BALLS, ACKS] PARG;
+SPAWN PONGER PARG AS P;
+LOOP ROUNDS
+{
+    PRINT ping;
+    SEND 1 TO BALLS;
+    RECV FROM ACKS AS A;
+}
+CLOSE BALLS;
+JOIN P;
+PRINT done;
+THIS.DIE();

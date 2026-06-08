@@ -1,0 +1,56 @@
+// Read two integers X, Y from stdin (one per line) and print the verdicts that hold among le/ge/ne plus AND/OR of "X>0","Y>0". Output: 3,7 -> x le y / x ne y / both positive; 4,4 -> x le y / x ge y / both positive; 0,5 -> x le y / x ne y / some zero.
+
+IMPORTF <parse> AS PARSE;
+IMPORTF <le> AS LE;
+IMPORTF <ge> AS GE;
+IMPORTF <ne> AS NE;
+IMPORTF <gt> AS GT;
+IMPORTF <and> AS AND;
+IMPORTF <or> AS OR;
+IMPORTF <eq> AS EQ;
+
+INPUT LINE_X;
+INPUT LINE_Y;
+PARSE [LINE_X, NULL]X;
+PARSE [LINE_Y, NULL]Y;
+
+LE [X, Y]V_LE;
+~ATH(V_LE)
+{
+    PRINT x le y;
+    V_LE.DIE();
+}
+
+GE [X, Y]V_GE;
+~ATH(V_GE)
+{
+    PRINT x ge y;
+    V_GE.DIE();
+}
+
+NE [X, Y]V_NE;
+~ATH(V_NE)
+{
+    PRINT x ne y;
+    V_NE.DIE();
+}
+
+GT [X, 0]X_POS;
+GT [Y, 0]Y_POS;
+AND [X_POS, Y_POS]BOTH_POS;
+~ATH(BOTH_POS)
+{
+    PRINT both positive;
+    BOTH_POS.DIE();
+}
+
+EQ [X, 0]X_ZERO;
+EQ [Y, 0]Y_ZERO;
+OR [X_ZERO, Y_ZERO]EITHER_ZERO;
+~ATH(EITHER_ZERO)
+{
+    PRINT some zero;
+    EITHER_ZERO.DIE();
+}
+
+THIS.DIE();

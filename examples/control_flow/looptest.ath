@@ -1,0 +1,24 @@
+// Build a counter as a chain of cons cells, then peel one level per ~ATH pass, printing APPLE and ORANGE each iteration until the chain runs out. Output: APPLE, ORANGE repeated five times (one per line)
+IMPORT BLAH A;
+BIFURCATE A[Z, A];
+BIFURCATE A[G, A];
+BIFURCATE [Z, G] N;
+BIFURCATE A[G, A];
+BIFURCATE [G, N] N;
+BIFURCATE A[G, A];
+BIFURCATE [G, N] N;
+BIFURCATE A[G, A];
+BIFURCATE [G, N] N;
+BIFURCATE A[G, A];
+BIFURCATE [G, N] N;
+BIFURCATE [Z, N] N;
+
+BIFURCATE N[Z, N];
+~ATH(Z)
+{
+    BIFURCATE N[D, N];
+    D.DIE();
+    PRINT APPLE;
+    PRINT ORANGE;
+}
+THIS.DIE();

@@ -1,0 +1,44 @@
+// Primes below 31 by trial division: for each candidate C, an inner loop tests divisors D with D*D <= C and C is prime iff none divide it. Output: 2 3 5 7 11 13 17 19 23 29 (one per line).
+
+IMPORTF <mod> AS MOD;
+IMPORTF <lt> AS LT;
+IMPORTF <le> AS LE;
+IMPORTF <eq> AS EQ;
+IMPORTF <add> AS ADD;
+IMPORTF <mul> AS MUL;
+
+IMPORT NUMBER 2 AS C;
+IMPORT NUMBER 0 AS DIVISORS;     // reset each candidate
+IMPORT NUMBER 2 AS D;            // reset to 2 each candidate
+
+LT [C, 31]OUTER;
+~ATH(OUTER)
+{
+    ADD [0, 0]DIVISORS;        // DIVISORS := 0
+    ADD [2, 0]D;                // D := 2
+
+    MUL [D, D]DSQ;
+    LE [DSQ, C]INNER;                // D*D <= C ?
+    ~ATH(INNER)
+    {
+        MOD [C, D]R;
+        EQ [R, 0]DIVIDES;
+        BRANCH(DIVIDES)
+        {
+            ADD [DIVISORS, 1]DIVISORS;
+        }
+        ADD [D, 1]D;
+        MUL [D, D]DSQ;
+        LE [DSQ, C]INNER;
+    }
+
+    EQ [DIVISORS, 0]ISPRIME;
+    BRANCH(ISPRIME)
+    {
+        PRINT $C;
+    }
+
+    ADD [C, 1]C;
+    LT [C, 31]OUTER;
+}
+THIS.DIE();

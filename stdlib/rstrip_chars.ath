@@ -1,0 +1,5 @@
+// SPEC §4.8.4 — strip chars in CHARS from the right. RSTRIP_CHARS [S, CHARS] R;
+IMPORT BUILTIN ath_rstrip_chars AS ATH_RSTRIP_CHARS;
+BIFURCATE ARGS[X, Y];
+ATH_RSTRIP_CHARS[X, Y] R;
+THIS.DIE(R);

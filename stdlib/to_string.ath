@@ -1,0 +1,10 @@
+// SPEC §4.8.2 — render a number as a string-cons-list.
+//
+//   TO_STRING [N, _] S;        // _ is NULL by convention; ignored.
+//
+// Returns NULL if N has no payload.
+
+IMPORT BUILTIN ath_to_string AS ATH_TO_STRING;
+BIFURCATE ARGS[N, IGNORED];
+ATH_TO_STRING[N, IGNORED] R;
+THIS.DIE(R);
