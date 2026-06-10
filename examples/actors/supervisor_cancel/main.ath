@@ -1,7 +1,7 @@
-// Fork three workers into a nursery, then cancel the whole group by killing the nursery. Output: spawned, cancelled, then worker stopped (x3) (one per line).
+// Fork three workers into a universe, then cancel the whole group by killing the universe. Output: spawned, cancelled, then worker stopped (x3) (one per line).
 IMPORTF "worker.ath" AS WORKER;
 CHANNEL AS C;
-NURSERY AS N;
+UNIVERSE AS N;
 SPAWN WORKER C INTO N AS A;
 SPAWN WORKER C INTO N AS B;
 SPAWN WORKER C INTO N AS D;

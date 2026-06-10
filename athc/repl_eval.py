@@ -100,7 +100,7 @@ class Evaluator:
     # rides on send/recv (already here), so listen/accept/connect join the same set.
     _ACTOR_STMTS = frozenset({
         "SpawnStmt", "SendStmt", "RecvStmt", "YieldStmt", "JoinStmt",
-        "ChannelStmt", "NurseryStmt",
+        "ChannelStmt", "UniverseStmt",
         "ListenStmt", "AcceptStmt", "ConnectStmt",
     })
 
@@ -111,7 +111,7 @@ class Evaluator:
             if name in self._ACTOR_STMTS:
                 raise ReplError(
                     "actor and networking statements (spawn/send/recv/yield/join/channel/"
-                    "nursery/listen/accept/connect) are only supported in compiled programs, "
+                    "universe/listen/accept/connect) are only supported in compiled programs, "
                     "not the REPL"
                 )
             raise ReplError(f"{name} is not supported in the REPL")

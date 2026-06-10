@@ -34,7 +34,7 @@ from athc.ast import (
     YieldStmt,
     JoinStmt,
     ChannelStmt,
-    NurseryStmt,
+    UniverseStmt,
     ListenStmt,
     AcceptStmt,
     ConnectStmt,
@@ -149,7 +149,7 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.target)
         elif isinstance(s, JoinStmt):
             names.add(s.handle)
-        elif isinstance(s, (ChannelStmt, NurseryStmt)):
+        elif isinstance(s, (ChannelStmt, UniverseStmt)):
             names.add(s.target)
         elif isinstance(s, ListenStmt):
             _add_operand(names, s.port)
@@ -401,8 +401,8 @@ class Codegen:
         self.f_channel = ir.Function(
             self.module, ir.FunctionType(self.obj_ptr, []), name="ath_channel"
         )
-        self.f_nursery_new = ir.Function(
-            self.module, ir.FunctionType(self.obj_ptr, []), name="ath_nursery_new"
+        self.f_universe_new = ir.Function(
+            self.module, ir.FunctionType(self.obj_ptr, []), name="ath_universe_new"
         )
         self.f_scheduler_drain = ir.Function(
             self.module, ir.FunctionType(ir.VoidType(), []), name="ath_scheduler_drain"
@@ -727,9 +727,9 @@ class FunctionEmitter:
             builder.call(self.cg.f_join_handle, [self._read_var(builder, stmt.handle)])
         elif isinstance(stmt, ChannelStmt):
             self._write_var(builder, stmt.target, builder.call(self.cg.f_channel, []))
-        elif isinstance(stmt, NurseryStmt):
+        elif isinstance(stmt, UniverseStmt):
             self._write_var(
-                builder, stmt.target, builder.call(self.cg.f_nursery_new, [])
+                builder, stmt.target, builder.call(self.cg.f_universe_new, [])
             )
         elif isinstance(stmt, ListenStmt):
             self._emit_listen(builder, stmt)
@@ -747,8 +747,8 @@ class FunctionEmitter:
             raise CodegenError(f"cannot spawn unknown function {stmt.name!r}")
         arg = self._emit_operand(builder, stmt.arg)
         if stmt.into is not None:
-            nursery = self._read_var(builder, stmt.into)
-            handle = builder.call(self.cg.f_spawn_into, [fn, arg, nursery])
+            universe = self._read_var(builder, stmt.into)
+            handle = builder.call(self.cg.f_spawn_into, [fn, arg, universe])
         else:
             handle = builder.call(self.cg.f_spawn, [fn, arg])
         self._write_var(builder, stmt.target, handle)

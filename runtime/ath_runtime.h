@@ -47,12 +47,12 @@ typedef struct ath_obj {
     int64_t mtime_sec;
     int64_t mtime_nsec;
     // Concurrency (scheduler.c): FIFO mailbox shared by actors and channels; actor back-pointer
-    // (NULL for channels/nurseries); live-child count for nurseries. All zero on a plain object,
+    // (NULL for channels/universes); live-child count for universes. All zero on a plain object,
     // so non-spawning programs are unaffected. Appended after the codegen-modeled prefix.
     struct ath_msg   *mbox_head;
     struct ath_msg   *mbox_tail;
     void             *actor;
-    int               nursery_pending;
+    int               universe_pending;
     // Networking (net.c). All zero on a non-socket object, so existing programs and codegen's
     // struct-prefix model are unaffected. A handle is EITHER a socket (sock_fd>0) OR a mailbox
     // (sock_fd==0); ath_send/ath_recv_from branch on sock_fd. Appended at the struct end.
@@ -286,9 +286,9 @@ _Noreturn void ath_halt(void);
 struct ath_msg; /* opaque mailbox node */
 // Start FN on a fresh coroutine; returns a live handle, dead once the actor finishes/cancels.
 ath_obj *ath_spawn(ath_obj *(*fn)(ath_obj *), ath_obj *arg);
-// Like ath_spawn but the child is scoped to a nursery: dies if the nursery dies (cancel), and
-// the nursery stays alive while any child is (join).
-ath_obj *ath_spawn_into(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *nursery);
+// Like ath_spawn but the child is scoped to a universe: dies if the universe dies (cancel), and
+// the universe stays alive while any child is (join).
+ath_obj *ath_spawn_into(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *universe);
 // FIFO-enqueue msg onto dest's mailbox (actor or channel); non-blocking; no-op if dest is dead.
 void     ath_send(ath_obj *dest, ath_obj *msg);
 // Dequeue from the running actor's own mailbox; blocks (yields) until a message or cancellation.
@@ -298,12 +298,12 @@ ath_obj *ath_recv(void);
 ath_obj *ath_recv_from(ath_obj *src);
 // Cooperative yield to the scheduler.
 void     ath_yield(void);
-// Drive the scheduler until handle is dead (joins an actor or a nursery). Works at top level too.
+// Drive the scheduler until handle is dead (joins an actor or a universe). Works at top level too.
 void     ath_join_handle(ath_obj *handle);
 // Fresh closeable channel: a live handle with an empty mailbox. Close via `close C;` or C.DIE().
 ath_obj *ath_channel(void);
-// Fresh nursery handle: live while any scoped child is; DIE() cancels the whole subtree.
-ath_obj *ath_nursery_new(void);
+// Fresh universe handle: live while any scoped child is; DIE() cancels the whole subtree.
+ath_obj *ath_universe_new(void);
 // Run the scheduler until no live actor remains. Emitted once at end of main when SPAWN is used.
 void     ath_scheduler_drain(void);
 // True iff a coroutine is currently running (used by ath_sleep_ms to park instead of block).

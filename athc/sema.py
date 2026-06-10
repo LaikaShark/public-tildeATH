@@ -35,7 +35,7 @@ from athc.ast import (
     YieldStmt,
     JoinStmt,
     ChannelStmt,
-    NurseryStmt,
+    UniverseStmt,
     ListenStmt,
     AcceptStmt,
     ConnectStmt,
@@ -230,7 +230,7 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             pass
         elif isinstance(s, JoinStmt):
             _check_read(s.handle, defined, s)
-        elif isinstance(s, (ChannelStmt, NurseryStmt)):
+        elif isinstance(s, (ChannelStmt, UniverseStmt)):
             _check_write(s.target, s)
             defined.add(s.target)
         elif isinstance(s, ListenStmt):

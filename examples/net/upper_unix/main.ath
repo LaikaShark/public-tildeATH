@@ -2,7 +2,7 @@
 // Unix-domain socket. Output: HELLO, then WORLD, then done.
 IMPORTF "server.ath" AS SERVER;
 IMPORTF "client.ath" AS CLIENT;
-NURSERY AS N;
+UNIVERSE AS N;
 SPAWN SERVER NULL INTO N AS S;
 SPAWN CLIENT NULL INTO N AS C;
 JOIN N;

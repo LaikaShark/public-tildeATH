@@ -1,4 +1,4 @@
-// Waits for work on its channel; when the supervising nursery is cancelled, RECV returns a dead object and it unwinds.
+// Waits for work on its channel; when the supervising universe is cancelled, RECV returns a dead object and it unwinds.
 RECV FROM ARGS AS M;
 ~ATH(M)
 {

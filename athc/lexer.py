@@ -28,7 +28,6 @@ class TokenKind(Enum):
     KW_RECV = auto()
     KW_YIELD = auto()
     KW_CHANNEL = auto()
-    KW_NURSERY = auto()
     KW_LISTEN = auto()
     KW_ACCEPT = auto()
     KW_CONNECT = auto()
@@ -154,7 +153,6 @@ KEYWORDS = {
     "recv": TokenKind.KW_RECV,
     "yield": TokenKind.KW_YIELD,
     "channel": TokenKind.KW_CHANNEL,
-    "nursery": TokenKind.KW_NURSERY,
     "listen": TokenKind.KW_LISTEN,
     "accept": TokenKind.KW_ACCEPT,
     "connect": TokenKind.KW_CONNECT,
@@ -164,6 +162,9 @@ KEYWORDS = {
 # 'join' is intentionally NOT a hard keyword: it is the name of a stdlib string function
 # (`importf <join> as JOIN`). It is recognized as a soft keyword at statement-leader position
 # in the parser, where `join IDENT ;` is unambiguous (function calls always use brackets).
+# 'universe' is likewise a soft keyword: it doubles as a lifetime-library concept
+# (`import universe U;`, the heat-death lifetime), so it stays an IDENT and the parser
+# recognizes the supervision-scope statement only in the `universe as IDENT ;` shape.
 
 RESERVED_V1: set[str] = set()
 

@@ -36,7 +36,7 @@ from athc.ast import (
     YieldStmt,
     JoinStmt,
     ChannelStmt,
-    NurseryStmt,
+    UniverseStmt,
     ListenStmt,
     AcceptStmt,
     ConnectStmt,
@@ -844,8 +844,8 @@ def test_spawn_with_literal_arg():
     assert s.arg.kind == "int" and s.arg.value == 5
 
 
-def test_spawn_into_nursery():
-    p = parse('importf <w> as W; nursery as N; spawn W ARGV into N as A;')
+def test_spawn_into_universe():
+    p = parse('importf <w> as W; universe as N; spawn W ARGV into N as A;')
     s = p.statements[2]
     assert isinstance(s, SpawnStmt)
     assert s.into == "N"
@@ -918,18 +918,28 @@ def test_channel_statement():
     assert s.target == "C"
 
 
-def test_nursery_statement():
-    p = parse('nursery as N;')
+def test_universe_statement():
+    p = parse('universe as N;')
     s = p.statements[0]
-    assert isinstance(s, NurseryStmt)
+    assert isinstance(s, UniverseStmt)
     assert s.target == "N"
 
 
+def test_universe_is_soft_keyword_still_usable_as_lifetime_concept():
+    # `universe` doubles as a lifetime-library concept: `import universe U;` must still parse as
+    # a concept import, not the supervision-scope statement (that needs the `universe as` shape).
+    p = parse('import universe U;')
+    s = p.statements[0]
+    assert type(s).__name__ == "ImportStmt"
+    assert s.name == "universe"
+    assert s.var == "U"
+
+
 def test_concurrency_keywords_case_insensitive():
-    p = parse('importf <w> as W; CHANNEL as C; NURSERY as N; SPAWN W C INTO N as A; '
+    p = parse('importf <w> as W; CHANNEL as C; UNIVERSE as N; SPAWN W C INTO N as A; '
               'SEND 1 TO C; RECV FROM C as M; YIELD;')
     kinds = [type(s).__name__ for s in p.statements]
-    assert kinds == ["ImportFuncStmt", "ChannelStmt", "NurseryStmt", "SpawnStmt",
+    assert kinds == ["ImportFuncStmt", "ChannelStmt", "UniverseStmt", "SpawnStmt",
                      "SendStmt", "RecvStmt", "YieldStmt"]
 
 

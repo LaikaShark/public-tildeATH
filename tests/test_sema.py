@@ -439,8 +439,8 @@ def test_spawn_user_function_ok():
     _check_with_funcs('spawn W THIS as A; join A;', ["W"])
 
 
-def test_spawn_into_nursery_ok():
-    _check_with_funcs('nursery as N; spawn W THIS into N as A; join N;', ["W"])
+def test_spawn_into_universe_ok():
+    _check_with_funcs('universe as N; spawn W THIS into N as A; join N;', ["W"])
 
 
 def test_spawn_undeclared_function_errors():
@@ -481,8 +481,8 @@ def test_join_unbound_handle_errors():
         check('join NOPE;')
 
 
-def test_channel_and_nursery_bind_targets():
-    check('channel as C; nursery as N; send 1 to C; join N;')
+def test_channel_and_universe_bind_targets():
+    check('channel as C; universe as N; send 1 to C; join N;')
 
 
 def test_yield_ok():

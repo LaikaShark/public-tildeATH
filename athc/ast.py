@@ -309,12 +309,12 @@ class TextStmt:
 @dataclass
 class SpawnStmt:
     """spawn FN <operand> [into N] as A; — start an actor running user function FN with the
-    composed argument, binding live handle A; if `into` is given, scope the actor to nursery N
+    composed argument, binding live handle A; if `into` is given, scope the actor to universe N
     (cancelled when N dies, keeps N alive while running) (§concurrency)."""
     name: str
     # str (a bound name) or Operand (an inline literal)
     arg: "str | Operand"
-    # nursery name, or None
+    # universe name, or None
     into: "str | None"
     target: str
     line: int
@@ -351,7 +351,7 @@ class YieldStmt:
 
 @dataclass
 class JoinStmt:
-    """join A; — drive the scheduler until handle A (actor or nursery) is dead."""
+    """join A; — drive the scheduler until handle A (actor or universe) is dead."""
     handle: str
     line: int
     col: int
@@ -366,8 +366,9 @@ class ChannelStmt:
 
 
 @dataclass
-class NurseryStmt:
-    """nursery as N; — bind N to a fresh nursery (alive while any child runs; DIE cancels all)."""
+class UniverseStmt:
+    """universe as N; — bind N to a fresh universe: a supervision scope, alive while any scoped
+    child runs; DIE cancels the whole subtree. (Distinct from the `universe` lifetime concept.)"""
     target: str
     line: int
     col: int
@@ -444,7 +445,7 @@ Stmt = Union[
     YieldStmt,
     JoinStmt,
     ChannelStmt,
-    NurseryStmt,
+    UniverseStmt,
     ListenStmt,
     AcceptStmt,
     ConnectStmt,

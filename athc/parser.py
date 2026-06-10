@@ -35,7 +35,7 @@ from athc.ast import (
     YieldStmt,
     JoinStmt,
     ChannelStmt,
-    NurseryStmt,
+    UniverseStmt,
     ListenStmt,
     AcceptStmt,
     ConnectStmt,
@@ -54,7 +54,7 @@ _STATEMENT_KEYWORDS = frozenset({
     "import", "importf", "bifurcate", "print", "input", "watch", "branch",
     "clone", "sleep", "timer", "read", "write", "append", "close", "text",
     "loop", "every",
-    "spawn", "send", "recv", "yield", "join", "channel", "nursery",
+    "spawn", "send", "recv", "yield", "join", "channel", "universe",
     "listen", "accept", "connect",
 })
 
@@ -157,8 +157,6 @@ class Parser:
             return self._parse_yield()
         if tok.kind is TokenKind.KW_CHANNEL:
             return self._parse_channel()
-        if tok.kind is TokenKind.KW_NURSERY:
-            return self._parse_nursery()
         if tok.kind is TokenKind.KW_LISTEN:
             return self._parse_listen()
         if tok.kind is TokenKind.KW_ACCEPT:
@@ -173,6 +171,12 @@ class Parser:
                     and self._peek(1).kind is TokenKind.IDENT
                     and self._peek(2).kind is TokenKind.SEMI):
                 return self._parse_join()
+            # 'universe' is a soft keyword for the same reason: it doubles as a lifetime-library
+            # concept (`import universe U;`), so it stays an IDENT and is recognized as the
+            # supervision-scope statement only in the `universe as IDENT ;` shape.
+            if (tok.value.lower() == "universe"
+                    and self._peek(1).kind is TokenKind.KW_AS):
+                return self._parse_universe()
             # IDENT leads funcall/subscript/.DIE, but a misspelled keyword also lexes as IDENT; if the IDENT-led parse fails and the word is one typo from a statement keyword, report that
             try:
                 return self._parse_die_or_funcall()
@@ -608,12 +612,12 @@ class Parser:
         self._expect(TokenKind.SEMI)
         return ChannelStmt(target=tgt.value, line=kw.line, col=kw.col)
 
-    def _parse_nursery(self) -> NurseryStmt:
-        kw = self._expect(TokenKind.KW_NURSERY)
+    def _parse_universe(self) -> UniverseStmt:
+        kw = self._advance()  # the soft keyword 'universe' (an IDENT)
         self._expect(TokenKind.KW_AS)
         tgt = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
-        return NurseryStmt(target=tgt.value, line=kw.line, col=kw.col)
+        return UniverseStmt(target=tgt.value, line=kw.line, col=kw.col)
 
     def _parse_listen(self) -> ListenStmt:
         # listen PORT as L;  (TCP)  |  listen "unix:/path" as L;  (Unix-domain)

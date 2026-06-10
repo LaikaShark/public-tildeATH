@@ -1844,12 +1844,12 @@ PRINT done;
 THIS.DIE();
 ```
 
-A **nursery** supervises a group. `spawn ... into N` scopes a child to it;
+A **universe** supervises a group. `spawn ... into N` scopes a child to it;
 `join N` waits for the whole group; `N.DIE()` cancels the subtree — each
 child notices at its next `recv`/`yield` and unwinds:
 
 ```ath
-NURSERY AS N;
+UNIVERSE AS N;
 SPAWN WORKER 1 INTO N AS A;
 SPAWN WORKER 2 INTO N AS B;
 JOIN N;         // alive while any child runs; dies when all finish
@@ -1921,7 +1921,7 @@ THIS.DIE();
 // main.ath — run both as actors; output: hello, world, done
 IMPORTF "server.ath" AS SERVER;
 IMPORTF "client.ath" AS CLIENT;
-NURSERY AS N;
+UNIVERSE AS N;
 SPAWN SERVER NULL INTO N AS S;
 SPAWN CLIENT NULL INTO N AS C;
 JOIN N;

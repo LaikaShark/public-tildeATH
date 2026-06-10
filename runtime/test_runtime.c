@@ -1669,8 +1669,8 @@ int main(void) {
         assert(chan_n == 3);
         assert(chan_vals[0] == 11 && chan_vals[1] == 22 && chan_vals[2] == 33);
 
-        // nursery join: alive while children pending, auto-dies when all finish
-        ath_obj *nur = ath_nursery_new();
+        // universe join: alive while children pending, auto-dies when all finish
+        ath_obj *nur = ath_universe_new();
         ath_spawn_into(act_worker, ath_NULL, nur);
         ath_spawn_into(act_worker, ath_NULL, nur);
         assert(ath_is_alive(nur));
@@ -1678,8 +1678,8 @@ int main(void) {
         assert(!ath_is_alive(nur));
         assert(worker_done == 2);
 
-        // nursery cancel: killing the nursery cancels a child blocked on recv (EOF -> unwind)
-        ath_obj *nur2 = ath_nursery_new();
+        // universe cancel: killing the universe cancels a child blocked on recv (EOF -> unwind)
+        ath_obj *nur2 = ath_universe_new();
         ath_obj *ch2 = ath_channel(); // never closed; stays alive and empty
         ath_obj *w = ath_spawn_into(act_recv_worker, ch2, nur2);
         ath_die(nur2); // cancel the subtree

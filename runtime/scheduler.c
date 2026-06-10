@@ -5,7 +5,7 @@
 // rest of the (not-thread-safe) runtime needs no locking and stays byte-for-byte correct.
 //
 // The object liveness machinery *is* the scheduler's signal: an actor is scheduled while its
-// handle is alive and reaped when it dies; a channel/nursery is just a handle with a mailbox /
+// handle is alive and reaped when it dies; a channel/universe is just a handle with a mailbox /
 // child-count. Determinism: a FIFO run queue scanned in order, FIFO mailboxes, and plain
 // handles (never interned, one-shot, or deadline-bearing) make output identical under `fresh`
 // and `intern`.
@@ -34,7 +34,7 @@ typedef struct ath_actor {
     ucontext_t          ctx;
     void               *stack;
     ath_obj            *handle;       // this actor's liveness handle (also its own mailbox)
-    ath_obj            *parent;       // nursery this actor is scoped to, or NULL
+    ath_obj            *parent;       // universe this actor is scoped to, or NULL
     ath_obj            *(*fn)(ath_obj *);
     ath_obj            *arg;
     int                 state;
@@ -114,13 +114,13 @@ static void ath_trampoline(void) {
     self->state = ACT_DONE;
     ath_die(self->handle);
     if (self->parent) {
-        if (--self->parent->nursery_pending <= 0) ath_die(self->parent);
+        if (--self->parent->universe_pending <= 0) ath_die(self->parent);
     }
     // Hand control back to the scheduler; this context is never resumed.
     swapcontext(&self->ctx, &g_sched_ctx);
 }
 
-static ath_obj *spawn_common(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *nursery) {
+static ath_obj *spawn_common(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *universe) {
     ath_actor *a = (ath_actor *)calloc(1, sizeof *a);
     if (!a) { return ath_NULL; }
     a->stack = malloc(ATH_ACTOR_STACK_SIZE);
@@ -130,11 +130,11 @@ static ath_obj *spawn_common(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *n
     a->fn = fn;
     a->arg = arg;
     a->state = ACT_READY;
-    a->parent = nursery;
-    if (nursery) {
-        // Child dies when the nursery dies (cancel); nursery stays alive while children run (join).
-        a->handle->dep1 = nursery;
-        nursery->nursery_pending++;
+    a->parent = universe;
+    if (universe) {
+        // Child dies when the universe dies (cancel); universe stays alive while children run (join).
+        a->handle->dep1 = universe;
+        universe->universe_pending++;
     }
     getcontext(&a->ctx);
     a->ctx.uc_stack.ss_sp = a->stack;
@@ -149,9 +149,9 @@ ath_obj *ath_spawn(ath_obj *(*fn)(ath_obj *), ath_obj *arg) {
     return spawn_common(fn, arg, NULL);
 }
 
-ath_obj *ath_spawn_into(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *nursery) {
-    if (nursery == NULL || nursery == ath_NULL) return spawn_common(fn, arg, NULL);
-    return spawn_common(fn, arg, nursery);
+ath_obj *ath_spawn_into(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *universe) {
+    if (universe == NULL || universe == ath_NULL) return spawn_common(fn, arg, NULL);
+    return spawn_common(fn, arg, universe);
 }
 
 // ---- scheduling core ------------------------------------------------------------------------
@@ -343,8 +343,8 @@ ath_obj *ath_channel(void) {
     return ath_alloc_alive(); // a live handle with an empty mailbox
 }
 
-ath_obj *ath_nursery_new(void) {
-    return ath_alloc_alive(); // nursery_pending starts at 0; born alive
+ath_obj *ath_universe_new(void) {
+    return ath_alloc_alive(); // universe_pending starts at 0; born alive
 }
 
 int ath_in_actor(void) {

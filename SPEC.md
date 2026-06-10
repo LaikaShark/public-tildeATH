@@ -196,7 +196,7 @@ statement     = import-stmt
               | yield-stmt
               | join-stmt
               | channel-stmt
-              | nursery-stmt
+              | universe-stmt
               | listen-stmt
               | accept-stmt
               | connect-stmt ;
@@ -336,7 +336,7 @@ every-stmt    = 'every' IDENT '{' statement* '}' ;
 spawn-stmt    = 'spawn' IDENT operand [ 'into' IDENT ] 'as' IDENT ';' ;
                 (* Start an actor running importf function IDENT with the
                    composed operand; bind a live handle. 'into' scopes it to a
-                   nursery. 'into' is a contextual marker. §7. *)
+                   universe. 'into' is a contextual marker. §7. *)
 
 send-stmt     = 'send' operand 'to' IDENT ';' ;
                 (* FIFO-enqueue the operand onto an actor/channel mailbox;
@@ -351,15 +351,17 @@ yield-stmt    = 'yield' ';' ;
                 (* Cooperative yield to the scheduler. §7. *)
 
 join-stmt     = 'join' IDENT ';' ;
-                (* Drive the scheduler until IDENT (actor or nursery) dies.
+                (* Drive the scheduler until IDENT (actor or universe) dies.
                    'join' is a soft keyword (a stdlib function name), so this
                    shape — IDENT IDENT ';' — is what selects it. §7. *)
 
 channel-stmt  = 'channel' 'as' IDENT ';' ;
                 (* Bind a fresh closeable channel. §7. *)
 
-nursery-stmt  = 'nursery' 'as' IDENT ';' ;
-                (* Bind a fresh nursery (supervision scope). §7. *)
+universe-stmt = 'universe' 'as' IDENT ';' ;
+                (* Bind a fresh universe (supervision scope). 'universe' is a
+                   soft keyword — it also names a lifetime-library concept
+                   (§5.3) — selected by the 'universe' 'as' IDENT shape. §7. *)
 
 listen-stmt   = 'listen' ( operand | STRING ) 'as' IDENT ';' ;
                 (* Bind a listening socket. An operand is a TCP port; a STRING
@@ -1674,7 +1676,7 @@ typedef struct ath_obj {
     int64_t        mtime_sec;
     int64_t        mtime_nsec;
 
-    /* §7 concurrency (mailbox/actor/nursery) and §7.6 networking (socket fd,
+    /* §7 concurrency (mailbox/actor/universe) and §7.6 networking (socket fd,
      * listener flag, end-of-stream flag, recv line-buffer) append further
      * optional fields after this prefix; all zero on a plain object. */
 } ath_obj;
@@ -2077,17 +2079,18 @@ exactly as in §1–§6 (the scheduler is created lazily on the first spawn).
 - **Channel** — a handle (bound by `channel`) carrying a FIFO mailbox but no
   coroutine. `send` enqueues; `recv from` dequeues; closing it (`close C;` or
   `C.DIE()`) makes it die. A channel is "closed" exactly when it is dead.
-- **Nursery** — a handle (bound by `nursery`) that scopes a group of actors
+- **Universe** — a handle (bound by `universe`) that scopes a group of actors
   (`spawn ... into N`). It is **alive while any scoped child is** (so `join N`
   waits for the whole group) and `N.DIE()` **cancels the subtree**: each child's
-  handle depends on the nursery (§4.7), so it is observed dead and unwinds at its
-  next yield point.
+  handle depends on the universe (§4.7), so it is observed dead and unwinds at its
+  next yield point. (`universe` is a soft keyword, distinct from the `universe`
+  lifetime-library concept of §5.3; the `universe as IDENT;` shape selects it.)
 
 ### 7.2 Statement semantics
 
 - `spawn FN <operand> [into N] as A;` — create an actor running `FN` with the
   composed operand as `ARGS`; bind live handle `A`. With `into N`, the child is
-  scoped to nursery `N`. The actor does not run yet; it is enqueued.
+  scoped to universe `N`. The actor does not run yet; it is enqueued.
 - `send <operand> to D;` — FIFO-enqueue the operand onto handle `D`'s mailbox
   (actor or channel). Non-blocking. A send to a dead `D` is dropped.
 - `recv [from S] as M;` — dequeue one message, **yielding until** one is
@@ -2096,9 +2099,9 @@ exactly as in §1–§6 (the scheduler is created lazily on the first spawn).
   once `S` is dead **and** drained, `recv` yields `NULL` (the **EOF** signal). A
   cancelled actor's own `recv` returns `NULL` immediately so it can unwind.
 - `yield;` — return control to the scheduler; the actor resumes later.
-- `join A;` — drive the scheduler until handle `A` (actor or nursery) is dead.
+- `join A;` — drive the scheduler until handle `A` (actor or universe) is dead.
   Usable at top level and inside an actor. Equivalent to `~ATH(A) { yield; }`.
-- `channel as C;` / `nursery as N;` — bind a fresh channel / nursery.
+- `channel as C;` / `universe as N;` — bind a fresh channel / universe.
 
 The idiomatic consumer drains a channel by looping on the received message's
 liveness, which ends exactly at EOF:
@@ -2131,7 +2134,7 @@ progress and the scheduler returns.
 
 The REPL is a synchronous interpreter and does not run the coroutine scheduler;
 the concurrency statements (`spawn`, `send`, `recv`, `yield`, `join`, `channel`,
-`nursery`) raise a clear error there. They are supported in compiled programs
+`universe`) raise a clear error there. They are supported in compiled programs
 only.
 
 ### 7.5 Runtime ABI
@@ -2141,14 +2144,14 @@ emitted code calls (see §5.2 for the object type):
 
 ```
 ath_obj *ath_spawn(ath_obj *(*fn)(ath_obj *), ath_obj *arg);
-ath_obj *ath_spawn_into(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *nursery);
+ath_obj *ath_spawn_into(ath_obj *(*fn)(ath_obj *), ath_obj *arg, ath_obj *universe);
 void     ath_send(ath_obj *dest, ath_obj *msg);
 ath_obj *ath_recv(void);
 ath_obj *ath_recv_from(ath_obj *src);
 void     ath_yield(void);
 void     ath_join_handle(ath_obj *handle);   /* `join` (the statement) */
 ath_obj *ath_channel(void);
-ath_obj *ath_nursery_new(void);
+ath_obj *ath_universe_new(void);
 void     ath_scheduler_drain(void);
 int      ath_in_actor(void);
 void     ath_park_until(double deadline_s);
