@@ -29,10 +29,18 @@ syn region  athComment  start="/\*" end="\*/" contains=athTodo,@Spell
 
 " --- statement keywords ----------------------------------------------------
 " (`print` is handled as a region below; do not list it here.)
+" Hard keywords (from KEYWORDS in athc/lexer.py):
 syn keyword athStatement  import importf bifurcate input execute watch clone
 syn keyword athStatement  sleep timer read write append close text loop every
+syn keyword athStatement  spawn send recv yield channel
+syn keyword athStatement  listen accept connect
 syn keyword athConditional branch else
 syn keyword athKeyword    as
+
+" Soft keywords — plain IDENTs recognised as statement leaders by the parser.
+" `join` is a stdlib function name reused as a soft keyword for `join HANDLE;`.
+" `universe` doubles as a lifetime-library concept and a supervision scope.
+syn keyword athStatement  join universe
 
 " Contextual sub-keywords: `import builtin`, `import number`, and the
 " `watch signal|pid|mtime` heads. They are plain identifiers to the lexer, so
