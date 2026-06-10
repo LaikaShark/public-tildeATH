@@ -83,6 +83,9 @@ ath_obj *ath_compose(ath_obj *l, ath_obj *r);
 void     ath_decompose(ath_obj *v, ath_obj **l_out, ath_obj **r_out);
 void     ath_die(ath_obj *v);
 int      ath_is_alive(ath_obj *v);
+// Non-mutating liveness: same verdict as ath_is_alive but never flips the cached bit or consumes
+// a one-shot. For inspection tools that must observe without disturbing the object.
+int      ath_observe_alive(ath_obj *v);
 void     ath_print(const char *text, size_t len);
 
 // Newline-free print primitives; ath_print/ath_print_obj are these plus a line feed

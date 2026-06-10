@@ -134,6 +134,13 @@ int ath_is_alive(ath_obj *v) {
     return 1;
 }
 
+// Non-mutating liveness: reports the same verdict as ath_is_alive without flipping the cached
+// bit or consuming a one-shot. For tools (e.g. REPL inspection) that must observe without
+// disturbing the object. NULL is dead.
+int ath_observe_alive(ath_obj *v) {
+    return ath_observe(v);
+}
+
 void ath_print_bytes(const char *text, size_t len) {
     if (len > 0) {
         fwrite(text, 1, len, stdout);

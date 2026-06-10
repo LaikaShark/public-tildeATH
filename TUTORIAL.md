@@ -63,14 +63,33 @@ is identical
 ~ATH> PRINT $N doubled is $R;
 5 doubled is 10
 ~ATH> :inspect R
-R: live · int · 10
+R:
+  live · int · 10
+```
+
+`:inspect` shows a variable's value plus its relationships and mortality —
+composition children, entangled dependencies and how they govern its death,
+lifetime conditions (deadlines, watches, one-shot), and any parent that
+references it. Add `-v` (or use `:tree VAR`) to print the whole object graph,
+including the cons-cell spine of strings and shared-node markers:
+
+```
+~ATH> TEXT "hi" AS S;
+~ATH> :tree S
+S:
+  #1 [S] live · string · 'hi'
+  ├─ #2 live · char · 'h' (104)
+  └─ #3 live · string · 'i'
+     ├─ #4 live · char · 'i' (105)
+     └─ #5 dead · NULL
 ```
 
 - statements end with `;`
 - a block (`~ATH(…){ … }`, `BRANCH`, `LOOP`) spans
 lines until its `}`. 
 - meta-commands start with `:`
-  - `:inspect VAR`
+  - `:inspect VAR` (add `-v` for the full graph)
+  - `:tree VAR` (the full object graph; alias `:graph`)
   - `:env`
   - `:load FILE`
   - `:reset`

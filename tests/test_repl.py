@@ -223,6 +223,80 @@ def test_repl_renders_diagnostic_with_suggestion():
     assert "did you mean the keyword 'print'" in meta
 
 
+def test_repl_inspect_children_and_parent():
+    meta, _ = _drive_repl([
+        "import number 3 as A;",
+        "import number 7 as B;",
+        "bifurcate [A, B] V;",
+        ":inspect V",
+        ":inspect A",
+        ":quit",
+    ])
+    # V's composition children, named by their bound aliases
+    assert "children (composition):" in meta
+    assert "left  = A (live · int · 3)" in meta
+    assert "right = B (live · int · 7)" in meta
+    # A's parent, found by reverse-scanning bound names (no back-pointer exists)
+    assert "parents:" in meta
+    assert "V (left half)" in meta
+
+
+def test_repl_inspect_mortality_inheritance():
+    meta, _ = _drive_repl([
+        "import number 3 as A;",
+        "import number 7 as B;",
+        "importf <entangle> as ENTANGLE;",
+        "ENTANGLE [A, B] E;",
+        ":inspect E",
+        ":quit",
+    ])
+    assert "mortality: dies when any entangled dep dies (AND):" in meta
+    assert "dep1 = A (live · int · 3)" in meta
+    assert "dep2 = B (live · int · 7)" in meta
+
+
+def test_repl_inspect_lifetime_and_oneshot_not_consumed():
+    meta, _ = _drive_repl([
+        "import once O;",
+        ":inspect O",
+        ":inspect O",
+        ":quit",
+    ])
+    # Lifetime condition surfaced, and inspecting a one-shot must NOT consume it:
+    # both inspections report it live (non-mutating observe).
+    assert meta.count("one-shot (dies after first observation)") == 2
+    assert meta.count("live · object") == 2
+
+
+def test_repl_inspect_verbose_shows_string_spine():
+    meta, _ = _drive_repl([
+        'text "hi" as S;',
+        ":inspect -v S",
+        ":quit",
+    ])
+    # The full graph prints the cons-cell spine: each char atom plus the NULL terminator.
+    assert "#1 [S] live · string · 'hi'" in meta
+    assert "live · char · 'h' (104)" in meta
+    assert "live · char · 'i' (105)" in meta
+    assert "└─ " in meta  # tree connectors
+
+
+def test_repl_tree_alias_and_shared_node_marker():
+    meta, _ = _drive_repl([
+        "import number 3 as A;",
+        "import number 7 as B;",
+        "importf <entangle> as ENTANGLE;",
+        "ENTANGLE [A, B] E;",
+        ":tree E",
+        ":quit",
+    ])
+    # `:tree` is the verbose graph; the entangled deps alias the composition halves, so they
+    # show as shared-node back-references rather than re-printed subtrees.
+    assert "#1 [E] live · object" in meta
+    assert "dep1: → #" in meta
+    assert "(seen)" in meta
+
+
 def test_repl_unknown_function_is_repl_error():
     meta, _ = _drive_repl(["import number 1 as N;", "NOPE [N, N] R;", ":quit"])
     assert "is not declared" in meta

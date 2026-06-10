@@ -21,7 +21,10 @@ CONTINUE = "  ... "
 
 _HELP = """\
 commands:
-  :inspect VAR   show a variable's liveness, kind, and value (alias :i)
+  :inspect VAR   show a variable's value, lifetime, children, entanglements,
+                 and parents (alias :i); add -v for the full object graph
+  :tree VAR      the full object graph: string spines and nested structure
+                 with shared-node markers (same as :inspect -v) (alias :graph)
   :env           list bound variables and their state
   :load FILE     evaluate the statements in FILE
   :reset         start a fresh environment
@@ -124,13 +127,25 @@ class Repl:
             return True
         elif cmd == "help":
             self._emit(_HELP + "\n")
-        elif cmd in ("inspect", "i"):
-            if not arg:
-                self._emit("usage: :inspect VAR\n")
-            elif arg not in self.ev.env:
-                self._emit(f"'{arg}' is not bound\n")
+        elif cmd in ("inspect", "i", "tree", "graph"):
+            # `:tree`/`:graph` imply the verbose full-graph view; `:inspect` takes an optional
+            # -v/verbose flag for the same. Default `:inspect` is the relationship summary.
+            verbose = cmd in ("tree", "graph")
+            toks = arg.split()
+            if toks and toks[0] in ("-v", "--verbose", "verbose"):
+                verbose = True
+                toks = toks[1:]
+            var = toks[0] if toks else ""
+            if not var:
+                self._emit("usage: :inspect [-v] VAR   (or :tree VAR for the full graph)\n")
+            elif var not in self.ev.env:
+                self._emit(f"'{var}' is not bound\n")
             else:
-                self._emit(f"{arg}: {self.rt.describe(self.ev._read(arg))}\n")
+                env_items = [(n, self.ev._read(n)) for n in self.ev.env]
+                obj = self.ev._read(var)
+                body = (self.rt.render_graph(obj, env_items) if verbose
+                        else self.rt.inspect(obj, env_items))
+                self._emit(f"{var}:\n{body}\n")
         elif cmd == "env":
             names = sorted(n for n in self.ev.env if n != "THIS")
             if not names:
