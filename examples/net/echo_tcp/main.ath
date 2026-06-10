@@ -1,7 +1,4 @@
-// Spawn a TCP echo server and a client that talk over 127.0.0.1:9101 in one
-// process. Same shape as echo_unix; only the transport differs. The server also
-// works against an external client, e.g. `nc 127.0.0.1 9101`.
-// Output: hello, then world, then done.
+// Echo server and client over TCP (127.0.0.1:9101). Output: hello, world, done.
 IMPORTF "server.ath" AS SERVER;
 IMPORTF "client.ath" AS CLIENT;
 UNIVERSE AS N;

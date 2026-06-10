@@ -1,4 +1,4 @@
-// Client: send two lines, print each echoed reply, then hang up so the server sees EOF.
+// Send two lines, print each echoed reply, then hang up.
 CONNECT "unix:/tmp/ath_echo.sock" AS CONN;
 SEND "hello" TO CONN;
 RECV FROM CONN AS R;

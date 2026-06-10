@@ -1,6 +1,4 @@
-// Uppercase each line the client sends, bouncing it back, until the client hangs
-// up. One step past echo: the server does real work on every line. The connection
-// CONN is a channel whose liveness is the socket, so peer-close ends the loop.
+// Uppercase each line and send it back until the client hangs up.
 IMPORTF <upper> AS UPPER;
 LISTEN "unix:/tmp/ath_upper.sock" AS SERVER;
 ACCEPT FROM SERVER AS CONN;

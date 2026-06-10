@@ -1,5 +1,4 @@
-// An uppercase-transform server and a client, both actors in one process over a
-// Unix-domain socket. Output: HELLO, then WORLD, then done.
+// Uppercase server and client over a Unix-domain socket. Output: HELLO, WORLD, done.
 IMPORTF "server.ath" AS SERVER;
 IMPORTF "client.ath" AS CLIENT;
 UNIVERSE AS N;

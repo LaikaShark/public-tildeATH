@@ -1,6 +1,4 @@
-// One per connection. ARGS packs the connection and the shared transcript
-// channel. The client's first line is its name; every later line is relayed,
-// tagged with that name, into the transcript until the client hangs up.
+// Read client name, then relay tagged lines into the transcript until hangup.
 BIFURCATE ARGS[CONN, LOG];
 RECV FROM CONN AS NAME;
 RECV FROM CONN AS LINE;

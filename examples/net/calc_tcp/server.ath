@@ -1,6 +1,4 @@
-// TCP variant of calc_unix: each request line is two space-separated integers;
-// the reply is their sum. Serves one connection until the client hangs up.
-// (Not in the conformance suite: a real port is non-deterministic in CI.)
+// Parse two integers per line, reply with their sum until the client hangs up.
 IMPORTF <split> AS SPLIT;
 IMPORTF <parse> AS PARSE;
 IMPORTF <add> AS ADD;

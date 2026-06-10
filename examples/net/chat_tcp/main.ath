@@ -1,5 +1,4 @@
-// A chat relay over TCP (127.0.0.1:9104): a server multiplexes two clients
-// (alice and bob) into one transcript, then prints done. Same shape as chat_unix.
+// Chat relay over TCP (127.0.0.1:9104): server multiplexes alice and bob into one transcript. Output: tagged messages, then done.
 IMPORTF "server.ath" AS SERVER;
 IMPORTF "alice.ath" AS ALICE;
 IMPORTF "bob.ath" AS BOB;

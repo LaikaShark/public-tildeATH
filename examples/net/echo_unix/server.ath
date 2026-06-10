@@ -1,6 +1,4 @@
-// Echo server: accept one connection, then bounce each line back until the client hangs up.
-// The connection CONN is a channel whose liveness is the socket — when the client closes, CONN
-// dies and the ~ATH(CONN) loop ends on its own.
+// Accept one connection, echo each line back until the client hangs up.
 LISTEN "unix:/tmp/ath_echo.sock" AS SERVER;
 ACCEPT FROM SERVER AS CONN;
 ~ATH(CONN)

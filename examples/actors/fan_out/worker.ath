@@ -1,4 +1,4 @@
-// Pulls tasks from the shared channel until it closes, yielding after each so work spreads across workers.
+// Pull tasks from the shared channel until it closes, yielding after each.
 BIFURCATE ARGS[ID, WORK];
 RECV FROM WORK AS M;
 ~ATH(M)

@@ -1,4 +1,4 @@
-// For each ball received on its inbox, prints pong and returns the ball on its outbox, until the inbox closes.
+// Print pong and return the ball for each receive, until the inbox closes.
 BIFURCATE ARGS[BALLS, ACKS];
 RECV FROM BALLS AS M;
 ~ATH(M)

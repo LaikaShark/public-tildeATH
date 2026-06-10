@@ -1,7 +1,4 @@
-// A chat relay: a server multiplexes two clients (alice and bob) into one
-// transcript. Each client's lines are relayed tagged with its name, then the
-// run prints done. The cooperative scheduler is deterministic, so the transcript
-// order is stable and identical under both composition modes.
+// Chat relay over a Unix-domain socket: server multiplexes alice and bob into one transcript. Output: tagged messages, then done.
 IMPORTF "server.ath" AS SERVER;
 IMPORTF "alice.ath" AS ALICE;
 IMPORTF "bob.ath" AS BOB;

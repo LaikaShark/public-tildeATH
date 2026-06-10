@@ -1,5 +1,4 @@
-// TCP variant of upper_unix: uppercase each line and bounce it back until the
-// client hangs up. (Not in the conformance suite: a real port is non-deterministic.)
+// Uppercase each line and send it back until the client hangs up.
 IMPORTF <upper> AS UPPER;
 LISTEN 9102 AS SERVER;
 ACCEPT FROM SERVER AS CONN;

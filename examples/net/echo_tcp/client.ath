@@ -1,4 +1,4 @@
-// Connect over TCP to the local echo server, send two lines, print each reply.
+// Send two lines, print each reply, then hang up.
 CONNECT "127.0.0.1" 9101 AS CONN;
 SEND "hello" TO CONN;
 RECV FROM CONN AS R;

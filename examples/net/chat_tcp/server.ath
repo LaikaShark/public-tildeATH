@@ -1,8 +1,4 @@
-// TCP variant of chat_unix: a chat room on a TCP port. Accept K clients; spawn
-// one handler actor per connection (served concurrently via the cooperative
-// scheduler), and fan their messages into a single transcript channel that a
-// printer actor drains in arrival order.
-// (Not in the conformance suite: a real port is non-deterministic in CI.)
+// Accept K clients, spawn a handler per connection, fan messages into a transcript channel.
 IMPORTF "handler.ath" AS HANDLER;
 IMPORTF "printer.ath" AS PRINTER;
 IMPORT NUMBER 2 AS K;

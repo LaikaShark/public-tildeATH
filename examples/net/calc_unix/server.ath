@@ -1,6 +1,4 @@
-// A tiny request/response protocol: each request line is two space-separated
-// integers; the reply is their sum as a decimal string. Serves one connection
-// until the client hangs up (peer-close kills CONN and ends the loop).
+// Parse two integers per line, reply with their sum until the client hangs up.
 IMPORTF <split> AS SPLIT;
 IMPORTF <parse> AS PARSE;
 IMPORTF <add> AS ADD;

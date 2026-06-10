@@ -1,6 +1,4 @@
-// A sum-the-two-integers request/response server and client over TCP
-// (127.0.0.1:9103), in one process. Same shape as calc_unix.
-// Output: 42, then 12, then done.
+// Sum-of-two-integers server and client over TCP (127.0.0.1:9103). Output: 42, 12, done.
 IMPORTF "server.ath" AS SERVER;
 IMPORTF "client.ath" AS CLIENT;
 UNIVERSE AS N;
