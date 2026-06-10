@@ -62,3 +62,4 @@ clean:
 	rm -f $(RUNTIME)/*.o $(RUNTIME)/*.a $(RUNTIME)/*.so \
 	      $(RUNTIME)/test_runtime $(RUNTIME)/test_runtime_fresh \
 	      $(RUNTIME)/test_runtime_intern
+	find . -name a.out -delete

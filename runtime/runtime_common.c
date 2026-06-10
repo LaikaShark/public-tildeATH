@@ -1722,14 +1722,15 @@ ath_obj *ath_join(ath_obj *list, ath_obj *sep) {
         if (count >= cap) {
             cap *= 2;
             char **nb = (char **)realloc(bufs, sizeof(char *) * cap);
+            if (nb) bufs = nb;
             size_t *nl = (size_t *)realloc(lens, sizeof(size_t) * cap);
+            if (nl) lens = nl;
             if (!nb || !nl) {
                 for (size_t k = 0; k < count; k++) free(bufs[k]);
-                free(nb ? nb : bufs); free(nl ? nl : lens); free(pbuf);
+                free(bufs); free(lens); free(pbuf);
                 free(ebuf);
                 return ath_alloc_dead();
             }
-            bufs = nb; lens = nl;
         }
         bufs[count] = ebuf;
         lens[count] = elen;
