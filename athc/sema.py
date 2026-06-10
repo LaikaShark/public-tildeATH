@@ -36,6 +36,9 @@ from athc.ast import (
     JoinStmt,
     ChannelStmt,
     NurseryStmt,
+    ListenStmt,
+    AcceptStmt,
+    ConnectStmt,
 )
 
 
@@ -228,6 +231,19 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
         elif isinstance(s, JoinStmt):
             _check_read(s.handle, defined, s)
         elif isinstance(s, (ChannelStmt, NurseryStmt)):
+            _check_write(s.target, s)
+            defined.add(s.target)
+        elif isinstance(s, ListenStmt):
+            # spec/host are string literals; the port may be a bound name
+            _check_operand(s.port, defined, s)
+            _check_write(s.target, s)
+            defined.add(s.target)
+        elif isinstance(s, AcceptStmt):
+            _check_read(s.listener, defined, s)
+            _check_write(s.target, s)
+            defined.add(s.target)
+        elif isinstance(s, ConnectStmt):
+            _check_operand(s.port, defined, s)
             _check_write(s.target, s)
             defined.add(s.target)
         else:

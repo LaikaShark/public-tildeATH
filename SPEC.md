@@ -196,7 +196,10 @@ statement     = import-stmt
               | yield-stmt
               | join-stmt
               | channel-stmt
-              | nursery-stmt ;
+              | nursery-stmt
+              | listen-stmt
+              | accept-stmt
+              | connect-stmt ;
 
 import-stmt   = import-concept
               | import-builtin
@@ -357,6 +360,18 @@ channel-stmt  = 'channel' 'as' IDENT ';' ;
 
 nursery-stmt  = 'nursery' 'as' IDENT ';' ;
                 (* Bind a fresh nursery (supervision scope). §7. *)
+
+listen-stmt   = 'listen' ( operand | STRING ) 'as' IDENT ';' ;
+                (* Bind a listening socket. An operand is a TCP port; a STRING
+                   must be "unix:/path" for a Unix-domain socket. §7.6. *)
+
+accept-stmt   = 'accept' 'from' IDENT 'as' IDENT ';' ;
+                (* Accept one connection from a listener, binding a connection
+                   handle. 'from' is a contextual marker. §7.6. *)
+
+connect-stmt  = 'connect' STRING [ operand ] 'as' IDENT ';' ;
+                (* Open a connection. "unix:/path" host takes no port; any other
+                   host is TCP and requires a port operand. §7.6. *)
 
 Notes:
 
@@ -1658,6 +1673,10 @@ typedef struct ath_obj {
     const char    *mtime_path;
     int64_t        mtime_sec;
     int64_t        mtime_nsec;
+
+    /* §7 concurrency (mailbox/actor/nursery) and §7.6 networking (socket fd,
+     * listener flag, end-of-stream flag, recv line-buffer) append further
+     * optional fields after this prefix; all zero on a plain object. */
 } ath_obj;
 ```
 
@@ -2134,3 +2153,88 @@ void     ath_scheduler_drain(void);
 int      ath_in_actor(void);
 void     ath_park_until(double deadline_s);
 ```
+
+## 7.6 Networking
+
+Networking extends the actor model rather than adding a parallel I/O subsystem: a
+**network connection is a channel whose liveness is the socket**. The connection
+handle is alive while the socket is open; peer disconnect, a socket error, or an
+explicit `close`/`.DIE()` makes it dead, which ends a `~ATH(CONN) {...}` loop with
+no new control-flow concept. Because a connection is a channel, the existing
+`send` and `recv` statements (§7.2) carry its traffic — there are no networking
+verbs beyond the three that set a connection up.
+
+Two stream transports are supported: **TCP** (`AF_INET`) and **Unix-domain**
+(`AF_UNIX`). They share one accept/connect/send/recv path; a Unix-domain address
+is written `"unix:/path"`. Unix-domain is the deterministic, port-free choice for
+local tests.
+
+### 7.6.1 Statements
+
+- `listen PORT as L;` / `listen "unix:/path" as L;` — bind a listening socket and
+  bind handle `L`, alive while the socket is open. A numeric/bound-name operand is
+  a TCP port (1–65535); a `"unix:/path"` literal is a Unix-domain socket (a stale
+  socket file at that path is removed first). Born dead on any bind/listen error.
+- `accept from L as C;` — take one connection from listener `L`, binding the fresh
+  connection handle `C`. Blocks (parking the actor, §7.6.2) until a client
+  connects. `C` is a channel: `send`/`recv` on it cross the wire.
+- `connect "host" PORT as C;` / `connect "unix:/path" as C;` — open a connection,
+  binding `C` (alive while connected, born dead on failure). A `"unix:/path"` host
+  takes no port; any other host is TCP to `host:port`.
+
+`send` and `recv` on a connection handle behave as in §7.2 but move bytes over the
+socket, **newline-framed**:
+
+- `send M to C;` — coerce `M` to a string (§4.6), write its bytes followed by a
+  `\n`. A write to a closed/broken peer kills `C`.
+- `recv from C as M;` — yield until a full line arrives, then bind `M` to that line
+  as a string (the trailing `\n`/`\r\n` stripped), exactly like `input` (§4.4). On
+  peer close, any unterminated final line is delivered, then the connection goes
+  dead and subsequent `recv` yields `NULL`. As with channels, the loop condition is
+  the **connection's** liveness, not the message's:
+
+```
+accept from SERVER as CONN;
+~ATH(CONN) {            // ends when the peer hangs up
+    recv from CONN as LINE;
+    send LINE to CONN;  // echo; a send to a dead CONN is dropped
+}
+```
+
+### 7.6.2 Scheduling, EOF, and resources
+
+Socket fds are non-blocking. A `accept`/`recv`/`send`/`connect` that would block
+**parks the current actor** on the fd (a new blocked-on-I/O state) and yields; the
+scheduler's idle step `poll()`s every parked fd alongside the nearest `sleep`
+deadline and rewakes actors as fds become ready. So one actor per connection can
+serve many clients concurrently. At top level (no actor) the same wait is a
+blocking `poll`, like top-level `sleep`.
+
+Peer-close is observed without a syscall in the liveness hot path: the read/write
+paths latch an end-of-stream flag and kill the handle, and `~ATH`/`ath_is_alive`
+just read it. Determinism holds as in §7.3 — connection handles are plain alive
+objects (never interned, no deadlines) and framing reuses the §4.6 string
+builders, so a well-behaved networked program produces identical output under
+`fresh` and `intern`.
+
+A connection's fd is closed when its handle dies through `close C;`/`C.DIE()` (or
+the runtime's internal kill on EOF/error). A handle that dies **passively** —
+e.g. a connection whose variable is dropped without `close` — has its fd reclaimed
+by a sweep at scheduler drain; until then the fd lingers, as with any un-`close`d
+resource. The REPL limitation of §7.4 applies: `listen`/`accept`/`connect` (which
+ride on `send`/`recv`) are compiled-only.
+
+### 7.6.3 Runtime ABI
+
+Networking lives in `runtime/net.c`, compiled into both archives. The emitted code
+calls:
+
+```
+ath_obj *ath_listen(const char *spec, ath_obj *port);   /* spec NULL => TCP(port) */
+ath_obj *ath_accept(ath_obj *listener);
+ath_obj *ath_connect(const char *host, ath_obj *port);  /* "unix:/p" host => AF_UNIX */
+```
+
+`send`/`recv` on a connection are the same `ath_send`/`ath_recv_from` as §7.5: each
+checks for a socket fd on the handle and routes to the socket path
+(`ath_sock_send` / `ath_sock_recv_line`) instead of the in-process mailbox.

@@ -373,6 +373,44 @@ class NurseryStmt:
     col: int
 
 
+@dataclass
+class ListenStmt:
+    """listen <port> as L;  |  listen "unix:/path" as L; — bind a listening socket. The handle L
+    is alive while the socket is open. A bound name/operand port selects TCP; a "unix:/p" string
+    literal selects a Unix-domain socket. Accept connections with `accept from L as C;`."""
+    # str (a "unix:/p" literal) for Unix-domain, else None (TCP)
+    spec: "str | None"
+    # port operand (name or literal) for TCP, else None (Unix-domain)
+    port: "str | Operand | None"
+    target: str
+    line: int
+    col: int
+
+
+@dataclass
+class AcceptStmt:
+    """accept from L as C; — block (parking the actor) until a client connects to listener L,
+    binding the fresh connection handle C. C is a channel: `send`/`recv` on it cross the wire,
+    and peer-close makes C dead."""
+    listener: str
+    target: str
+    line: int
+    col: int
+
+
+@dataclass
+class ConnectStmt:
+    """connect "host" <port> as C;  |  connect "unix:/path" as C; — open a connection, binding
+    handle C (alive while connected, born dead on failure). A "unix:/p" host selects Unix-domain
+    and takes no port; otherwise TCP to host:port."""
+    host: str
+    # port operand (name or literal) for TCP, else None (Unix-domain)
+    port: "str | Operand | None"
+    target: str
+    line: int
+    col: int
+
+
 Stmt = Union[
     ImportStmt,
     DecomposeStmt,
@@ -407,6 +445,9 @@ Stmt = Union[
     JoinStmt,
     ChannelStmt,
     NurseryStmt,
+    ListenStmt,
+    AcceptStmt,
+    ConnectStmt,
 ]
 
 

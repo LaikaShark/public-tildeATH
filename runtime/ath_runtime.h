@@ -53,6 +53,16 @@ typedef struct ath_obj {
     struct ath_msg   *mbox_tail;
     void             *actor;
     int               nursery_pending;
+    // Networking (net.c). All zero on a non-socket object, so existing programs and codegen's
+    // struct-prefix model are unaffected. A handle is EITHER a socket (sock_fd>0) OR a mailbox
+    // (sock_fd==0); ath_send/ath_recv_from branch on sock_fd. Appended at the struct end.
+    int    sock_fd;          // 0 = not a socket; >0 = open listener/connection fd (fd 0 is stdin)
+    int    sock_is_listener; // 1 = accept target; 0 = stream connection
+    int    sock_eof;         // latched on EOF/error; ath_observe reads this (no syscall)
+    char  *sock_rbuf;        // recv line-buffer: bytes read from fd but not yet returned as a line
+    size_t sock_rlen;        // valid bytes in sock_rbuf
+    size_t sock_rcap;        // capacity of sock_rbuf
+    struct ath_obj *sock_next; // intrusive link in the open-socket registry (net.c sweep)
 } ath_obj;
 
 #define ATH_DEP_AND 0
@@ -86,6 +96,10 @@ ath_obj *ath_char_atom(int c);
 
 // Build fresh right-nested cons-list from len bytes, terminated with ath_NULL; empty returns ath_NULL
 ath_obj *ath_string_from_bytes(const char *bytes, size_t len);
+
+// Slurp a string-like object into a heap byte buffer (caller frees); 0 on success, -1 on malformed
+// string or alloc failure. NULL/dead/empty s yields a successful empty buffer. Used by net.c send.
+int      ath_string_to_bytes(ath_obj *s, char **out_buf, size_t *out_len);
 
 // Coerce to string-like for `text` interpolation: payload operands via ath_to_string, else returned unchanged
 ath_obj *ath_coerce_string(ath_obj *v);
@@ -294,7 +308,31 @@ ath_obj *ath_nursery_new(void);
 void     ath_scheduler_drain(void);
 // True iff a coroutine is currently running (used by ath_sleep_ms to park instead of block).
 int      ath_in_actor(void);
+// True iff a coroutine is running and its handle has died (cancelled); net.c bails on it.
+int      ath_self_dead(void);
 // Park the current actor until the monotonic deadline, yielding the scheduler meanwhile.
 void     ath_park_until(double deadline_s);
+// Park the current actor until fd is ready for events (POLLIN/POLLOUT), yielding meanwhile.
+// No-op at top level (net.c does a blocking poll there instead). Declared for net.c.
+void     ath_park_io(int fd, short events);
+
+// Networking (net.c). A connection is a channel that carries a socket fd: the handle is alive
+// iff the socket is open. Peer close, socket error, or .DIE()/close kills it, ending ~ATH(C).
+// Transports: TCP (spec NULL, AF_INET, host+port) and Unix-domain (spec "unix:/path", AF_UNIX).
+// All null-safe (C NULL => ath_NULL). Setup errors yield a born-dead handle.
+// Bind+listen; spec NULL => TCP on port's int64 payload; "unix:/p" => AF_UNIX (port ignored).
+ath_obj *ath_listen(const char *spec, ath_obj *port);
+// Accept one connection from a listener; fresh connection handle, ath_NULL if dead/not a listener.
+ath_obj *ath_accept(ath_obj *listener);
+// Connect out; host "unix:/p" => AF_UNIX, else TCP to host:port (port's int64 payload).
+ath_obj *ath_connect(const char *host, ath_obj *port);
+// Socket-backed send/recv, reached from ath_send/ath_recv_from when the handle has sock_fd>0.
+// recv returns one newline-framed line as a string; EOF/error => sock_eof latched, handle dies, NULL.
+void     ath_sock_send(ath_obj *c, ath_obj *msg);
+ath_obj *ath_sock_recv_line(ath_obj *c);
+// Idempotent: close(sock_fd), free recv buffer, latch sock_eof. Called from ath_die/ath_close.
+void     ath_sock_teardown(ath_obj *v);
+// Close any still-open registered sockets whose handle is dead; called at scheduler drain/atexit.
+void     ath_sock_sweep(void);
 
 #endif

@@ -1869,7 +1869,79 @@ Runnable examples live under `examples/actors/`, from basic to advanced:
 
 ---
 
-## 20. Where to look next
+## 20. Networking
+
+Networking is the actor model pointed at the wire. The whole idea is one
+sentence: **a connection is a channel whose liveness is the socket.** When
+the peer hangs up, the connection handle dies — so the same `~ATH(CONN)`
+loop you'd write over a channel becomes a server that runs until the client
+disconnects. There are no new I/O verbs: once a connection is open, you talk
+to it with the `send` and `recv` you already know.
+
+Three statements set a connection up:
+
+- `LISTEN PORT AS L;` (or `LISTEN "unix:/path" AS L;`) — bind a listening
+  socket; `L` is alive while it's open.
+- `ACCEPT FROM L AS C;` — wait for a client and bind the connection `C`.
+- `CONNECT "host" PORT AS C;` (or `CONNECT "unix:/path" AS C;`) — dial out.
+
+Messages are newline-framed strings: `send` writes a line, `recv` reads one
+(like `input`). On the wire that means each `SEND M TO C;` is one line the
+other side reads back with `RECV FROM C AS M;`.
+
+Here is a complete echo server and client talking over a Unix-domain socket
+(port-free, so it's the easy way to test locally). Two actors, one process:
+
+```ath
+// server.ath — bounce each line back until the client hangs up
+LISTEN "unix:/tmp/ath_echo.sock" AS SERVER;
+ACCEPT FROM SERVER AS CONN;
+~ATH(CONN) {              // ends when the peer closes (CONN dies on EOF)
+    RECV FROM CONN AS LINE;
+    SEND LINE TO CONN;
+}
+CLOSE SERVER;
+THIS.DIE();
+```
+
+```ath
+// client.ath — send two lines, print the echoes, then hang up
+CONNECT "unix:/tmp/ath_echo.sock" AS CONN;
+SEND "hello" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+SEND "world" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+CLOSE CONN;             // closing makes the server see EOF
+THIS.DIE();
+```
+
+```ath
+// main.ath — run both as actors; output: hello, world, done
+IMPORTF "server.ath" AS SERVER;
+IMPORTF "client.ath" AS CLIENT;
+NURSERY AS N;
+SPAWN SERVER NULL INTO N AS S;
+SPAWN CLIENT NULL INTO N AS C;
+JOIN N;
+PRINT done;
+THIS.DIE();
+```
+
+Under the hood sockets are non-blocking: an `accept` or `recv` that would
+block parks the actor and yields, so one actor per connection serves many
+clients at once — but you never see that, you just write the loop. Swap the
+Unix path for a TCP port (`LISTEN 8080 AS SERVER;`) and the same code serves
+the network; connect to it with `nc localhost 8080`. As with actors, a
+well-behaved networked program prints the same thing under both composition
+modes, and `listen`/`accept`/`connect` are compiled-only (not in the REPL).
+
+The runnable version is `examples/net/echo_unix/`.
+
+---
+
+## 21. Where to look next
 
 - `SPEC.md` is the authoritative reference. section numbers cited
   throughout this tutorial point into it

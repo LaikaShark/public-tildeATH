@@ -70,6 +70,54 @@ static ath_obj *act_sleeper(ath_obj *arg) {
     return ath_NULL;
 }
 
+// ---- networking test helpers ----------------------------------------------------------------
+// A server actor and a client actor talk over a real AF_UNIX stream socket in one process; the
+// cooperative scheduler interleaves them. Exercises listen/accept/connect/send/recv plus the
+// poll/park idle path. Deterministic: the client sends a fixed line sequence, then closes; the
+// server records the lines and observes EOF kill the connection handle.
+static char g_net_spec[256];   // "unix:/path"
+static char g_net_recv[256];   // received lines joined by ','
+static int  g_net_recv_n;
+static int  g_net_listen_ok;
+static int  g_net_connect_ok;
+static int  g_net_conn_died;   // server saw the connection die on EOF
+
+static ath_obj *act_net_server(ath_obj *arg) {
+    (void)arg;
+    ath_obj *lis = ath_listen(g_net_spec, ath_NULL);
+    if (!ath_is_alive(lis)) return ath_NULL;
+    g_net_listen_ok = 1;
+    ath_obj *conn = ath_accept(lis);
+    while (ath_is_alive(conn)) {
+        ath_obj *line = ath_recv_from(conn);
+        if (!ath_is_alive(conn)) break; // recv hit EOF and killed the connection
+        char *buf = NULL;
+        size_t len = 0;
+        if (ath_string_to_bytes(line, &buf, &len) == 0) {
+            if (g_net_recv_n) g_net_recv[g_net_recv_n++] = ',';
+            memcpy(g_net_recv + g_net_recv_n, buf, len);
+            g_net_recv_n += (int)len;
+            g_net_recv[g_net_recv_n] = '\0';
+            free(buf);
+        }
+    }
+    g_net_conn_died = 1; // loop exited because the connection went dead (EOF)
+    ath_die(lis);
+    return ath_NULL;
+}
+
+static ath_obj *act_net_client(ath_obj *arg) {
+    (void)arg;
+    ath_obj *conn = ath_connect(g_net_spec, ath_NULL);
+    if (!ath_is_alive(conn)) return ath_NULL;
+    g_net_connect_ok = 1;
+    ath_send(conn, ath_string_from_bytes("one", 3));
+    ath_send(conn, ath_string_from_bytes("two", 3));
+    ath_send(conn, ath_string_from_bytes("three", 5));
+    ath_die(conn); // close: server sees the buffered lines then EOF
+    return ath_NULL;
+}
+
 int main(void) {
     // bigint core
     {
@@ -1644,6 +1692,20 @@ int main(void) {
         ath_spawn(act_sleeper, ath_NULL);
         ath_scheduler_drain();
         assert(slept == 1);
+    }
+
+    // networking: a connection is a channel carrying a socket fd; peer-close => handle dies
+    {
+        snprintf(g_net_spec, sizeof g_net_spec, "unix:/tmp/ath_net_%d.sock", (int)getpid());
+        ath_spawn(act_net_server, ath_NULL); // listens + accepts, then recvs to EOF
+        ath_spawn(act_net_client, ath_NULL); // connects, sends three lines, closes
+        ath_scheduler_drain();
+        if (g_net_listen_ok && g_net_connect_ok) {
+            assert(strcmp(g_net_recv, "one,two,three") == 0);
+            assert(g_net_conn_died); // EOF turned the live socket handle dead
+        } else {
+            fputs("net test: skipped (AF_UNIX unavailable)\n", stdout);
+        }
     }
 
     fputs("runtime test: all checks passed\n", stdout);

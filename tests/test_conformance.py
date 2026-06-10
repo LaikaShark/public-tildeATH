@@ -1,8 +1,10 @@
 """Conformance suite: compile-and-run each canonical .ath program and
 diff stdout against an expected value. Programs live under examples/."""
 
+import socket as _socket
 import subprocess
 import sys
+import tempfile as _tempfile
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,33 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PROGRAMS = PROJECT_ROOT / "examples"
 RUNTIME_LIB = PROJECT_ROOT / "runtime" / "libath_fresh.a"
+
+
+def _af_unix_available() -> bool:
+    """Whether AF_UNIX bind works here. CI sandboxes (seccomp/no-socket) may forbid it, in which
+    case the networking conformance cases skip rather than fail."""
+    probe = Path(_tempfile.gettempdir()) / "ath_afunix_probe.sock"
+    try:
+        probe.unlink()
+    except OSError:
+        pass
+    try:
+        s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+        try:
+            s.bind(str(probe))
+        finally:
+            s.close()
+        return True
+    except (OSError, AttributeError):
+        return False
+    finally:
+        try:
+            probe.unlink()
+        except OSError:
+            pass
+
+
+_HAVE_AF_UNIX = _af_unix_available()
 
 
 def _ensure_runtime():
@@ -606,3 +635,16 @@ def test_program_with_env(
         source, tmp_path, stdin=stdin, compose=compose, env=env
     )
     assert output == expected
+
+
+@pytest.mark.skipif(not _HAVE_AF_UNIX, reason="AF_UNIX sockets unavailable (sandboxed)")
+@pytest.mark.parametrize("compose", ["fresh", "intern"])
+def test_networking_echo_unix(compose: str, tmp_path: Path):
+    """An echo server + client talking over a Unix-domain socket, both as actors in one process.
+    A connection is a channel whose liveness is the socket: peer-close ends the ~ATH(CONN) loop.
+    Output is byte-identical under both compose modes — socket handles are plain alive objects
+    (never interned) and message framing reuses the same string builders as the actor cases."""
+    source = PROGRAMS / "net/echo_unix/main.ath"
+    assert source.exists(), f"missing program file: {source}"
+    output = _compile_and_run(source, tmp_path, compose=compose)
+    assert output == "hello\nworld\ndone\n"

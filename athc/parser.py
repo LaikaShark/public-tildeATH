@@ -36,6 +36,9 @@ from athc.ast import (
     JoinStmt,
     ChannelStmt,
     NurseryStmt,
+    ListenStmt,
+    AcceptStmt,
+    ConnectStmt,
 )
 from athc.lexer import (
     Token,
@@ -52,6 +55,7 @@ _STATEMENT_KEYWORDS = frozenset({
     "clone", "sleep", "timer", "read", "write", "append", "close", "text",
     "loop", "every",
     "spawn", "send", "recv", "yield", "join", "channel", "nursery",
+    "listen", "accept", "connect",
 })
 
 # Literal tokens accepted as inline read-operands inside bracket forms.
@@ -155,6 +159,12 @@ class Parser:
             return self._parse_channel()
         if tok.kind is TokenKind.KW_NURSERY:
             return self._parse_nursery()
+        if tok.kind is TokenKind.KW_LISTEN:
+            return self._parse_listen()
+        if tok.kind is TokenKind.KW_ACCEPT:
+            return self._parse_accept()
+        if tok.kind is TokenKind.KW_CONNECT:
+            return self._parse_connect()
         if tok.kind is TokenKind.IDENT:
             # 'join' is a soft keyword: `join HANDLE ;` (IDENT IDENT ';') is unambiguous because
             # function calls always use brackets, so this shape is otherwise a parse error. This
@@ -604,6 +614,67 @@ class Parser:
         tgt = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
         return NurseryStmt(target=tgt.value, line=kw.line, col=kw.col)
+
+    def _parse_listen(self) -> ListenStmt:
+        # listen PORT as L;  (TCP)  |  listen "unix:/path" as L;  (Unix-domain)
+        kw = self._expect(TokenKind.KW_LISTEN)
+        spec: str | None = None
+        port = None
+        if self._peek().kind is TokenKind.STRING:
+            stok = self._advance()
+            if not stok.value.startswith("unix:"):
+                raise ParseError(
+                    "a string 'listen' address must be a unix-domain path "
+                    '("unix:/path"); for TCP use a port: listen PORT as L;',
+                    stok.line,
+                    stok.col,
+                )
+            spec = stok.value
+        else:
+            port = self._parse_operand()  # TCP port (a name or numeric literal)
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return ListenStmt(
+            spec=spec, port=port, target=tgt.value, line=kw.line, col=kw.col
+        )
+
+    def _parse_accept(self) -> AcceptStmt:
+        # accept from L as C;
+        kw = self._expect(TokenKind.KW_ACCEPT)
+        self._expect_contextual("from")
+        lis = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return AcceptStmt(
+            listener=lis.value, target=tgt.value, line=kw.line, col=kw.col
+        )
+
+    def _parse_connect(self) -> ConnectStmt:
+        # connect "host" PORT as C;  (TCP)  |  connect "unix:/path" as C;  (Unix-domain)
+        kw = self._expect(TokenKind.KW_CONNECT)
+        host = self._expect(TokenKind.STRING)
+        port = None
+        if self._peek().kind is not TokenKind.KW_AS:
+            port = self._parse_operand()
+        is_unix = host.value.startswith("unix:")
+        if is_unix and port is not None:
+            raise ParseError(
+                "a unix-domain 'connect' takes no port", kw.line, kw.col
+            )
+        if not is_unix and port is None:
+            raise ParseError(
+                'a TCP \'connect\' needs a port: connect "host" PORT as C;',
+                kw.line,
+                kw.col,
+            )
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return ConnectStmt(
+            host=host.value, port=port, target=tgt.value, line=kw.line, col=kw.col
+        )
 
     def _parse_text(self) -> TextStmt:
         kw = self._expect(TokenKind.KW_TEXT)

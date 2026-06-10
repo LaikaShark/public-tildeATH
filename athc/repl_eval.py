@@ -95,11 +95,13 @@ class Evaluator:
         for s in stmts:
             self._eval(s)
 
-    # Concurrency statements need the ucontext scheduler, which doesn't compose with the REPL's
-    # synchronous Python-driven loop; they are compiled-only in v1.
+    # Concurrency and networking statements need the ucontext scheduler, which doesn't compose
+    # with the REPL's synchronous Python-driven loop; they are compiled-only in v1. Networking
+    # rides on send/recv (already here), so listen/accept/connect join the same set.
     _ACTOR_STMTS = frozenset({
         "SpawnStmt", "SendStmt", "RecvStmt", "YieldStmt", "JoinStmt",
         "ChannelStmt", "NurseryStmt",
+        "ListenStmt", "AcceptStmt", "ConnectStmt",
     })
 
     def _eval(self, s):
@@ -108,8 +110,9 @@ class Evaluator:
             name = type(s).__name__
             if name in self._ACTOR_STMTS:
                 raise ReplError(
-                    "actor statements (spawn/send/recv/yield/join/channel/nursery) are "
-                    "only supported in compiled programs, not the REPL"
+                    "actor and networking statements (spawn/send/recv/yield/join/channel/"
+                    "nursery/listen/accept/connect) are only supported in compiled programs, "
+                    "not the REPL"
                 )
             raise ReplError(f"{name} is not supported in the REPL")
         m(self, s)

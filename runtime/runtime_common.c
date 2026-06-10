@@ -72,6 +72,10 @@ void ath_die(ath_obj *v) {
     if (v->alive && v->owns_path && v->watch_path) {
         unlink(v->watch_path);
     }
+    // Release the socket fd on death (idempotent; no-op for non-sockets).
+    if (v->sock_fd > 0) {
+        ath_sock_teardown(v);
+    }
     v->alive = 0;
 }
 
@@ -98,6 +102,9 @@ static int ath_observe(ath_obj *v) {
         if ((int64_t)mst.st_mtim.tv_sec != v->mtime_sec
             || (int64_t)mst.st_mtim.tv_nsec != v->mtime_nsec) return 0;
     }
+    // Socket peer-close/error is detected by the I/O paths (which latch sock_eof); observe just
+    // reads the flag so it stays non-mutating and syscall-free in the hot path.
+    if (v->sock_fd > 0 && v->sock_eof) return 0;
     if (v->dep_mode == ATH_DEP_OR) {
         int d1_present = (v->dep1 != NULL);
         int d2_present = (v->dep2 != NULL);
@@ -1261,6 +1268,10 @@ void ath_close(ath_obj *v) {
     if (v == NULL || v == ath_NULL) return;
     // Disown file (so ath_die won't unlink) before killing
     v->owns_path = 0;
+    // Release the socket fd if this handle is a socket (idempotent; no-op otherwise).
+    if (v->sock_fd > 0) {
+        ath_sock_teardown(v);
+    }
     v->alive = 0;
 }
 
@@ -1280,6 +1291,11 @@ static int ath_string_slurp(ath_obj *s, char **out_buf, size_t *out_len) {
     *out_buf = buf;
     *out_len = (size_t)n;
     return 0;
+}
+
+// Public wrapper over ath_string_slurp for net.c (string -> heap bytes; caller frees).
+int ath_string_to_bytes(ath_obj *s, char **out_buf, size_t *out_len) {
+    return ath_string_slurp(s, out_buf, out_len);
 }
 
 // Build fresh right-nested cons-list from byte buffer; NULL on empty

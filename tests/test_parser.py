@@ -37,6 +37,9 @@ from athc.ast import (
     JoinStmt,
     ChannelStmt,
     NurseryStmt,
+    ListenStmt,
+    AcceptStmt,
+    ConnectStmt,
 )
 from athc.parser import ParseError, parse
 
@@ -928,3 +931,79 @@ def test_concurrency_keywords_case_insensitive():
     kinds = [type(s).__name__ for s in p.statements]
     assert kinds == ["ImportFuncStmt", "ChannelStmt", "NurseryStmt", "SpawnStmt",
                      "SendStmt", "RecvStmt", "YieldStmt"]
+
+
+def test_listen_tcp_port():
+    p = parse('import number 8080 as PORT; listen PORT as L;')
+    s = p.statements[1]
+    assert isinstance(s, ListenStmt)
+    assert s.spec is None
+    assert s.port == "PORT"
+    assert s.target == "L"
+
+
+def test_listen_tcp_literal_port():
+    p = parse('listen 9000 as L;')
+    s = p.statements[0]
+    assert isinstance(s, ListenStmt)
+    assert s.spec is None
+    assert isinstance(s.port, Operand) and s.port.value == 9000
+
+
+def test_listen_unix_path():
+    p = parse('listen "unix:/tmp/s.sock" as L;')
+    s = p.statements[0]
+    assert isinstance(s, ListenStmt)
+    assert s.spec == "unix:/tmp/s.sock"
+    assert s.port is None
+
+
+def test_listen_rejects_non_unix_string():
+    with pytest.raises(ParseError, match="unix-domain"):
+        parse('listen "localhost" as L;')
+
+
+def test_accept_statement():
+    p = parse('listen 9000 as L; accept from L as C;')
+    s = p.statements[1]
+    assert isinstance(s, AcceptStmt)
+    assert s.listener == "L"
+    assert s.target == "C"
+
+
+def test_accept_requires_from_marker():
+    with pytest.raises(ParseError, match="'from'"):
+        parse('listen 9000 as L; accept L as C;')
+
+
+def test_connect_tcp():
+    p = parse('connect "example.com" 80 as C;')
+    s = p.statements[0]
+    assert isinstance(s, ConnectStmt)
+    assert s.host == "example.com"
+    assert isinstance(s.port, Operand) and s.port.value == 80
+    assert s.target == "C"
+
+
+def test_connect_unix_path():
+    p = parse('connect "unix:/tmp/s.sock" as C;')
+    s = p.statements[0]
+    assert isinstance(s, ConnectStmt)
+    assert s.host == "unix:/tmp/s.sock"
+    assert s.port is None
+
+
+def test_connect_tcp_requires_port():
+    with pytest.raises(ParseError, match="needs a port"):
+        parse('connect "example.com" as C;')
+
+
+def test_connect_unix_rejects_port():
+    with pytest.raises(ParseError, match="no port"):
+        parse('connect "unix:/tmp/s.sock" 80 as C;')
+
+
+def test_networking_keywords_case_insensitive():
+    p = parse('LISTEN "unix:/tmp/s" as L; ACCEPT FROM L as C; CONNECT "unix:/tmp/s" as D;')
+    kinds = [type(s).__name__ for s in p.statements]
+    assert kinds == ["ListenStmt", "AcceptStmt", "ConnectStmt"]

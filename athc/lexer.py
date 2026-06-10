@@ -29,6 +29,9 @@ class TokenKind(Enum):
     KW_YIELD = auto()
     KW_CHANNEL = auto()
     KW_NURSERY = auto()
+    KW_LISTEN = auto()
+    KW_ACCEPT = auto()
+    KW_CONNECT = auto()
     ATH = auto()
     DIE = auto()
     IDENT = auto()
@@ -152,6 +155,9 @@ KEYWORDS = {
     "yield": TokenKind.KW_YIELD,
     "channel": TokenKind.KW_CHANNEL,
     "nursery": TokenKind.KW_NURSERY,
+    "listen": TokenKind.KW_LISTEN,
+    "accept": TokenKind.KW_ACCEPT,
+    "connect": TokenKind.KW_CONNECT,
 }
 # 'to', 'from', 'into' stay contextual idents (matched in the parser, like the existing
 # write/append 'to'), so they remain usable as ordinary variable names.

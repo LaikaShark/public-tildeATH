@@ -35,6 +35,9 @@ from athc.ast import (
     JoinStmt,
     ChannelStmt,
     NurseryStmt,
+    ListenStmt,
+    AcceptStmt,
+    ConnectStmt,
 )
 
 binding.initialize_native_target()
@@ -147,6 +150,15 @@ def _collect_names(stmts, names: set) -> None:
         elif isinstance(s, JoinStmt):
             names.add(s.handle)
         elif isinstance(s, (ChannelStmt, NurseryStmt)):
+            names.add(s.target)
+        elif isinstance(s, ListenStmt):
+            _add_operand(names, s.port)
+            names.add(s.target)
+        elif isinstance(s, AcceptStmt):
+            names.add(s.listener)
+            names.add(s.target)
+        elif isinstance(s, ConnectStmt):
+            _add_operand(names, s.port)
             names.add(s.target)
         # YieldStmt and ImportFuncStmt contribute no variable names
 
@@ -394,6 +406,25 @@ class Codegen:
         )
         self.f_scheduler_drain = ir.Function(
             self.module, ir.FunctionType(ir.VoidType(), []), name="ath_scheduler_drain"
+        )
+
+        # Networking (runtime/net.c). A connection handle is a channel carrying a socket fd, so
+        # send/recv on it reuse f_send/f_recv_from above. listen/connect take a C string (the
+        # "unix:/p" spec or TCP host; NULL spec => TCP) plus a port object (NULL/dead => Unix).
+        self.f_listen = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer(), self.obj_ptr]),
+            name="ath_listen",
+        )
+        self.f_accept = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
+            name="ath_accept",
+        )
+        self.f_connect = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer(), self.obj_ptr]),
+            name="ath_connect",
         )
 
         # Builtin C functions from `import builtin SYM as NAME;`, keyed by raw C symbol to dedupe across files
@@ -700,6 +731,12 @@ class FunctionEmitter:
             self._write_var(
                 builder, stmt.target, builder.call(self.cg.f_nursery_new, [])
             )
+        elif isinstance(stmt, ListenStmt):
+            self._emit_listen(builder, stmt)
+        elif isinstance(stmt, AcceptStmt):
+            self._emit_accept(builder, stmt)
+        elif isinstance(stmt, ConnectStmt):
+            self._emit_connect(builder, stmt)
         else:
             raise CodegenError(f"no codegen for {type(stmt).__name__}")
 
@@ -728,6 +765,39 @@ class FunctionEmitter:
         else:
             msg = builder.call(self.cg.f_recv, [])
         self._write_var(builder, stmt.target, msg)
+
+    def _cstring_ptr(self, builder: ir.IRBuilder, s: str) -> ir.Value:
+        zero = ir.Constant(self.cg.i32, 0)
+        g = self.cg.make_cstring_global(s)
+        return builder.gep(g, [zero, zero], inbounds=True)
+
+    def _emit_listen(self, builder: ir.IRBuilder, stmt: ListenStmt) -> None:
+        # spec: the "unix:/p" literal (NULL => TCP); port: the port object (NULL => Unix-domain).
+        if stmt.spec is not None:
+            spec_ptr = self._cstring_ptr(builder, stmt.spec)
+            port = ir.Constant(self.cg.obj_ptr, None)
+        else:
+            spec_ptr = ir.Constant(self.cg.i8.as_pointer(), None)
+            port = self._emit_operand(builder, stmt.port)
+        self._write_var(
+            builder, stmt.target, builder.call(self.cg.f_listen, [spec_ptr, port])
+        )
+
+    def _emit_accept(self, builder: ir.IRBuilder, stmt: AcceptStmt) -> None:
+        listener = self._read_var(builder, stmt.listener)
+        self._write_var(
+            builder, stmt.target, builder.call(self.cg.f_accept, [listener])
+        )
+
+    def _emit_connect(self, builder: ir.IRBuilder, stmt: ConnectStmt) -> None:
+        host_ptr = self._cstring_ptr(builder, stmt.host)
+        if stmt.port is not None:
+            port = self._emit_operand(builder, stmt.port)
+        else:
+            port = ir.Constant(self.cg.obj_ptr, None)
+        self._write_var(
+            builder, stmt.target, builder.call(self.cg.f_connect, [host_ptr, port])
+        )
 
     def _emit_import(self, builder: ir.IRBuilder, stmt: ImportStmt) -> None:
         if stmt.var == "NULL":

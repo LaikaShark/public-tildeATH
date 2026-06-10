@@ -15,23 +15,26 @@ runtime: $(RUNTIME)/libath_fresh.a $(RUNTIME)/libath_intern.a \
 	@mkdir -p athc/_runtime
 	@cp -p $^ athc/_runtime/
 
-$(RUNTIME)/libath_fresh.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/scheduler.o $(RUNTIME)/compose_fresh.o $(RUNTIME)/bigint.o
+$(RUNTIME)/libath_fresh.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/scheduler.o $(RUNTIME)/net.o $(RUNTIME)/compose_fresh.o $(RUNTIME)/bigint.o
 	ar rcs $@ $^
 
-$(RUNTIME)/libath_intern.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/scheduler.o $(RUNTIME)/compose_intern.o $(RUNTIME)/bigint.o
+$(RUNTIME)/libath_intern.a: $(RUNTIME)/runtime_common.o $(RUNTIME)/scheduler.o $(RUNTIME)/net.o $(RUNTIME)/compose_intern.o $(RUNTIME)/bigint.o
 	ar rcs $@ $^
 
 # Shared libraries for the REPL (loaded via ctypes, athc/runtime_ffi.py).
-$(RUNTIME)/libath_fresh.so: $(RUNTIME)/runtime_common.o $(RUNTIME)/scheduler.o $(RUNTIME)/compose_fresh.o $(RUNTIME)/bigint.o
+$(RUNTIME)/libath_fresh.so: $(RUNTIME)/runtime_common.o $(RUNTIME)/scheduler.o $(RUNTIME)/net.o $(RUNTIME)/compose_fresh.o $(RUNTIME)/bigint.o
 	$(CC) -shared $^ -lm -o $@
 
-$(RUNTIME)/libath_intern.so: $(RUNTIME)/runtime_common.o $(RUNTIME)/scheduler.o $(RUNTIME)/compose_intern.o $(RUNTIME)/bigint.o
+$(RUNTIME)/libath_intern.so: $(RUNTIME)/runtime_common.o $(RUNTIME)/scheduler.o $(RUNTIME)/net.o $(RUNTIME)/compose_intern.o $(RUNTIME)/bigint.o
 	$(CC) -shared $^ -lm -o $@
 
 $(RUNTIME)/runtime_common.o: $(RUNTIME)/runtime_common.c $(RUNTIME)/ath_runtime.h $(RUNTIME)/bigint.h
 	$(CC) $(CFLAGS) -I$(RUNTIME) -c $< -o $@
 
 $(RUNTIME)/scheduler.o: $(RUNTIME)/scheduler.c $(RUNTIME)/ath_runtime.h
+	$(CC) $(CFLAGS) -I$(RUNTIME) -c $< -o $@
+
+$(RUNTIME)/net.o: $(RUNTIME)/net.c $(RUNTIME)/ath_runtime.h
 	$(CC) $(CFLAGS) -I$(RUNTIME) -c $< -o $@
 
 $(RUNTIME)/bigint.o: $(RUNTIME)/bigint.c $(RUNTIME)/bigint.h

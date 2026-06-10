@@ -16,13 +16,14 @@
 
 #include "ath_runtime.h"
 
+#include <poll.h>
 #include <stdlib.h>
 #include <time.h>
 #include <ucontext.h>
 
 #define ATH_ACTOR_STACK_SIZE (1u << 20) /* 1 MiB per actor */
 
-enum { ACT_READY = 0, ACT_BLOCKED_RECV, ACT_BLOCKED_SLEEP, ACT_DONE };
+enum { ACT_READY = 0, ACT_BLOCKED_RECV, ACT_BLOCKED_SLEEP, ACT_BLOCKED_IO, ACT_DONE };
 
 struct ath_msg {
     ath_obj        *value;
@@ -39,6 +40,9 @@ typedef struct ath_actor {
     int                 state;
     ath_obj            *wait_on;      // channel/handle this actor is blocked receiving from
     double              park_deadline;
+    int                 io_fd;        // fd this actor parks on while ACT_BLOCKED_IO
+    short               io_events;    // POLLIN or POLLOUT: the readiness it waits for
+    int                 io_ready;     // set by sched_step's poll; consumed on resume
     struct ath_actor   *qnext;        // run-queue link
 } ath_actor;
 
@@ -165,6 +169,10 @@ static int actor_runnable(ath_actor *a) {
             return mbox_nonempty(a->wait_on) || !ath_is_alive(a->wait_on);
         case ACT_BLOCKED_SLEEP:
             return sched_now() >= a->park_deadline;
+        case ACT_BLOCKED_IO:
+            // Readiness is stamped once per idle sweep by sched_step's poll(); a dead handle is
+            // already handled by the guard above, so here we only check the readiness flag.
+            return a->io_ready;
         default:
             return 0;
     }
@@ -206,26 +214,50 @@ static int sched_step(void) {
         }
         runq_push(a);
     }
-    // Full sweep, nobody runnable: wait for the nearest sleeper, else give up.
+    // Full sweep, nobody runnable: block in poll() until a watched socket fd is ready or the
+    // nearest sleep deadline elapses. Collect the blocked-IO actors with live handles into a
+    // pollfd set; the sleep deadline becomes the poll timeout (so this subsumes the old
+    // nanosleep-only path: with no IO waiters, poll(NULL,0,timeout) is exactly that sleep).
     double dl = earliest_sleep_deadline();
-    if (dl > 0.0) {
-        double now = sched_now();
-        if (dl > now) {
-            double rem = dl - now;
-            struct timespec ts;
-            ts.tv_sec = (time_t)rem;
-            ts.tv_nsec = (long)((rem - (double)ts.tv_sec) * 1e9);
-            nanosleep(&ts, NULL);
+    size_t cap = g_runq_len;
+    struct pollfd *pfds = cap ? (struct pollfd *)malloc(cap * sizeof *pfds) : NULL;
+    ath_actor **waiters = cap ? (ath_actor **)malloc(cap * sizeof *waiters) : NULL;
+    nfds_t nf = 0;
+    if (pfds && waiters) {
+        for (ath_actor *a = g_runq_head; a; a = a->qnext) {
+            if (a->state == ACT_BLOCKED_IO && ath_is_alive(a->handle)) {
+                pfds[nf].fd = a->io_fd;
+                pfds[nf].events = a->io_events;
+                pfds[nf].revents = 0;
+                waiters[nf] = a;
+                nf++;
+            }
         }
-        return 1;
     }
-    return 0;
+    if (nf == 0 && dl == 0.0) { free(pfds); free(waiters); return 0; } // nothing to wait on
+    int timeout_ms = -1;
+    if (dl > 0.0) {
+        double rem = dl - sched_now();
+        timeout_ms = rem <= 0.0 ? 0 : (int)(rem * 1000.0) + 1;
+    }
+    int r = poll(pfds, nf, timeout_ms);
+    if (r > 0) {
+        for (nfds_t i = 0; i < nf; i++) {
+            if (pfds[i].revents) waiters[i]->io_ready = 1;
+        }
+    }
+    free(pfds);
+    free(waiters);
+    return 1; // progress: a fd readied, or we slept toward a deadline
 }
 
 void ath_scheduler_drain(void) {
     while (g_runq_len > 0 && sched_step()) {
         /* keep stepping */
     }
+    // Reclaim fds of any connection whose handle died without an explicit .DIE()/close
+    // (e.g. an accept-loop that drops connection handles as it goes).
+    ath_sock_sweep();
 }
 
 // ---- cooperative primitives -----------------------------------------------------------------
@@ -246,7 +278,24 @@ void ath_park_until(double deadline_s) {
     self->park_deadline = 0.0;
 }
 
+// Park the current actor until io_fd is ready for io_events. Records the fd + direction so
+// sched_step's idle poll() can wait on it. No-op at top level (net.c blocks in poll itself).
+void ath_park_io(int fd, short events) {
+    ath_actor *self = g_current;
+    if (!self) return;
+    self->io_fd = fd;
+    self->io_events = events;
+    self->io_ready = 0;
+    self->state = ACT_BLOCKED_IO;
+    swapcontext(&self->ctx, &g_sched_ctx);
+    self->io_fd = 0;
+    self->io_events = 0;
+    self->io_ready = 0;
+}
+
 ath_obj *ath_recv_from(ath_obj *src) {
+    // A socket-backed handle reads framed lines off the wire instead of a mailbox.
+    if (src != NULL && src != ath_NULL && src->sock_fd > 0) return ath_sock_recv_line(src);
     ath_actor *self = g_current;
     for (;;) {
         // Cancelled actor: stop waiting and unwind (EOF).
@@ -274,6 +323,8 @@ ath_obj *ath_recv(void) {
 
 void ath_send(ath_obj *dest, ath_obj *msg) {
     if (dest == NULL || dest == ath_NULL || !ath_is_alive(dest)) return; // drop to a dead target
+    // A socket-backed handle writes framed bytes to the wire instead of a mailbox.
+    if (dest->sock_fd > 0) { ath_sock_send(dest, msg); return; }
     mbox_push(dest, msg);
     // No explicit wakeup needed: blocked receivers are re-checked by actor_runnable each sweep.
 }
@@ -298,4 +349,10 @@ ath_obj *ath_nursery_new(void) {
 
 int ath_in_actor(void) {
     return g_current != NULL;
+}
+
+int ath_self_dead(void) {
+    // True iff a coroutine is running and its handle has died (cancelled): net.c's blocking
+    // accept/recv/send loops poll this after a park to stop waiting and unwind.
+    return g_current != NULL && !ath_is_alive(g_current->handle);
 }
