@@ -1,0 +1,13 @@
+// TCP variant of echo_unix: bind a TCP port instead of a Unix path. Echo each
+// line back until the client hangs up. The connection CONN is a channel whose
+// liveness is the socket — peer-close ends the ~ATH(CONN) loop on its own.
+// (Not in the conformance suite: a real port is non-deterministic in CI.)
+LISTEN 9101 AS SERVER;
+ACCEPT FROM SERVER AS CONN;
+~ATH(CONN)
+{
+    RECV FROM CONN AS LINE;
+    SEND LINE TO CONN;
+}
+CLOSE SERVER;
+THIS.DIE();

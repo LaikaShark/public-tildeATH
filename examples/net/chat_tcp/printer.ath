@@ -1,0 +1,9 @@
+// Drain the transcript channel (ARGS) and print each relayed message, until the
+// server closes the channel and it empties (EOF ends the loop).
+RECV FROM ARGS AS M;
+~ATH(M)
+{
+    PRINT $M;
+    RECV FROM ARGS AS M;
+}
+THIS.DIE();

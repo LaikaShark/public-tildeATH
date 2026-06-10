@@ -1,0 +1,10 @@
+// Connect over TCP, send two "A B" requests, print each computed sum, then hang up.
+CONNECT "127.0.0.1" 9103 AS CONN;
+SEND "12 30" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+SEND "5 7" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+CLOSE CONN;
+THIS.DIE();

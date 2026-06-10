@@ -1,0 +1,6 @@
+// Join the chat over TCP as "bob": first line is the name, then one message.
+CONNECT "127.0.0.1" 9104 AS CONN;
+SEND "bob" TO CONN;
+SEND "hi alice" TO CONN;
+CLOSE CONN;
+THIS.DIE();

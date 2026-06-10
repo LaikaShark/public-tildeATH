@@ -1,0 +1,10 @@
+// Connect over TCP to the local echo server, send two lines, print each reply.
+CONNECT "127.0.0.1" 9101 AS CONN;
+SEND "hello" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+SEND "world" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+CLOSE CONN;
+THIS.DIE();

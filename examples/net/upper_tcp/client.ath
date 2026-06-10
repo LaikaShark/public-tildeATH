@@ -1,0 +1,10 @@
+// Connect over TCP, send two lines, print each uppercased reply, then hang up.
+CONNECT "127.0.0.1" 9102 AS CONN;
+SEND "hello" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+SEND "world" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+CLOSE CONN;
+THIS.DIE();

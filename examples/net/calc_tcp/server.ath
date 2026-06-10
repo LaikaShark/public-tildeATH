@@ -1,0 +1,23 @@
+// TCP variant of calc_unix: each request line is two space-separated integers;
+// the reply is their sum. Serves one connection until the client hangs up.
+// (Not in the conformance suite: a real port is non-deterministic in CI.)
+IMPORTF <split> AS SPLIT;
+IMPORTF <parse> AS PARSE;
+IMPORTF <add> AS ADD;
+IMPORTF <to_string> AS TO_STRING;
+LISTEN 9103 AS SERVER;
+ACCEPT FROM SERVER AS CONN;
+~ATH(CONN)
+{
+    RECV FROM CONN AS LINE;
+    SPLIT [LINE, " "]PARTS;
+    BIFURCATE PARTS[ASTR, REST];
+    BIFURCATE REST[BSTR, TAIL];
+    PARSE [ASTR, NULL]A;
+    PARSE [BSTR, NULL]B;
+    ADD [A, B]SUM;
+    TO_STRING [SUM, NULL]REPLY;
+    SEND REPLY TO CONN;
+}
+CLOSE SERVER;
+THIS.DIE();

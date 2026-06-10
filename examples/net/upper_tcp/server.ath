@@ -1,0 +1,13 @@
+// TCP variant of upper_unix: uppercase each line and bounce it back until the
+// client hangs up. (Not in the conformance suite: a real port is non-deterministic.)
+IMPORTF <upper> AS UPPER;
+LISTEN 9102 AS SERVER;
+ACCEPT FROM SERVER AS CONN;
+~ATH(CONN)
+{
+    RECV FROM CONN AS LINE;
+    UPPER [LINE, NULL]CAPS;
+    SEND CAPS TO CONN;
+}
+CLOSE SERVER;
+THIS.DIE();
