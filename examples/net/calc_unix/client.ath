@@ -1,0 +1,10 @@
+// Send two "A B" requests, print each computed sum, then hang up.
+CONNECT "unix:/tmp/ath_calc.sock" AS CONN;
+SEND "12 30" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+SEND "5 7" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+CLOSE CONN;
+THIS.DIE();

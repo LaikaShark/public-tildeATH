@@ -637,14 +637,29 @@ def test_program_with_env(
     assert output == expected
 
 
+# Networking examples over Unix-domain sockets, in rough order of complexity. A connection is a
+# channel whose liveness is the socket; peer-close ends the ~ATH(CONN) loop. Output is byte-
+# identical under both compose modes — socket handles are plain alive objects (never interned)
+# and message framing reuses the same string builders as the actor cases. Gated on AF_UNIX
+# availability so sandboxed CI skips rather than fails.
+NET_CASES = [
+    pytest.param("net/echo_unix/main.ath", "hello\nworld\ndone\n", id="echo"),
+    pytest.param("net/upper_unix/main.ath", "HELLO\nWORLD\ndone\n", id="upper"),
+    pytest.param("net/calc_unix/main.ath", "42\n12\ndone\n", id="calc"),
+    pytest.param(
+        "net/chat_unix/main.ath",
+        "[alice] hello\n[alice] anyone there\n[bob] hi alice\ndone\n",
+        id="chat",
+    ),
+]
+
+
 @pytest.mark.skipif(not _HAVE_AF_UNIX, reason="AF_UNIX sockets unavailable (sandboxed)")
 @pytest.mark.parametrize("compose", ["fresh", "intern"])
-def test_networking_echo_unix(compose: str, tmp_path: Path):
-    """An echo server + client talking over a Unix-domain socket, both as actors in one process.
-    A connection is a channel whose liveness is the socket: peer-close ends the ~ATH(CONN) loop.
-    Output is byte-identical under both compose modes — socket handles are plain alive objects
-    (never interned) and message framing reuses the same string builders as the actor cases."""
-    source = PROGRAMS / "net/echo_unix/main.ath"
+@pytest.mark.parametrize("rel_path,expected", NET_CASES)
+def test_networking(rel_path: str, expected: str, compose: str, tmp_path: Path):
+    """Each networking example must run and produce identical output under both compose modes."""
+    source = PROGRAMS / rel_path
     assert source.exists(), f"missing program file: {source}"
     output = _compile_and_run(source, tmp_path, compose=compose)
-    assert output == "hello\nworld\ndone\n"
+    assert output == expected

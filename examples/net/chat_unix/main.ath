@@ -1,0 +1,14 @@
+// A chat relay: a server multiplexes two clients (alice and bob) into one
+// transcript. Each client's lines are relayed tagged with its name, then the
+// run prints done. The cooperative scheduler is deterministic, so the transcript
+// order is stable and identical under both composition modes.
+IMPORTF "server.ath" AS SERVER;
+IMPORTF "alice.ath" AS ALICE;
+IMPORTF "bob.ath" AS BOB;
+NURSERY AS N;
+SPAWN SERVER NULL INTO N AS S;
+SPAWN ALICE NULL INTO N AS A;
+SPAWN BOB NULL INTO N AS B;
+JOIN N;
+PRINT done;
+THIS.DIE();

@@ -1,0 +1,10 @@
+// An uppercase-transform server and a client, both actors in one process over a
+// Unix-domain socket. Output: HELLO, then WORLD, then done.
+IMPORTF "server.ath" AS SERVER;
+IMPORTF "client.ath" AS CLIENT;
+NURSERY AS N;
+SPAWN SERVER NULL INTO N AS S;
+SPAWN CLIENT NULL INTO N AS C;
+JOIN N;
+PRINT done;
+THIS.DIE();

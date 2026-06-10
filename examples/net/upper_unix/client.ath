@@ -1,0 +1,10 @@
+// Send two lines, print each uppercased reply, then hang up.
+CONNECT "unix:/tmp/ath_upper.sock" AS CONN;
+SEND "hello" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+SEND "world" TO CONN;
+RECV FROM CONN AS R;
+PRINT $R;
+CLOSE CONN;
+THIS.DIE();

@@ -1,0 +1,14 @@
+// Uppercase each line the client sends, bouncing it back, until the client hangs
+// up. One step past echo: the server does real work on every line. The connection
+// CONN is a channel whose liveness is the socket, so peer-close ends the loop.
+IMPORTF <upper> AS UPPER;
+LISTEN "unix:/tmp/ath_upper.sock" AS SERVER;
+ACCEPT FROM SERVER AS CONN;
+~ATH(CONN)
+{
+    RECV FROM CONN AS LINE;
+    UPPER [LINE, NULL]CAPS;
+    SEND CAPS TO CONN;
+}
+CLOSE SERVER;
+THIS.DIE();

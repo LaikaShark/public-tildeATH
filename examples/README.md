@@ -35,7 +35,10 @@ modes (`fresh` and `intern`) and is the executable spec for their output.
   `yield_interleave`, `mailbox`, `producer_consumer`, `fan_out`, `fork_join`,
   `ping_pong`, `supervisor_cancel`, `pipeline`, `actor_sleep`.
 - **net/** — networking, where a connection is a channel whose liveness is the
-  socket: `echo_unix` (an echo server and client over a Unix-domain socket).
+  socket (all over Unix-domain sockets): `echo_unix` (echo back each line),
+  `upper_unix` (uppercase each line), `calc_unix` (a sum request/response
+  protocol), `chat_unix` (a relay multiplexing two clients, one handler actor
+  per connection, into one transcript).
 - **programs/** — complete applications and algorithms: `calculator`, `maze`,
   `sudoku`, `brainfuck`, `rule110`, `fizzbuzz`, `primes`, `collatz`, `modexp`,
   `newton_sqrt`, `guess`, `wordfreq`, `balanced`, `rle`.

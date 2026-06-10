@@ -1,0 +1,13 @@
+// One per connection. ARGS packs the connection and the shared transcript
+// channel. The client's first line is its name; every later line is relayed,
+// tagged with that name, into the transcript until the client hangs up.
+BIFURCATE ARGS[CONN, LOG];
+RECV FROM CONN AS NAME;
+RECV FROM CONN AS LINE;
+~ATH(CONN)
+{
+    TEXT "[" NAME "] " LINE AS MSG;
+    SEND MSG TO LOG;
+    RECV FROM CONN AS LINE;
+}
+THIS.DIE();

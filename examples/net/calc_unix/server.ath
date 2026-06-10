@@ -1,0 +1,23 @@
+// A tiny request/response protocol: each request line is two space-separated
+// integers; the reply is their sum as a decimal string. Serves one connection
+// until the client hangs up (peer-close kills CONN and ends the loop).
+IMPORTF <split> AS SPLIT;
+IMPORTF <parse> AS PARSE;
+IMPORTF <add> AS ADD;
+IMPORTF <to_string> AS TO_STRING;
+LISTEN "unix:/tmp/ath_calc.sock" AS SERVER;
+ACCEPT FROM SERVER AS CONN;
+~ATH(CONN)
+{
+    RECV FROM CONN AS LINE;
+    SPLIT [LINE, " "]PARTS;
+    BIFURCATE PARTS[ASTR, REST];
+    BIFURCATE REST[BSTR, TAIL];
+    PARSE [ASTR, NULL]A;
+    PARSE [BSTR, NULL]B;
+    ADD [A, B]SUM;
+    TO_STRING [SUM, NULL]REPLY;
+    SEND REPLY TO CONN;
+}
+CLOSE SERVER;
+THIS.DIE();

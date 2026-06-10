@@ -1,0 +1,22 @@
+// A chat room over a Unix-domain socket. Accept K clients; spawn one handler
+// actor per connection (so connections are served concurrently via the
+// cooperative scheduler), and fan their messages into a single transcript
+// channel that a printer actor drains in arrival order.
+IMPORTF "handler.ath" AS HANDLER;
+IMPORTF "printer.ath" AS PRINTER;
+IMPORT NUMBER 2 AS K;
+LISTEN "unix:/tmp/ath_chat.sock" AS L;
+CHANNEL AS LOG;
+SPAWN PRINTER LOG AS P;
+NURSERY AS HN;
+LOOP K
+{
+    ACCEPT FROM L AS CONN;
+    BIFURCATE [CONN, LOG] HARG;
+    SPAWN HANDLER HARG INTO HN AS H;
+}
+JOIN HN;        // every client has hung up
+CLOSE LOG;      // the printer stops at EOF
+JOIN P;
+CLOSE L;
+THIS.DIE();

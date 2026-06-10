@@ -1,0 +1,7 @@
+// Join the chat as "alice": first line is the name, then two messages.
+CONNECT "unix:/tmp/ath_chat.sock" AS CONN;
+SEND "alice" TO CONN;
+SEND "hello" TO CONN;
+SEND "anyone there" TO CONN;
+CLOSE CONN;
+THIS.DIE();
