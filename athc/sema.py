@@ -42,7 +42,7 @@ from athc.ast import (
 )
 
 
-PREDEFINED_MAIN = frozenset({"THIS", "NULL"})
+PREDEFINED_MAIN = frozenset({"THIS", "NULL", "ARGS"})
 PREDEFINED_FUNC = frozenset({"THIS", "NULL", "ARGS"})
 READ_ONLY = frozenset({"NULL"})
 

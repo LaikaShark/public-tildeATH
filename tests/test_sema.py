@@ -213,9 +213,9 @@ def test_args_is_in_scope_in_function_body():
     analyze(program, function_table)
 
 
-def test_args_not_in_scope_at_top_level():
-    with pytest.raises(SemaError, match="ARGS.*not in scope"):
-        analyze(parse("ARGS.DIE();"))
+def test_args_in_scope_at_top_level():
+    # ARGS is predefined in main (populated from CLI argv)
+    analyze(parse("BIFURCATE ARGS[X, Y];\nTHIS.DIE();"))
 
 
 def test_die_arg_must_be_in_scope():

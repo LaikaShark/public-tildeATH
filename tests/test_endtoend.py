@@ -34,9 +34,15 @@ def _compile(
     )
 
 
-def _run(binary: Path, timeout: float = 5.0, stdin_input: str | None = None) -> subprocess.CompletedProcess:
+def _run(
+    binary: Path,
+    timeout: float = 5.0,
+    stdin_input: str | None = None,
+    run_args: list[str] | None = None,
+) -> subprocess.CompletedProcess:
+    cmd = [str(binary)] + (run_args or [])
     return subprocess.run(
-        [str(binary)],
+        cmd,
         input=stdin_input,
         capture_output=True,
         text=True,
@@ -49,13 +55,14 @@ def _build_and_run(
     tmp_path: Path,
     stdin_input: str | None = None,
     extra_args: list[str] | None = None,
+    run_args: list[str] | None = None,
 ) -> str:
     _ensure_runtime()
     out = tmp_path / "prog"
     compiled = _compile(source_path, out, extra_args=extra_args)
     assert compiled.returncode == 0, f"compile failed:\nstderr:\n{compiled.stderr}"
     assert out.exists(), "compiler did not produce output binary"
-    run = _run(out, stdin_input=stdin_input)
+    run = _run(out, stdin_input=stdin_input, run_args=run_args)
     assert run.returncode == 0, f"binary exited {run.returncode}, stderr:\n{run.stderr}"
     return run.stdout
 
@@ -833,3 +840,40 @@ def test_watch_dies_when_file_deleted_mid_run(tmp_path):
     assert "alive" in output, f"expected at least one alive line; got:\n{output!r}"
     # after file disappears, loop exits and trailing "done" is last output
     assert output.endswith("done\n"), f"expected to end with 'done'; got:\n{output!r}"
+
+
+# ---- command-line ARGS tests ----
+
+def test_args_none(tmp_path):
+    """ARGS is NULL when no CLI args given."""
+    src = tmp_path / "t.ath"
+    src.write_text(
+        "~ATH(ARGS) { }\n"
+        "print no args;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path) == "no args\n"
+
+
+def test_args_single(tmp_path):
+    """Single CLI arg is accessible via BIFURCATE."""
+    src = tmp_path / "t.ath"
+    src.write_text(
+        "BIFURCATE ARGS[FIRST, REST];\n"
+        "print $FIRST;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path, run_args=["hello"]) == "hello\n"
+
+
+def test_args_multiple(tmp_path):
+    """Multiple CLI args form a right-nested cons-list."""
+    src = tmp_path / "t.ath"
+    src.write_text(
+        "BIFURCATE ARGS[A, REST];\n"
+        "BIFURCATE REST[B, _];\n"
+        "print $A;\n"
+        "print $B;\n"
+        "THIS.DIE();\n"
+    )
+    assert _build_and_run(src, tmp_path, run_args=["foo", "bar"]) == "foo\nbar\n"

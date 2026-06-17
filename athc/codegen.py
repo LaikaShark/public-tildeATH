@@ -450,11 +450,21 @@ class Codegen:
             name="ath_coerce_string",
         )
 
+        self.i8_ptr = self.i8.as_pointer()
+        self.i8_ptr_ptr = self.i8_ptr.as_pointer()
+        self.f_build_argv = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i32, self.i8_ptr_ptr]),
+            name="ath_build_argv",
+        )
+
         self.g_null = ir.GlobalVariable(self.module, self.obj_ptr, name="ath_NULL")
         self.g_null.linkage = "external"
 
         self.main_fn = ir.Function(
-            self.module, ir.FunctionType(self.i32, []), name="main"
+            self.module,
+            ir.FunctionType(self.i32, [self.i32, self.i8_ptr_ptr]),
+            name="main",
         )
 
         self.user_fns: dict[str, ir.Function] = {}
@@ -558,8 +568,7 @@ class FunctionEmitter:
         names: set[str] = set()
         _collect_names(self.program.statements, names)
         names.add("THIS")
-        if not self.is_main:
-            names.add("ARGS")
+        names.add("ARGS")
         names.discard("NULL")
 
         entry = self.fn.append_basic_block("entry")
@@ -595,7 +604,12 @@ class FunctionEmitter:
         this_obj = builder.call(self.cg.f_alloc, [])
         builder.store(this_obj, self.slots["THIS"])
 
-        if not self.is_main:
+        if self.is_main:
+            args_obj = builder.call(
+                self.cg.f_build_argv, [self.fn.args[0], self.fn.args[1]]
+            )
+            builder.store(args_obj, self.slots["ARGS"])
+        else:
             builder.store(self.fn.args[0], self.slots["ARGS"])
 
         # Programs that spawn actors drive the scheduler to completion before main returns,

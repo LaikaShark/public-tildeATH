@@ -42,7 +42,7 @@ class Evaluator:
         # lower(name) -> ('builtin', c_symbol) | ('user', Program)
         self.functions = {}
         self.read_line = read_line or (lambda: sys.stdin.readline())
-        top = {"THIS": rt.lib.ath_alloc_alive()}
+        top = {"THIS": rt.lib.ath_alloc_alive(), "ARGS": rt.lib.ath_NULL}
         self.frames = [top]
 
     @property

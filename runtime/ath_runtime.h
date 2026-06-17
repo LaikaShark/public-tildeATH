@@ -100,6 +100,10 @@ ath_obj *ath_char_atom(int c);
 // Build fresh right-nested cons-list from len bytes, terminated with ath_NULL; empty returns ath_NULL
 ath_obj *ath_string_from_bytes(const char *bytes, size_t len);
 
+// Build right-nested cons-list of string objects from argv[1..argc-1].
+// Returns ath_NULL when argc <= 1 (no user args).
+ath_obj *ath_build_argv(int argc, char **argv);
+
 // Slurp a string-like object into a heap byte buffer (caller frees); 0 on success, -1 on malformed
 // string or alloc failure. NULL/dead/empty s yields a successful empty buffer. Used by net.c send.
 int      ath_string_to_bytes(ath_obj *s, char **out_buf, size_t *out_len);

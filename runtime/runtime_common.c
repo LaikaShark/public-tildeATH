@@ -183,6 +183,15 @@ ath_obj *ath_string_from_bytes(const char *bytes, size_t len) {
     return acc;
 }
 
+ath_obj *ath_build_argv(int argc, char **argv) {
+    ath_obj *acc = ath_NULL;
+    for (int i = argc - 1; i >= 1; i--) {
+        ath_obj *s = ath_string_from_bytes(argv[i], strlen(argv[i]));
+        acc = ath_compose(s, acc);
+    }
+    return acc;
+}
+
 ath_obj *ath_coerce_string(ath_obj *v) {
     if (v == NULL || v == ath_NULL) return ath_NULL;
     // Payload-bearing operands become their decimal representation; result inherits v as a dep
