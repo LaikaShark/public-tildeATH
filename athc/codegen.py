@@ -7,6 +7,7 @@ from athc.ast import (
     CloneStmt,
     CloseStmt,
     EveryStmt,
+    ExistsStmt,
     ListdirStmt,
     LoopStmt,
     MkdirStmt,
@@ -405,6 +406,16 @@ class Codegen:
             ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
             name="ath_listdir_obj",
         )
+        self.f_exists = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
+            name="ath_exists",
+        )
+        self.f_exists_obj = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
+            name="ath_exists_obj",
+        )
         self.f_close = ir.Function(
             self.module,
             ir.FunctionType(ir.VoidType(), [self.obj_ptr]),
@@ -777,6 +788,8 @@ class FunctionEmitter:
             self._emit_mkdir(builder, stmt)
         elif isinstance(stmt, ListdirStmt):
             self._emit_listdir(builder, stmt)
+        elif isinstance(stmt, ExistsStmt):
+            self._emit_exists(builder, stmt)
         elif isinstance(stmt, CloseStmt):
             self._emit_close(builder, stmt)
         elif isinstance(stmt, TextStmt):
@@ -1236,6 +1249,17 @@ class FunctionEmitter:
         else:
             path_obj = self._read_var(builder, stmt.path_var)
             result = builder.call(self.cg.f_listdir_obj, [path_obj])
+        self._write_var(builder, stmt.target, result)
+
+    def _emit_exists(self, builder: ir.IRBuilder, stmt) -> None:
+        if stmt.path is not None:
+            path_g = self.cg.make_cstring_global(stmt.path)
+            zero = ir.Constant(self.cg.i32, 0)
+            path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
+            result = builder.call(self.cg.f_exists, [path_ptr])
+        else:
+            path_obj = self._read_var(builder, stmt.path_var)
+            result = builder.call(self.cg.f_exists_obj, [path_obj])
         self._write_var(builder, stmt.target, result)
 
     def _emit_text(self, builder: ir.IRBuilder, stmt: TextStmt) -> None:

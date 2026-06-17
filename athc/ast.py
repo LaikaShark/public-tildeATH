@@ -306,6 +306,16 @@ class ListdirStmt:
 
 
 @dataclass
+class ExistsStmt:
+    """exists "PATH" as VAR; or exists PATH_VAR as VAR; — verdict: alive if path exists."""
+    path: str | None
+    path_var: str | None
+    target: str
+    line: int
+    col: int
+
+
+@dataclass
 class TextPart:
     """A single part inside a `text` statement (§4.4.25). `kind` is
     'str' (a STRING literal, with escapes already decoded) or 'ident'
@@ -470,6 +480,7 @@ Stmt = Union[
     ListenStmt,
     AcceptStmt,
     ConnectStmt,
+    ExistsStmt,
 ]
 
 

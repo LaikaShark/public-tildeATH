@@ -12,6 +12,7 @@ from athc.ast import (
     FuncCallComposeArg,
     FuncCallDecomposeRet,
     ImportBuiltinStmt,
+    ExistsStmt,
     ListdirStmt,
     MkdirStmt,
     Operand,
@@ -151,6 +152,8 @@ class Parser:
             return self._parse_mkdir()
         if tok.kind is TokenKind.KW_LISTDIR:
             return self._parse_listdir()
+        if tok.kind is TokenKind.KW_EXISTS:
+            return self._parse_exists()
         if tok.kind is TokenKind.KW_TEXT:
             return self._parse_text()
         if tok.kind is TokenKind.KW_SPAWN:
@@ -744,6 +747,25 @@ class Parser:
         tgt = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
         return ListdirStmt(path=path, path_var=path_var, target=tgt.value, line=kw.line, col=kw.col)
+
+    def _parse_exists(self):
+        kw = self._expect(TokenKind.KW_EXISTS)
+        tok = self._peek()
+        if tok.kind is TokenKind.STRING:
+            self._advance()
+            path, path_var = tok.value, None
+        elif tok.kind is TokenKind.IDENT:
+            self._advance()
+            path, path_var = None, tok.value
+        else:
+            raise ParseError(
+                f"expected a string literal or variable name after 'exists' but found {describe_token(tok)}",
+                tok.line, tok.col,
+            )
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return ExistsStmt(path=path, path_var=path_var, target=tgt.value, line=kw.line, col=kw.col)
 
     def _parse_text(self) -> TextStmt:
         kw = self._expect(TokenKind.KW_TEXT)

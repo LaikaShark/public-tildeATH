@@ -288,6 +288,8 @@ int      ath_mkdir(const char *path);
 int      ath_mkdir_obj(ath_obj *path_obj);
 ath_obj *ath_listdir(const char *path);
 ath_obj *ath_listdir_obj(ath_obj *path_obj);
+ath_obj *ath_exists(const char *path);
+ath_obj *ath_exists_obj(ath_obj *path_obj);
 
 // Time and randomness; durations are int64 milliseconds. ath_sleep_ms no-op on dead/no-payload n. ath_alloc_timer_ms binds fresh alive object with deadline; duration not dep-tracked on result
 void     ath_sleep_ms(ath_obj *n);

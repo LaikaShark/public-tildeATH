@@ -22,6 +22,7 @@ class TokenKind(Enum):
     KW_CLOSE = auto()
     KW_MKDIR = auto()
     KW_LISTDIR = auto()
+    KW_EXISTS = auto()
     KW_TEXT = auto()
     KW_LOOP = auto()
     KW_EVERY = auto()
@@ -149,6 +150,7 @@ KEYWORDS = {
     "close": TokenKind.KW_CLOSE,
     "mkdir": TokenKind.KW_MKDIR,
     "listdir": TokenKind.KW_LISTDIR,
+    "exists": TokenKind.KW_EXISTS,
     "text": TokenKind.KW_TEXT,
     "loop": TokenKind.KW_LOOP,
     "every": TokenKind.KW_EVERY,

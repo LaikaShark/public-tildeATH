@@ -1413,6 +1413,22 @@ ath_obj *ath_listdir_obj(ath_obj *path_obj) {
     return r;
 }
 
+ath_obj *ath_exists(const char *path) {
+    if (path == NULL) return ath_verdict_false();
+    struct stat st;
+    if (stat(path, &st) == 0) return ath_verdict_true(NULL, NULL);
+    return ath_verdict_false();
+}
+
+ath_obj *ath_exists_obj(ath_obj *path_obj) {
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_to_bytes(path_obj, &buf, &len) != 0) return ath_verdict_false();
+    ath_obj *r = ath_exists(buf);
+    free(buf);
+    return r;
+}
+
 // Build fresh right-nested cons-list from byte buffer; NULL on empty
 static ath_obj *ath_buf_to_string(const char *buf, size_t n) {
     ath_obj *acc = ath_NULL;
