@@ -247,9 +247,10 @@ class TimerStmt:
 
 @dataclass
 class ReadStmt:
-    """read "PATH" as VAR; — slurp file into a string-cons-list owning the
-    file (§4.4.21). Explicit .DIE() or BRANCH consumption deletes it."""
-    path: str
+    """read "PATH" as VAR; or read VAR as TARGET; — slurp file into a
+    string-cons-list owning the file (§4.4.21)."""
+    path: str | None
+    path_var: str | None
     target: str
     line: int
     col: int
@@ -257,10 +258,10 @@ class ReadStmt:
 
 @dataclass
 class WriteStmt:
-    """write SRC to "PATH" [as VERDICT]; — truncate-and-write (§4.4.22)."""
+    """write SRC to "PATH" [as VERDICT]; or write SRC to VAR [as VERDICT]; (§4.4.22)."""
     source: str
-    path: str
-    # None when 'as' clause omitted
+    path: str | None
+    path_var: str | None
     verdict: str | None
     line: int
     col: int
@@ -268,9 +269,10 @@ class WriteStmt:
 
 @dataclass
 class AppendStmt:
-    """append SRC to "PATH" [as VERDICT]; — like write but appends (§4.4.23)."""
+    """append SRC to "PATH" [as VERDICT]; or append SRC to VAR [as VERDICT]; (§4.4.23)."""
     source: str
-    path: str
+    path: str | None
+    path_var: str | None
     verdict: str | None
     line: int
     col: int
@@ -279,6 +281,25 @@ class AppendStmt:
 @dataclass
 class CloseStmt:
     """close VAR; — disown the file (if owned) and kill VAR (§4.4.24)."""
+    target: str
+    line: int
+    col: int
+
+
+@dataclass
+class MkdirStmt:
+    """mkdir "PATH"; or mkdir VAR; — create directory (recursive)."""
+    path: str | None
+    path_var: str | None
+    line: int
+    col: int
+
+
+@dataclass
+class ListdirStmt:
+    """listdir "PATH" as VAR; or listdir PATH_VAR as VAR; — list directory entries."""
+    path: str | None
+    path_var: str | None
     target: str
     line: int
     col: int

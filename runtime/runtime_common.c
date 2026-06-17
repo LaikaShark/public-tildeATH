@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <dirent.h>
 
 static ath_obj ath_NULL_storage = { .alive = 0 };
 ath_obj *ath_NULL = &ath_NULL_storage;
@@ -1312,6 +1313,102 @@ static int ath_string_slurp(ath_obj *s, char **out_buf, size_t *out_len) {
 // Public wrapper over ath_string_slurp for net.c (string -> heap bytes; caller frees).
 int ath_string_to_bytes(ath_obj *s, char **out_buf, size_t *out_len) {
     return ath_string_slurp(s, out_buf, out_len);
+}
+
+ath_obj *ath_alloc_read_file_obj(ath_obj *path_obj) {
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(path_obj, &buf, &len) != 0) return ath_alloc_dead_obj();
+    ath_obj *r = ath_alloc_read_file(buf);
+    free(buf);
+    return r;
+}
+
+ath_obj *ath_write_file_obj(ath_obj *s, ath_obj *path_obj) {
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(path_obj, &buf, &len) != 0) return ath_alloc_dead_obj();
+    ath_obj *r = ath_write_file(s, buf);
+    free(buf);
+    return r;
+}
+
+ath_obj *ath_append_file_obj(ath_obj *s, ath_obj *path_obj) {
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(path_obj, &buf, &len) != 0) return ath_alloc_dead_obj();
+    ath_obj *r = ath_append_file(s, buf);
+    free(buf);
+    return r;
+}
+
+static int ath_mkdir_recursive(const char *path) {
+    if (path == NULL || *path == '\0') return -1;
+    char *tmp = strdup(path);
+    if (!tmp) return -1;
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(tmp, 0755);
+            *p = '/';
+        }
+    }
+    int rc = mkdir(tmp, 0755);
+    free(tmp);
+    return (rc == 0 || errno == EEXIST) ? 0 : -1;
+}
+
+int ath_mkdir(const char *path) {
+    return ath_mkdir_recursive(path);
+}
+
+int ath_mkdir_obj(ath_obj *path_obj) {
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(path_obj, &buf, &len) != 0) return -1;
+    int rc = ath_mkdir(buf);
+    free(buf);
+    return rc;
+}
+
+ath_obj *ath_listdir(const char *path) {
+    if (path == NULL) return ath_NULL;
+    DIR *d = opendir(path);
+    if (!d) return ath_NULL;
+    // Collect entries into a temporary array, then build right-to-left
+    struct dirent *ent;
+    size_t cap = 64, count = 0;
+    char **entries = (char **)malloc(cap * sizeof(char *));
+    if (!entries) { closedir(d); return ath_NULL; }
+    while ((ent = readdir(d)) != NULL) {
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+            continue;
+        if (count >= cap) {
+            cap *= 2;
+            char **tmp = (char **)realloc(entries, cap * sizeof(char *));
+            if (!tmp) break;
+            entries = tmp;
+        }
+        entries[count++] = strdup(ent->d_name);
+    }
+    closedir(d);
+    ath_obj *acc = ath_NULL;
+    for (size_t i = count; i > 0; i--) {
+        ath_obj *s = ath_string_from_bytes(entries[i - 1], strlen(entries[i - 1]));
+        acc = ath_compose(s, acc);
+        free(entries[i - 1]);
+    }
+    free(entries);
+    return acc;
+}
+
+ath_obj *ath_listdir_obj(ath_obj *path_obj) {
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_slurp(path_obj, &buf, &len) != 0) return ath_NULL;
+    ath_obj *r = ath_listdir(buf);
+    free(buf);
+    return r;
 }
 
 // Build fresh right-nested cons-list from byte buffer; NULL on empty

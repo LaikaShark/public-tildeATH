@@ -14,7 +14,8 @@ from athc.ast import (
     AthLoop, BranchStmt, CloneStmt, CloseStmt, ComposeStmt, DecomposeStmt,
     DieStmt, EveryStmt, FuncCallComposeArg, FuncCallDecomposeRet,
     ImportBuiltinStmt, ImportFuncStmt, ImportNumberStmt, ImportStmt,
-    InputStmt, LoopStmt, PrintStmt, ReadStmt, SliceStmt, SubscriptStmt,
+    InputStmt, ListdirStmt, LoopStmt, MkdirStmt, PrintStmt, ReadStmt,
+    SliceStmt, SubscriptStmt,
     TextStmt, TimerStmt, WatchStmt, WriteStmt, AppendStmt, SleepStmt,
 )
 from athc.loader import _resolve_search_path
@@ -320,16 +321,36 @@ class Evaluator:
         self._write(s.target, self.rt.lib.ath_alloc_timer_ms(self._read(s.duration)))
 
     def _read_file(self, s: ReadStmt):
-        self._write(s.target, self.rt.lib.ath_alloc_read_file(s.path.encode("utf-8")))
+        if s.path is not None:
+            self._write(s.target, self.rt.lib.ath_alloc_read_file(s.path.encode("utf-8")))
+        else:
+            self._write(s.target, self.rt.lib.ath_alloc_read_file_obj(self._read(s.path_var)))
 
     def _write_file(self, s):
-        fn = self.rt.lib.ath_append_file if isinstance(s, AppendStmt) else self.rt.lib.ath_write_file
-        verdict = fn(self._read(s.source), s.path.encode("utf-8"))
+        src = self._read(s.source)
+        if s.path is not None:
+            fn = self.rt.lib.ath_append_file if isinstance(s, AppendStmt) else self.rt.lib.ath_write_file
+            verdict = fn(src, s.path.encode("utf-8"))
+        else:
+            fn = self.rt.lib.ath_append_file_obj if isinstance(s, AppendStmt) else self.rt.lib.ath_write_file_obj
+            verdict = fn(src, self._read(s.path_var))
         if s.verdict is not None:
             self._write(s.verdict, verdict)
 
     def _close(self, s: CloseStmt):
         self.rt.lib.ath_close(self._read(s.target))
+
+    def _mkdir(self, s):
+        if s.path is not None:
+            self.rt.lib.ath_mkdir(s.path.encode("utf-8"))
+        else:
+            self.rt.lib.ath_mkdir_obj(self._read(s.path_var))
+
+    def _listdir(self, s):
+        if s.path is not None:
+            self._write(s.target, self.rt.lib.ath_listdir(s.path.encode("utf-8")))
+        else:
+            self._write(s.target, self.rt.lib.ath_listdir_obj(self._read(s.path_var)))
 
 
 Evaluator._DISPATCH = {
@@ -359,4 +380,6 @@ Evaluator._DISPATCH = {
     WriteStmt: Evaluator._write_file,
     AppendStmt: Evaluator._write_file,
     CloseStmt: Evaluator._close,
+    MkdirStmt: Evaluator._mkdir,
+    ListdirStmt: Evaluator._listdir,
 }

@@ -12,6 +12,8 @@ from athc.ast import (
     FuncCallComposeArg,
     FuncCallDecomposeRet,
     ImportBuiltinStmt,
+    ListdirStmt,
+    MkdirStmt,
     Operand,
     ImportFuncStmt,
     ImportNumberStmt,
@@ -145,6 +147,10 @@ class Parser:
             return self._parse_write_or_append(append=True)
         if tok.kind is TokenKind.KW_CLOSE:
             return self._parse_close()
+        if tok.kind is TokenKind.KW_MKDIR:
+            return self._parse_mkdir()
+        if tok.kind is TokenKind.KW_LISTDIR:
+            return self._parse_listdir()
         if tok.kind is TokenKind.KW_TEXT:
             return self._parse_text()
         if tok.kind is TokenKind.KW_SPAWN:
@@ -478,12 +484,24 @@ class Parser:
 
     def _parse_read(self) -> ReadStmt:
         kw = self._expect(TokenKind.KW_READ)
-        path = self._expect(TokenKind.STRING)
+        tok = self._peek()
+        if tok.kind is TokenKind.STRING:
+            self._advance()
+            path, path_var = tok.value, None
+        elif tok.kind is TokenKind.IDENT:
+            self._advance()
+            path, path_var = None, tok.value
+        else:
+            raise ParseError(
+                f"expected a string literal or variable name after 'read' but found {describe_token(tok)}",
+                tok.line, tok.col,
+            )
         self._expect(TokenKind.KW_AS)
         tgt = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
         return ReadStmt(
-            path=path.value,
+            path=path,
+            path_var=path_var,
             target=tgt.value,
             line=kw.line,
             col=kw.col,
@@ -494,7 +512,6 @@ class Parser:
             TokenKind.KW_APPEND if append else TokenKind.KW_WRITE
         )
         src = self._expect(TokenKind.IDENT)
-        # 'to' is contextual: IDENT whose value matches "to" (case-insensitive); elsewhere a normal identifier
         to_tok = self._peek()
         if to_tok.kind is not TokenKind.IDENT or to_tok.value.lower() != "to":
             raise ParseError(
@@ -504,7 +521,18 @@ class Parser:
                 to_tok.col,
             )
         self._advance()
-        path = self._expect(TokenKind.STRING)
+        tok = self._peek()
+        if tok.kind is TokenKind.STRING:
+            self._advance()
+            path, path_var = tok.value, None
+        elif tok.kind is TokenKind.IDENT:
+            self._advance()
+            path, path_var = None, tok.value
+        else:
+            raise ParseError(
+                f"expected a string literal or variable name after 'to' but found {describe_token(tok)}",
+                tok.line, tok.col,
+            )
         verdict: str | None = None
         if self._peek().kind is TokenKind.KW_AS:
             self._advance()
@@ -514,7 +542,8 @@ class Parser:
         cls = AppendStmt if append else WriteStmt
         return cls(
             source=src.value,
-            path=path.value,
+            path=path,
+            path_var=path_var,
             verdict=verdict,
             line=kw.line,
             col=kw.col,
@@ -679,6 +708,42 @@ class Parser:
         return ConnectStmt(
             host=host.value, port=port, target=tgt.value, line=kw.line, col=kw.col
         )
+
+    def _parse_mkdir(self):
+        kw = self._expect(TokenKind.KW_MKDIR)
+        tok = self._peek()
+        if tok.kind is TokenKind.STRING:
+            self._advance()
+            path, path_var = tok.value, None
+        elif tok.kind is TokenKind.IDENT:
+            self._advance()
+            path, path_var = None, tok.value
+        else:
+            raise ParseError(
+                f"expected a string literal or variable name after 'mkdir' but found {describe_token(tok)}",
+                tok.line, tok.col,
+            )
+        self._expect(TokenKind.SEMI)
+        return MkdirStmt(path=path, path_var=path_var, line=kw.line, col=kw.col)
+
+    def _parse_listdir(self):
+        kw = self._expect(TokenKind.KW_LISTDIR)
+        tok = self._peek()
+        if tok.kind is TokenKind.STRING:
+            self._advance()
+            path, path_var = tok.value, None
+        elif tok.kind is TokenKind.IDENT:
+            self._advance()
+            path, path_var = None, tok.value
+        else:
+            raise ParseError(
+                f"expected a string literal or variable name after 'listdir' but found {describe_token(tok)}",
+                tok.line, tok.col,
+            )
+        self._expect(TokenKind.KW_AS)
+        tgt = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return ListdirStmt(path=path, path_var=path_var, target=tgt.value, line=kw.line, col=kw.col)
 
     def _parse_text(self) -> TextStmt:
         kw = self._expect(TokenKind.KW_TEXT)

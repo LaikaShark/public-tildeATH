@@ -7,7 +7,9 @@ from athc.ast import (
     CloneStmt,
     CloseStmt,
     EveryStmt,
+    ListdirStmt,
     LoopStmt,
+    MkdirStmt,
     ComposeStmt,
     DecomposeStmt,
     DieStmt,
@@ -117,11 +119,22 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.duration)
             names.add(s.target)
         elif isinstance(s, ReadStmt):
+            if s.path_var is not None:
+                names.add(s.path_var)
             names.add(s.target)
         elif isinstance(s, (WriteStmt, AppendStmt)):
             names.add(s.source)
+            if s.path_var is not None:
+                names.add(s.path_var)
             if s.verdict is not None:
                 names.add(s.verdict)
+        elif isinstance(s, MkdirStmt):
+            if s.path_var is not None:
+                names.add(s.path_var)
+        elif isinstance(s, ListdirStmt):
+            if s.path_var is not None:
+                names.add(s.path_var)
+            names.add(s.target)
         elif isinstance(s, CloseStmt):
             names.add(s.target)
         elif isinstance(s, PrintStmt):
@@ -356,6 +369,41 @@ class Codegen:
             self.module,
             ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.i8.as_pointer()]),
             name="ath_append_file",
+        )
+        self.f_alloc_read_file_obj = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
+            name="ath_alloc_read_file_obj",
+        )
+        self.f_write_file_obj = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.obj_ptr]),
+            name="ath_write_file_obj",
+        )
+        self.f_append_file_obj = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.obj_ptr]),
+            name="ath_append_file_obj",
+        )
+        self.f_mkdir = ir.Function(
+            self.module,
+            ir.FunctionType(self.i32, [self.i8.as_pointer()]),
+            name="ath_mkdir",
+        )
+        self.f_mkdir_obj = ir.Function(
+            self.module,
+            ir.FunctionType(self.i32, [self.obj_ptr]),
+            name="ath_mkdir_obj",
+        )
+        self.f_listdir = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.i8.as_pointer()]),
+            name="ath_listdir",
+        )
+        self.f_listdir_obj = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr]),
+            name="ath_listdir_obj",
         )
         self.f_close = ir.Function(
             self.module,
@@ -725,6 +773,10 @@ class FunctionEmitter:
             self._emit_write_or_append(builder, stmt, append=False)
         elif isinstance(stmt, AppendStmt):
             self._emit_write_or_append(builder, stmt, append=True)
+        elif isinstance(stmt, MkdirStmt):
+            self._emit_mkdir(builder, stmt)
+        elif isinstance(stmt, ListdirStmt):
+            self._emit_listdir(builder, stmt)
         elif isinstance(stmt, CloseStmt):
             self._emit_close(builder, stmt)
         elif isinstance(stmt, TextStmt):
@@ -1134,28 +1186,57 @@ class FunctionEmitter:
         self._write_var(builder, stmt.target, result)
 
     def _emit_read(self, builder: ir.IRBuilder, stmt: ReadStmt) -> None:
-        path_g = self.cg.make_cstring_global(stmt.path)
-        zero = ir.Constant(self.cg.i32, 0)
-        path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
-        result = builder.call(self.cg.f_alloc_read_file, [path_ptr])
+        if stmt.path is not None:
+            path_g = self.cg.make_cstring_global(stmt.path)
+            zero = ir.Constant(self.cg.i32, 0)
+            path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
+            result = builder.call(self.cg.f_alloc_read_file, [path_ptr])
+        else:
+            path_obj = self._read_var(builder, stmt.path_var)
+            result = builder.call(self.cg.f_alloc_read_file_obj, [path_obj])
         self._write_var(builder, stmt.target, result)
 
     def _emit_write_or_append(
         self, builder: ir.IRBuilder, stmt, append: bool
     ) -> None:
         src = self._read_var(builder, stmt.source)
-        path_g = self.cg.make_cstring_global(stmt.path)
-        zero = ir.Constant(self.cg.i32, 0)
-        path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
-        fn = self.cg.f_append_file if append else self.cg.f_write_file
-        verdict = builder.call(fn, [src, path_ptr])
+        if stmt.path is not None:
+            path_g = self.cg.make_cstring_global(stmt.path)
+            zero = ir.Constant(self.cg.i32, 0)
+            path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
+            fn = self.cg.f_append_file if append else self.cg.f_write_file
+            verdict = builder.call(fn, [src, path_ptr])
+        else:
+            path_obj = self._read_var(builder, stmt.path_var)
+            fn = self.cg.f_append_file_obj if append else self.cg.f_write_file_obj
+            verdict = builder.call(fn, [src, path_obj])
         if stmt.verdict is not None:
             self._write_var(builder, stmt.verdict, verdict)
-        # Otherwise verdict object is allocated and discarded
 
     def _emit_close(self, builder: ir.IRBuilder, stmt: CloseStmt) -> None:
         v = self._read_var(builder, stmt.target)
         builder.call(self.cg.f_close, [v])
+
+    def _emit_mkdir(self, builder: ir.IRBuilder, stmt) -> None:
+        if stmt.path is not None:
+            path_g = self.cg.make_cstring_global(stmt.path)
+            zero = ir.Constant(self.cg.i32, 0)
+            path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
+            builder.call(self.cg.f_mkdir, [path_ptr])
+        else:
+            path_obj = self._read_var(builder, stmt.path_var)
+            builder.call(self.cg.f_mkdir_obj, [path_obj])
+
+    def _emit_listdir(self, builder: ir.IRBuilder, stmt) -> None:
+        if stmt.path is not None:
+            path_g = self.cg.make_cstring_global(stmt.path)
+            zero = ir.Constant(self.cg.i32, 0)
+            path_ptr = builder.gep(path_g, [zero, zero], inbounds=True)
+            result = builder.call(self.cg.f_listdir, [path_ptr])
+        else:
+            path_obj = self._read_var(builder, stmt.path_var)
+            result = builder.call(self.cg.f_listdir_obj, [path_obj])
+        self._write_var(builder, stmt.target, result)
 
     def _emit_text(self, builder: ir.IRBuilder, stmt: TextStmt) -> None:
         """Emit ENTANGLE-less concatenation chain for `text` (§4.4.25).

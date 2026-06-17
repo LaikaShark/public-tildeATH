@@ -19,6 +19,8 @@ from athc.ast import (
     ImportNumberStmt,
     ImportStmt,
     InputStmt,
+    ListdirStmt,
+    MkdirStmt,
     PrintStmt,
     Program,
     ReadStmt,
@@ -188,13 +190,25 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             _check_write(s.target, s)
             defined.add(s.target)
         elif isinstance(s, ReadStmt):
+            if s.path_var is not None:
+                _check_read(s.path_var, defined, s)
             _check_write(s.target, s)
             defined.add(s.target)
         elif isinstance(s, (WriteStmt, AppendStmt)):
             _check_read(s.source, defined, s)
+            if s.path_var is not None:
+                _check_read(s.path_var, defined, s)
             if s.verdict is not None:
                 _check_write(s.verdict, s)
                 defined.add(s.verdict)
+        elif isinstance(s, MkdirStmt):
+            if s.path_var is not None:
+                _check_read(s.path_var, defined, s)
+        elif isinstance(s, ListdirStmt):
+            if s.path_var is not None:
+                _check_read(s.path_var, defined, s)
+            _check_write(s.target, s)
+            defined.add(s.target)
         elif isinstance(s, CloseStmt):
             _check_read(s.target, defined, s)
         elif isinstance(s, TextStmt):
