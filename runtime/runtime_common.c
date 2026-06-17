@@ -1221,6 +1221,12 @@ ath_obj *ath_alloc_read_file(const char *path) {
     }
     fclose(fp);
 
+    // Empty file: return ath_NULL (matches TEXT "" semantics)
+    if (sz == 0) {
+        free(buf);
+        return ath_NULL;
+    }
+
     // Build cons-list right-to-left; tail uses regular intern-mode-aware compose path
     ath_obj *tail = ath_NULL;
     for (long i = sz; i > 1; i--) {
@@ -1230,12 +1236,8 @@ ath_obj *ath_alloc_read_file(const char *path) {
 
     // Head: fresh non-interned wrapper carrying file ownership; explicit left/right bypasses hash-cons, unique per call
     ath_obj *head = ath_alloc_alive();
-    if (sz > 0) {
-        head->left = ath_char_atom((unsigned char)buf[0]);
-        head->right = tail;
-    } else {
-        // Empty file: head is empty string but owns path; left=right=NULL keeps lazy-half semantics
-    }
+    head->left = ath_char_atom((unsigned char)buf[0]);
+    head->right = tail;
 
     // Strdup path so caller can free its argument
     size_t plen = strlen(path);
