@@ -9,6 +9,8 @@ class TokenKind(Enum):
     KW_BIFURCATE = auto()
     KW_PRINT = auto()
     KW_INPUT = auto()
+    KW_INPUT_CHAR = auto()
+    KW_EMIT = auto()
     KW_EXECUTE = auto()
     KW_WATCH = auto()
     KW_BRANCH = auto()
@@ -137,6 +139,8 @@ KEYWORDS = {
     "bifurcate": TokenKind.KW_BIFURCATE,
     "print": TokenKind.KW_PRINT,
     "input": TokenKind.KW_INPUT,
+    "input_char": TokenKind.KW_INPUT_CHAR,
+    "emit": TokenKind.KW_EMIT,
     "execute": TokenKind.KW_EXECUTE,
     "watch": TokenKind.KW_WATCH,
     "branch": TokenKind.KW_BRANCH,
@@ -467,6 +471,8 @@ class Lexer:
                     kind = KEYWORDS[folded]
                     self._emit(kind, word, line, col)
                     if kind is TokenKind.KW_PRINT:
+                        self._read_print_payload()
+                    elif kind is TokenKind.KW_EMIT:
                         self._read_print_payload()
                 elif folded in RESERVED_V1:
                     self._emit(TokenKind.RESERVED, word, line, col)

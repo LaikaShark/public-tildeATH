@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "ath_runtime.h"
+#include <termios.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -219,6 +220,30 @@ ath_obj *ath_input_line(void) {
         acc = ath_compose(c, acc);
     }
     return acc;
+}
+
+ath_obj *ath_input_char(void) {
+    struct termios old, raw;
+    int is_tty = (tcgetattr(STDIN_FILENO, &old) == 0);
+    if (is_tty) {
+        raw = old;
+        raw.c_lflag &= ~(ICANON | ECHO);
+        raw.c_cc[VMIN] = 1;
+        raw.c_cc[VTIME] = 0;
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    }
+
+    unsigned char c;
+    ssize_t n = read(STDIN_FILENO, &c, 1);
+
+    if (is_tty) tcsetattr(STDIN_FILENO, TCSAFLUSH, &old);
+
+    if (n != 1) return ath_alloc_number(-1);
+    return ath_alloc_number((int64_t)c);
+}
+
+void ath_flush(void) {
+    fflush(stdout);
 }
 
 // Forward decl: numeric rendering shared with ath_to_string

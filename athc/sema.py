@@ -19,6 +19,8 @@ from athc.ast import (
     ImportNumberStmt,
     ImportStmt,
     InputStmt,
+    InputCharStmt,
+    EmitStmt,
     ExistsStmt,
     ListdirStmt,
     MkdirStmt,
@@ -144,6 +146,13 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
         elif isinstance(s, InputStmt):
             _check_write(s.var, s)
             defined.add(s.var)
+        elif isinstance(s, InputCharStmt):
+            _check_write(s.var, s)
+            defined.add(s.var)
+        elif isinstance(s, EmitStmt):
+            for part in s.parts:
+                if part.kind == "var":
+                    _check_read(part.value, defined, part)
         elif isinstance(s, ImportFuncStmt):
             pass
         elif isinstance(s, FuncCallComposeArg):

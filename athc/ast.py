@@ -106,6 +106,21 @@ class InputStmt:
 
 
 @dataclass
+class InputCharStmt:
+    var: str
+    line: int
+    col: int
+
+
+@dataclass
+class EmitStmt:
+    # list[PrintPart] in source order (same structure as PrintStmt, but no trailing newline)
+    parts: list
+    line: int
+    col: int
+
+
+@dataclass
 class ImportFuncStmt:
     path: str
     name: str
@@ -453,6 +468,8 @@ Stmt = Union[
     DieStmt,
     PrintStmt,
     InputStmt,
+    InputCharStmt,
+    EmitStmt,
     ImportFuncStmt,
     ImportBuiltinStmt,
     ImportNumberStmt,

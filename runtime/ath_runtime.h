@@ -94,7 +94,9 @@ void     ath_print_obj_raw(ath_obj *s);
 
 // String I/O; strings are cons-lists of character atoms
 ath_obj *ath_input_line(void);
+ath_obj *ath_input_char(void);
 void     ath_print_obj(ath_obj *s);
+void     ath_flush(void);
 ath_obj *ath_char_atom(int c);
 
 // Build fresh right-nested cons-list from len bytes, terminated with ath_NULL; empty returns ath_NULL
