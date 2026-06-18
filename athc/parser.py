@@ -20,6 +20,8 @@ from athc.ast import (
     ImportNumberStmt,
     ImportStmt,
     InputStmt,
+    InputCharStmt,
+    EmitStmt,
     PrintPart,
     PrintStmt,
     Program,
@@ -56,6 +58,7 @@ from athc.suggest import closest
 _STATEMENT_KEYWORDS = frozenset({
     "import", "importf", "bifurcate", "print", "input", "watch", "branch",
     "clone", "sleep", "timer", "read", "write", "append", "close", "text",
+    "input_char", "emit",
     "loop", "every",
     "spawn", "send", "recv", "yield", "join", "channel", "universe",
     "listen", "accept", "connect",
@@ -126,6 +129,10 @@ class Parser:
             return self._parse_print()
         if tok.kind is TokenKind.KW_INPUT:
             return self._parse_input()
+        if tok.kind is TokenKind.KW_INPUT_CHAR:
+            return self._parse_input_char()
+        if tok.kind is TokenKind.KW_EMIT:
+            return self._parse_emit()
         if tok.kind is TokenKind.ATH:
             return self._parse_ath_loop()
         if tok.kind is TokenKind.KW_BRANCH:
@@ -355,6 +362,30 @@ class Parser:
         var = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
         return InputStmt(var=var.value, line=kw.line, col=kw.col)
+
+    def _parse_input_char(self) -> InputCharStmt:
+        kw = self._expect(TokenKind.KW_INPUT_CHAR)
+        var = self._expect(TokenKind.IDENT)
+        self._expect(TokenKind.SEMI)
+        return InputCharStmt(var=var.value, line=kw.line, col=kw.col)
+
+    def _parse_emit(self) -> EmitStmt:
+        kw = self._expect(TokenKind.KW_EMIT)
+        parts: list[PrintPart] = []
+        while True:
+            tok = self._peek()
+            if tok.kind is TokenKind.RAWTEXT:
+                self._advance()
+                parts.append(PrintPart(kind="lit", value=tok.value,
+                                       line=tok.line, col=tok.col))
+            elif tok.kind is TokenKind.PRINTVAR:
+                self._advance()
+                parts.append(PrintPart(kind="var", value=tok.value,
+                                       line=tok.line, col=tok.col))
+            else:
+                break
+        self._expect(TokenKind.SEMI)
+        return EmitStmt(parts=parts, line=kw.line, col=kw.col)
 
     def _parse_ath_loop(self) -> AthLoop:
         kw = self._expect(TokenKind.ATH)
