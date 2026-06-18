@@ -295,6 +295,15 @@ ath_obj *ath_sock_recv_line(ath_obj *c) {
     }
 }
 
+ath_obj *ath_connect_obj(ath_obj *host_obj, ath_obj *port) {
+    char *buf = NULL;
+    size_t len = 0;
+    if (ath_string_to_bytes(host_obj, &buf, &len) != 0) return net_born_dead();
+    ath_obj *r = ath_connect(buf, port);
+    free(buf);
+    return r;
+}
+
 // ---- teardown -------------------------------------------------------------------------------
 
 void ath_sock_teardown(ath_obj *v) {

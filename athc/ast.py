@@ -432,10 +432,10 @@ class AcceptStmt:
 
 @dataclass
 class ConnectStmt:
-    """connect "host" <port> as C;  |  connect "unix:/path" as C; — open a connection, binding
-    handle C (alive while connected, born dead on failure). A "unix:/p" host selects Unix-domain
-    and takes no port; otherwise TCP to host:port."""
-    host: str
+    """connect "host" <port> as C;  |  connect HOST_VAR <port> as C;  |  connect "unix:/path" as C;
+    Open a connection, binding handle C (alive while connected, born dead on failure)."""
+    host: "str | None"
+    host_var: "str | None"
     # port operand (name or literal) for TCP, else None (Unix-domain)
     port: "str | Operand | None"
     target: str

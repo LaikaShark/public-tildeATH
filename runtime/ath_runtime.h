@@ -346,6 +346,7 @@ ath_obj *ath_listen(const char *spec, ath_obj *port);
 ath_obj *ath_accept(ath_obj *listener);
 // Connect out; host "unix:/p" => AF_UNIX, else TCP to host:port (port's int64 payload).
 ath_obj *ath_connect(const char *host, ath_obj *port);
+ath_obj *ath_connect_obj(ath_obj *host_obj, ath_obj *port);
 // Socket-backed send/recv, reached from ath_send/ath_recv_from when the handle has sock_fd>0.
 // recv returns one newline-framed line as a string; EOF/error => sock_eof latched, handle dies, NULL.
 void     ath_sock_send(ath_obj *c, ath_obj *msg);

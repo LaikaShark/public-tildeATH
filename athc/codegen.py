@@ -485,6 +485,11 @@ class Codegen:
             ir.FunctionType(self.obj_ptr, [self.i8.as_pointer(), self.obj_ptr]),
             name="ath_connect",
         )
+        self.f_connect_obj = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, [self.obj_ptr, self.obj_ptr]),
+            name="ath_connect_obj",
+        )
 
         # Builtin C functions from `import builtin SYM as NAME;`, keyed by raw C symbol to dedupe across files
         self.c_builtin_fns: dict[str, ir.Function] = {}
@@ -869,14 +874,17 @@ class FunctionEmitter:
         )
 
     def _emit_connect(self, builder: ir.IRBuilder, stmt: ConnectStmt) -> None:
-        host_ptr = self._cstring_ptr(builder, stmt.host)
         if stmt.port is not None:
             port = self._emit_operand(builder, stmt.port)
         else:
             port = ir.Constant(self.cg.obj_ptr, None)
-        self._write_var(
-            builder, stmt.target, builder.call(self.cg.f_connect, [host_ptr, port])
-        )
+        if stmt.host is not None:
+            host_ptr = self._cstring_ptr(builder, stmt.host)
+            result = builder.call(self.cg.f_connect, [host_ptr, port])
+        else:
+            host_obj = self._read_var(builder, stmt.host_var)
+            result = builder.call(self.cg.f_connect_obj, [host_obj, port])
+        self._write_var(builder, stmt.target, result)
 
     def _emit_import(self, builder: ir.IRBuilder, stmt: ImportStmt) -> None:
         if stmt.var == "NULL":

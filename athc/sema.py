@@ -263,6 +263,8 @@ def _walk(stmts: list, defined: set, fnames: set, local_builtins: set) -> None:
             _check_write(s.target, s)
             defined.add(s.target)
         elif isinstance(s, ConnectStmt):
+            if s.host_var is not None:
+                _check_read(s.host_var, defined, s)
             _check_operand(s.port, defined, s)
             _check_write(s.target, s)
             defined.add(s.target)

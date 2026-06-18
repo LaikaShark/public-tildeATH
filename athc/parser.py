@@ -688,18 +688,30 @@ class Parser:
         )
 
     def _parse_connect(self) -> ConnectStmt:
-        # connect "host" PORT as C;  (TCP)  |  connect "unix:/path" as C;  (Unix-domain)
+        # connect "host" PORT as C;  (TCP)  |  connect HOST_VAR PORT as C;  |  connect "unix:/path" as C;
         kw = self._expect(TokenKind.KW_CONNECT)
-        host = self._expect(TokenKind.STRING)
+        tok = self._peek()
+        host, host_var = None, None
+        if tok.kind is TokenKind.STRING:
+            self._advance()
+            host = tok.value
+        elif tok.kind is TokenKind.IDENT:
+            self._advance()
+            host_var = tok.value
+        else:
+            raise ParseError(
+                f"expected a string literal or variable name after 'connect' but found {describe_token(tok)}",
+                tok.line, tok.col,
+            )
         port = None
         if self._peek().kind is not TokenKind.KW_AS:
             port = self._parse_operand()
-        is_unix = host.value.startswith("unix:")
+        is_unix = host is not None and host.startswith("unix:")
         if is_unix and port is not None:
             raise ParseError(
                 "a unix-domain 'connect' takes no port", kw.line, kw.col
             )
-        if not is_unix and port is None:
+        if not is_unix and host_var is None and port is None:
             raise ParseError(
                 'a TCP \'connect\' needs a port: connect "host" PORT as C;',
                 kw.line,
@@ -709,7 +721,7 @@ class Parser:
         tgt = self._expect(TokenKind.IDENT)
         self._expect(TokenKind.SEMI)
         return ConnectStmt(
-            host=host.value, port=port, target=tgt.value, line=kw.line, col=kw.col
+            host=host, host_var=host_var, port=port, target=tgt.value, line=kw.line, col=kw.col
         )
 
     def _parse_mkdir(self):
