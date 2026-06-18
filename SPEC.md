@@ -121,10 +121,12 @@ a backslash before any other character (including end-of-input) is a
 compile-time lexical error; the diagnostic reports the backslash position and
 the recognized set
 
-`STRING` names file paths in `importf` (§4.4.8), `watch` (§4.4.11), `read`
-(§4.4.20), `write`/`append` (§4.4.21, §4.4.22), and supplies literal values
-to `text` (§4.4.24). consumers see the decoded bytes; the source `\X` form is
-not retained
+`STRING` names file paths in `importf` (§4.4.8), `watch` (§4.4.11), and
+supplies literal values to `text` (§4.4.24). `read` (§4.4.20), `write`/
+`append` (§4.4.21-22), `mkdir` (§4.4.23a), `listdir` (§4.4.23b), `exists`
+(§4.4.23c), and `connect` (§7.6) accept either a `STRING` literal or an
+`IDENT` variable holding a string. consumers see the decoded bytes; the
+source `\X` form is not retained
 
 ### 2.4 `print` payload
 
@@ -197,6 +199,9 @@ statement     = import-stmt
               | join-stmt
               | channel-stmt
               | universe-stmt
+              | mkdir-stmt
+              | listdir-stmt
+              | exists-stmt
               | listen-stmt
               | accept-stmt
               | connect-stmt ;
@@ -299,21 +304,39 @@ timer-stmt    = 'TIMER' IDENT 'as' IDENT ';' ;
                    IDENT.value ms from now. The duration is a parameter, not
                    a dependency. §4.4.19. *)
 
-read-stmt     = 'read' STRING 'as' IDENT ';' ;
-                (* Slurp the file as a string-cons-list. The result owns the
-                   file: explicit .DIE() or BRANCH consumption deletes it.
-                   §4.4.20. *)
+read-stmt     = 'read' ( STRING | IDENT ) 'as' IDENT ';' ;
+                (* Slurp the file as a string-cons-list. The path may be a
+                   string literal or a variable holding a string. The result
+                   owns the file: explicit .DIE() or BRANCH consumption
+                   deletes it. §4.4.20. *)
 
-write-stmt    = 'write' IDENT 'to' STRING [ 'as' IDENT ] ';' ;
+write-stmt    = 'write' IDENT 'to' ( STRING | IDENT ) [ 'as' IDENT ] ';' ;
                 (* Truncate-and-write the source string to the path. The
-                   optional 'as' clause binds a verdict alive iff the write
-                   succeeded. 'to' is a contextual marker. §4.4.21. *)
+                   path may be a string literal or a variable holding a
+                   string. The optional 'as' clause binds a verdict alive iff
+                   the write succeeded. 'to' is a contextual marker.
+                   §4.4.21. *)
 
-append-stmt   = 'append' IDENT 'to' STRING [ 'as' IDENT ] ';' ;
-                (* Like write-stmt but appends. §4.4.22. *)
+append-stmt   = 'append' IDENT 'to' ( STRING | IDENT ) [ 'as' IDENT ] ';' ;
+                (* Like write-stmt but appends. Path may be literal or
+                   variable. §4.4.22. *)
 
 close-stmt    = 'close' IDENT ';' ;
                 (* Clear owns_path and kill IDENT; the file persists. §4.4.23. *)
+
+mkdir-stmt    = 'mkdir' ( STRING | IDENT ) ';' ;
+                (* Create a directory (and intermediate parents) at the given
+                   path. Silently succeeds if the directory already exists.
+                   No-op on failure. §4.4.23a. *)
+
+listdir-stmt  = 'listdir' ( STRING | IDENT ) 'as' IDENT ';' ;
+                (* List the entries of a directory (excluding `.` and `..`)
+                   as a cons-list of string names and bind the result.
+                   Returns NULL on failure or empty directory. §4.4.23b. *)
+
+exists-stmt   = 'exists' ( STRING | IDENT ) 'as' IDENT ';' ;
+                (* Bind a verdict: alive if the path exists (file or
+                   directory), dead otherwise. §4.4.23c. *)
 
 text-stmt     = 'text' text-part+ 'as' IDENT ';' ;
 text-part     = STRING | IDENT ;
@@ -371,9 +394,11 @@ accept-stmt   = 'accept' 'from' IDENT 'as' IDENT ';' ;
                 (* Accept one connection from a listener, binding a connection
                    handle. 'from' is a contextual marker. §7.6. *)
 
-connect-stmt  = 'connect' STRING [ operand ] 'as' IDENT ';' ;
-                (* Open a connection. "unix:/path" host takes no port; any other
-                   host is TCP and requires a port operand. §7.6. *)
+connect-stmt  = 'connect' ( STRING | IDENT ) [ operand ] 'as' IDENT ';' ;
+                (* Open a connection. The host may be a string literal or a
+                   variable holding a string. "unix:/path" host takes no
+                   port; any other host is TCP and requires a port operand.
+                   §7.6. *)
 
 Notes:
 
@@ -936,9 +961,12 @@ TIMER FIVE_SEC as T;
 print timed out;
 ```
 
-#### 4.4.20 `read "PATH" as VAR;`
+#### 4.4.20 `read PATH as VAR;`
 
 slurp the entire file at `PATH` into a string-cons-list (§4.6) and bind `VAR`.
+`PATH` may be a string literal (`read "data.txt" as F;`) or a variable holding
+a string (`read FNAME as F;`); in the variable form the path is coerced to
+bytes at runtime via `ath_string_slurp`
 
 1. the runtime opens `PATH` for reading (relative to the current working
    directory)
@@ -962,10 +990,11 @@ strings (subscript, slice, `CONCAT`) inherit only the watch_path-driven
 lifetime through the dep machinery — they observe but do not own the file.
 `VAR` must not be `NULL`
 
-#### 4.4.21 `write SRC to "PATH" [as VERDICT];`
+#### 4.4.21 `write SRC to PATH [as VERDICT];`
 
 open `PATH` for writing (truncating), walk `SRC` as a string (§4.6), write
-each character atom's byte, close.
+each character atom's byte, close. `PATH` may be a string literal or a
+variable holding a string
 
 1. read `SRC`. if `SRC` is `NULL` or dead, the file is created and left empty
 2. walk `SRC`'s right-spine to `NULL`, a dead cell, or a non-character left
@@ -980,11 +1009,12 @@ each character atom's byte, close.
 `write` is fire-and-forget by default — capture the verdict to react to
 failure
 
-#### 4.4.22 `append SRC to "PATH" [as VERDICT];`
+#### 4.4.22 `append SRC to PATH [as VERDICT];`
 
 identical to `write` (§4.4.21) except the file is opened in append mode:
 existing contents are preserved and the new bytes follow; an absent file is
-created. failure semantics and the optional verdict clause are the same
+created. `PATH` may be a string literal or a variable holding a string.
+failure semantics and the optional verdict clause are the same
 
 #### 4.4.23 `close VAR;`
 
@@ -996,6 +1026,51 @@ release a file-owning object without deleting the file.
 
 on objects without `owns_path` set, `close` is indistinguishable from
 `VAR.DIE();`
+
+#### 4.4.23a `mkdir PATH;`
+
+create a directory at `PATH`, including any intermediate parents that do not
+exist (recursive). `PATH` may be a string literal (`mkdir "out/data";`) or a
+variable holding a string (`mkdir DIR;`)
+
+1. the runtime calls `mkdir(PATH, 0755)`, creating each component along the
+   path if necessary
+2. if the directory already exists, the statement succeeds silently
+3. on failure (permission denied, invalid path), the statement is a no-op —
+   no error is raised and no verdict is produced
+
+`mkdir` has no return value; it is fire-and-forget
+
+#### 4.4.23b `listdir PATH as VAR;`
+
+list the entries of a directory at `PATH`, excluding `.` and `..`, and bind
+`VAR` to a cons-list of string names. `PATH` may be a string literal or a
+variable holding a string
+
+1. the runtime opens `PATH` with `opendir` and collects all entries
+2. entries are built into a right-nested cons-list of string-cons-lists
+   (§4.6) via `ath_compose` — each element is a filename string, the tail is
+   the next entry or `NULL`
+3. on failure (directory does not exist, permission denied), `VAR` is bound
+   to `NULL`
+4. an empty directory produces `NULL`
+
+the list is suitable for walking with `~ATH(LIST) { BIFURCATE LIST[ENTRY, LIST]; ... }`;
+each `ENTRY` is a string
+
+#### 4.4.23c `exists PATH as VAR;`
+
+test whether `PATH` exists in the filesystem and bind `VAR` to a verdict.
+`PATH` may be a string literal or a variable holding a string
+
+1. the runtime calls `stat(PATH)` — checking for files, directories,
+   symlinks, or any other filesystem entry
+2. if the path exists, `VAR` is bound to a fresh alive object (verdict true)
+3. if the path does not exist or `stat` fails, `VAR` is bound to a born-dead
+   object (verdict false)
+
+`exists` does not set `watch_path` or `owns_path` — the verdict is a snapshot,
+not a live observation
 
 #### 4.4.24 `text PART+ as VAR;`
 
@@ -1890,6 +1965,26 @@ ath_obj *ath_write_file(ath_obj *s, const char *path);
 ath_obj *ath_append_file(ath_obj *s, const char *path);
 void     ath_close(ath_obj *v);
 
+/* Dynamic-path variants (§4.4.20-22). Coerce a string object to bytes
+ * via ath_string_slurp, then delegate to the literal-path form. On
+ * coercion failure, read returns a born-dead object and write/append
+ * return a dead verdict. */
+ath_obj *ath_alloc_read_file_obj(ath_obj *path_obj);
+ath_obj *ath_write_file_obj(ath_obj *s, ath_obj *path_obj);
+ath_obj *ath_append_file_obj(ath_obj *s, ath_obj *path_obj);
+
+/* Filesystem operations (§4.4.23a-c). mkdir creates directories
+ * recursively (succeeds silently if already present). listdir returns
+ * a cons-list of entry-name strings (NULL on failure/empty). exists
+ * returns a verdict. The *_obj variants coerce a string object to a
+ * path. */
+int      ath_mkdir(const char *path);
+int      ath_mkdir_obj(ath_obj *path_obj);
+ath_obj *ath_listdir(const char *path);
+ath_obj *ath_listdir_obj(ath_obj *path_obj);
+ath_obj *ath_exists(const char *path);
+ath_obj *ath_exists_obj(ath_obj *path_obj);
+
 /* Extracts a non-negative int64 iteration count from a number object,
  * clamped at 0 for dead/payload-less/negative inputs. Called by the
  * `loop N` and `every N` statement codegen (§4.4.25-26). */
@@ -2181,9 +2276,10 @@ local tests.
 - `accept from L as C;` — take one connection from listener `L`, binding the fresh
   connection handle `C`. Blocks (parking the actor, §7.6.2) until a client
   connects. `C` is a channel: `send`/`recv` on it cross the wire.
-- `connect "host" PORT as C;` / `connect "unix:/path" as C;` — open a connection,
-  binding `C` (alive while connected, born dead on failure). A `"unix:/path"` host
-  takes no port; any other host is TCP to `host:port`.
+- `connect "host" PORT as C;` / `connect HOST PORT as C;` / `connect "unix:/path" as C;`
+  — open a connection, binding `C` (alive while connected, born dead on failure).
+  The host may be a string literal or a variable holding a string. A `"unix:/path"`
+  host takes no port; any other host is TCP to `host:port`.
 
 `send` and `recv` on a connection handle behave as in §7.2 but move bytes over the
 socket, **newline-framed**:
@@ -2236,6 +2332,7 @@ calls:
 ath_obj *ath_listen(const char *spec, ath_obj *port);   /* spec NULL => TCP(port) */
 ath_obj *ath_accept(ath_obj *listener);
 ath_obj *ath_connect(const char *host, ath_obj *port);  /* "unix:/p" host => AF_UNIX */
+ath_obj *ath_connect_obj(ath_obj *host_obj, ath_obj *port); /* dynamic host via string obj */
 ```
 
 `send`/`recv` on a connection are the same `ath_send`/`ath_recv_from` as §7.5: each

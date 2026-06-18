@@ -1,7 +1,7 @@
 # athc — a compiler for `~ATH`
 
 `~ATH` ("Till Death") is an esolang built around one feature, an 
-object is alive or dead, and control flow is is based on the livelines of objects. a `~ATH(V)` loop
+object is alive or dead, and control flow is based on the liveness of objects. a `~ATH(V)` loop
 runs while `V` is alive and the program ends when it kills `THIS`, the object
 standing for the program itself
 
@@ -44,7 +44,7 @@ THIS.DIE();
 ## Requirements
 
 - python ≥ 3.10 with [`llvmlite`](https://pypi.org/project/llvmlite/) ≥ 0.42
-- a C compiler — `clang` by default (`--cc` to override)
+- a C compiler — `gcc` by default (`--cc` / `$CC` to override)
 - `make` and a POSIX C toolchain
 - [`pipx`](https://pipx.pypa.io/) to install the `athc` command
 
@@ -96,8 +96,8 @@ objects
 
 two halves over a fixed C ABI (`runtime/ath_runtime.h`):
 
-- **`athc/`** — the Python compiler, emitting LLVM IR linked with `clang`
-- **`runtime/`** — the C runtime: allocation and the liveness model
+- **`athc/`** — the Python compiler, emitting LLVM IR linked with `gcc`
+- **`runtime/`** — the C runtime: allocation, liveness, file I/O, concurrency, networking
 - **`stdlib/`** — one `~ATH` shim per builtin, imported via `IMPORTF <name>`
 
 ## Composition modes
@@ -117,11 +117,13 @@ a well-behaved program produces identical output under both
 
 ## Examples
 
-[`examples/`](examples/) has runnable programs for every feature. (also used to test everyting) highlights: 
+[`examples/`](examples/) has runnable programs for every feature (also used to test everything). highlights:
 - [Brainfuck interpreter](examples/programs/brainfuck.ath)
 - [maze generator + solver](examples/programs/maze.ath)
 - [Sudoku solver](examples/programs/sudoku.ath)
 - [expression calculator](examples/programs/calculator.ath)
+- [TCP chat server](examples/net/chat_tcp/)
+- [actor ping-pong](examples/actors/ping_pong/)
 
 ## Testing
 
