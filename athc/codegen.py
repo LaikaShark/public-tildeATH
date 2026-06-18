@@ -21,6 +21,8 @@ from athc.ast import (
     ImportNumberStmt,
     ImportStmt,
     InputStmt,
+    InputCharStmt,
+    EmitStmt,
     PrintStmt,
     Program,
     ReadStmt,
@@ -85,6 +87,8 @@ def _collect_names(stmts, names: set) -> None:
                 names.add(s.arg)
         elif isinstance(s, InputStmt):
             names.add(s.var)
+        elif isinstance(s, InputCharStmt):
+            names.add(s.var)
         elif isinstance(s, WatchStmt):
             names.add(s.var)
         elif isinstance(s, ImportNumberStmt):
@@ -140,6 +144,11 @@ def _collect_names(stmts, names: set) -> None:
             names.add(s.target)
         elif isinstance(s, PrintStmt):
             # Interpolated `$VAR` parts are reads; each needs a slot
+            for part in s.parts:
+                if part.kind == "var":
+                    names.add(part.value)
+        elif isinstance(s, EmitStmt):
+            # Same as PrintStmt: interpolated vars need slots
             for part in s.parts:
                 if part.kind == "var":
                     names.add(part.value)
@@ -259,6 +268,16 @@ class Codegen:
             self.module,
             ir.FunctionType(self.obj_ptr, []),
             name="ath_input_line",
+        )
+        self.f_input_char = ir.Function(
+            self.module,
+            ir.FunctionType(self.obj_ptr, []),
+            name="ath_input_char",
+        )
+        self.f_flush = ir.Function(
+            self.module,
+            ir.FunctionType(ir.VoidType(), []),
+            name="ath_flush",
         )
         self.f_print_obj = ir.Function(
             self.module,
@@ -762,6 +781,10 @@ class FunctionEmitter:
             self._emit_print(builder, stmt)
         elif isinstance(stmt, InputStmt):
             self._emit_input(builder, stmt)
+        elif isinstance(stmt, InputCharStmt):
+            self._emit_input_char(builder, stmt)
+        elif isinstance(stmt, EmitStmt):
+            self._emit_emit(builder, stmt)
         elif isinstance(stmt, ImportFuncStmt):
             # compile-time only; loader has registered the function
             pass
@@ -1107,6 +1130,24 @@ class FunctionEmitter:
     def _emit_input(self, builder: ir.IRBuilder, stmt: InputStmt) -> None:
         result = builder.call(self.cg.f_input, [])
         self._write_var(builder, stmt.var, result)
+
+    def _emit_input_char(self, builder: ir.IRBuilder, stmt: InputCharStmt) -> None:
+        result = builder.call(self.cg.f_input_char, [])
+        self._write_var(builder, stmt.var, result)
+
+    def _emit_emit(self, builder: ir.IRBuilder, stmt: EmitStmt) -> None:
+        zero = ir.Constant(self.cg.i32, 0)
+        for part in stmt.parts:
+            if part.kind == "lit":
+                g, length = self.cg.make_string_global(part.value)
+                ptr = builder.gep(g, [zero, zero], inbounds=True)
+                builder.call(
+                    self.cg.f_print_bytes, [ptr, ir.Constant(self.cg.size_t, length)]
+                )
+            else:
+                val = self._read_var(builder, part.value)
+                builder.call(self.cg.f_print_obj_raw, [val])
+        builder.call(self.cg.f_flush, [])
 
     def _emit_funcall_compose_arg(
         self, builder: ir.IRBuilder, stmt: FuncCallComposeArg
