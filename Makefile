@@ -8,14 +8,23 @@ RUNTIME := runtime
 
 all: runtime
 
+MAN_DIR       = $(HOME)/.local/share/man/man1
+GLOBAL_MAN    = /usr/share/man/man1
+
 install: runtime
 	pipx install --force .
+	install -d $(MAN_DIR)
+	install -m 644 athc.1 $(MAN_DIR)/athc.1
 
 install-global: runtime
 	sudo pip install --break-system-packages .
+	sudo install -d $(GLOBAL_MAN)
+	sudo install -m 644 athc.1 $(GLOBAL_MAN)/athc.1
 
 uninstall:
 	pipx uninstall athc 2>/dev/null; pip uninstall -y athc 2>/dev/null; true
+	rm -f $(MAN_DIR)/athc.1
+	sudo rm -f $(GLOBAL_MAN)/athc.1 2>/dev/null; true
 
 dev: runtime
 	pip install -e '.[dev]'

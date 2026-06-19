@@ -1,0 +1,165 @@
+.TH ATHC 1 "2026-06-19" "athc 0.0.1" "~ATH Manual"
+.SH NAME
+athc \- compiler for the ~ATH esoteric language
+.SH SYNOPSIS
+.B athc
+.RI [ source.ath ]
+.RB [ \-o
+.IR output ]
+.RB [ \-\-compose
+.IR mode ]
+.RB [ \-\-cc
+.IR compiler ]
+.RB [ \-\-emit\-ir ]
+.RB [ \-\-emit\-obj
+.IR path ]
+.RB [ \-D
+.IR name:min:max ]
+.RB [ \-\-repl ]
+.SH DESCRIPTION
+.B athc
+compiles ~ATH source files into native executables via LLVM IR and a
+small C runtime. If no source file is given,
+.B athc
+starts an interactive REPL.
+.PP
+~ATH is an esoteric language where control flow is object liveness:
+.B ~ATH(V) { ... }
+loops while
+.I V
+is alive, and a program terminates by killing
+.BR THIS .
+.PP
+The compile pipeline is: lex \(-> parse \(-> resolve imports \(-> semantic
+analysis \(-> LLVM IR generation \(-> object emission \(-> link with C
+runtime.
+.SH OPTIONS
+.TP
+.I source.ath
+Path to the ~ATH source file. If omitted, the REPL is started.
+.TP
+.BI \-o " output"
+Write the output executable to
+.IR output .
+Default:
+.BR a.out .
+.TP
+.B \-\-repl
+Start the interactive REPL. Enabled automatically when no source
+file is given.
+.TP
+.B \-\-emit\-ir
+Print LLVM IR to stdout and exit. No object file or executable
+is produced.
+.TP
+.BI \-\-emit\-obj " path"
+Write the compiled object file to
+.I path
+and exit. No linking is performed.
+.TP
+.BI \-\-compose " mode"
+Select the composition discipline for
+.BR "BIFURCATE [L,R] V" .
+.I mode
+is one of:
+.RS
+.TP
+.B fresh
+Every compose allocates a new object. This is the default.
+.TP
+.B intern
+Hash-consed by
+.RI ( left , right )
+pointer pair. Structurally equal composites share storage and
+die together.
+.RE
+.TP
+.BI \-\-runtime " path"
+Path to the runtime library archive. By default,
+.B athc
+locates the bundled
+.BI libath_ mode .a
+from the installed package or the repository
+.B runtime/
+directory.
+.TP
+.BI \-\-cc " compiler"
+C compiler to use for linking. Default:
+.BR gcc .
+Overridden by the
+.B CC
+environment variable if the flag is not given.
+.TP
+.BI \-D " name\fR:\fImin\fR:\fImax"
+.TQ
+.BI \-\-define\-lifetime " name\fR:\fImin\fR:\fImax"
+Register a custom library entry with a lifetime in seconds.
+.I min
+and
+.I max
+are non-negative floats with
+.IR min " \(<= " max .
+Spaces are permitted in
+.IR name .
+May be repeated.
+.SH ENVIRONMENT
+.TP
+.B CC
+Default C compiler when
+.B \-\-cc
+is not specified. Falls back to
+.BR gcc .
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Compilation error (loader, semantic analysis, codegen, or invalid
+arguments). A diagnostic with source location is printed to stderr.
+.TP
+.I nonzero
+Linker failure propagates the linker's exit code.
+.SH EXAMPLES
+Compile and run a program:
+.PP
+.nf
+athc hello.ath -o hello && ./hello
+.fi
+.PP
+Compile with interned composition:
+.PP
+.nf
+athc program.ath -o program --compose intern
+.fi
+.PP
+Dump LLVM IR:
+.PP
+.nf
+athc program.ath --emit-ir
+.fi
+.PP
+Start the REPL:
+.PP
+.nf
+athc --repl
+athc
+.fi
+.PP
+Use clang as the linker:
+.PP
+.nf
+athc program.ath -o program --cc clang
+.fi
+.SH FILES
+.TP
+.B stdlib/*.ath
+Standard library shims, resolved by
+.BR "IMPORTF <name>" .
+.TP
+.B runtime/ath_runtime.h
+ABI contract between codegen and the C runtime.
+.SH SEE ALSO
+.BR ant (1)
+.SH AUTHORS
+Laika Klingbeil
