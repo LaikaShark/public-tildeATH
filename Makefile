@@ -4,9 +4,21 @@ CC      ?= gcc
 CFLAGS  ?= -std=c11 -Wall -Wextra -Wpedantic -O2 -fPIC
 RUNTIME := runtime
 
-.PHONY: all runtime test-runtime clean
+.PHONY: all runtime install install-global uninstall dev test-runtime clean
 
 all: runtime
+
+install: runtime
+	pipx install --force .
+
+install-global: runtime
+	sudo pip install --break-system-packages .
+
+uninstall:
+	pipx uninstall athc 2>/dev/null; pip uninstall -y athc 2>/dev/null; true
+
+dev: runtime
+	pip install -e '.[dev]'
 
 runtime: $(RUNTIME)/libath_fresh.a $(RUNTIME)/libath_intern.a \
          $(RUNTIME)/libath_fresh.so $(RUNTIME)/libath_intern.so
